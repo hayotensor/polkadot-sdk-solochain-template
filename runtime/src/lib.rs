@@ -284,6 +284,7 @@ parameter_types! {
 	pub const EpochLength: u64 = 10;
 	pub const NetworkPalletId: PalletId = PalletId(*b"/network");
 	pub const SubnetInitializationCost: u128 = 100_000_000_000_000_000_000;
+	pub const MinProposalStake: u128 = 1_000_000_000_000_000_000; // 1 * 1e18
 }
 
 impl pallet_network::Config for Runtime {
@@ -300,6 +301,7 @@ impl pallet_network::Config for Runtime {
 	type PalletId = NetworkPalletId;
 	type SubnetInitializationCost = SubnetInitializationCost;
 	type Randomness = InsecureRandomnessCollectiveFlip;
+	type MinProposalStake = MinProposalStake;
 }
 
 parameter_types! {
@@ -310,12 +312,13 @@ parameter_types! {
 	// Testnet
 	pub const VotingPeriod: BlockNumber = DAYS * 9;
 	pub const EnactmentPeriod: BlockNumber = DAYS * 12;
+	pub const MinProposerStake: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
+	pub const Quorum: u128 = 10_000_000_000_000_000_000_000; // 10,000 * 1e18
 
 	// Local
 	// pub const VotingPeriod: BlockNumber = 50; // ~5 minutes
 	// pub const EnactmentPeriod: BlockNumber = 600; // ~60 minutes
 
-	pub const MinProposalStake: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
 }
 
 impl pallet_subnet_democracy::Config for Runtime {
@@ -328,7 +331,8 @@ impl pallet_subnet_democracy::Config for Runtime {
 	type MaxProposals = ConstU32<32>;
 	type VotingPeriod = VotingPeriod;
 	type EnactmentPeriod = EnactmentPeriod;
-	type MinProposalStake = MinProposalStake;
+	type MinProposerStake = MinProposerStake;
+	type Quorum = Quorum;
 }
 
 pub struct AuraAccountAdapter;

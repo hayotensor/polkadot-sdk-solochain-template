@@ -15,6 +15,10 @@
 
 //! Pallet for subnet voting.
 //! Sets all parameters required for initializing subnets
+// Votes are calculated from the accounts stake balance across all staking options.
+// Each account can use its stake balance across all proposals
+// e.g. If an account has 1000 tokens staked in total, they can vote on multiple proposals using that 1000
+//      in each proposal. (proposal 0: vote(1000), proposal 1: vote(1000), ...) 
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -93,7 +97,10 @@ pub mod pallet {
 
     /// Minimum amount to stake to create a proposal
     #[pallet::constant]
-		type MinProposalStake: Get<u128>;
+		type MinProposerStake: Get<u128>;
+
+    #[pallet::constant]
+		type Quorum: Get<u128>;
 
     #[pallet::constant]
 		type VotingPeriod: Get<BlockNumberFor<Self>>;
@@ -424,9 +431,9 @@ pub mod pallet {
 	pub type PropsPathStatus<T: Config> =
 		StorageMap<_, Blake2_128Concat, Vec<u8>, PropsStatus, ValueQuery, DefaultPropsStatus>;
 
-  #[pallet::storage]
-  #[pallet::getter(fn quorum)]
-  pub type Quorum<T> = StorageValue<_, u128, ValueQuery, DefaultQuorum>;
+  // #[pallet::storage]
+  // #[pallet::getter(fn quorum)]
+  // pub type Quorum<T> = StorageValue<_, u128, ValueQuery, DefaultQuorum>;
   
   #[pallet::storage]
   pub type Majority<T> = StorageValue<_, u128, ValueQuery>;
@@ -522,7 +529,7 @@ pub mod pallet {
           Error::<T>::SubnetNodesLengthInvalid
         );
 
-        proposer_stake = T::MinProposalStake::get();
+        proposer_stake = T::MinProposerStake::get();
         let proposer_stake_as_balance = Self::u128_to_balance(proposer_stake);
 
         ensure!(
@@ -910,33 +917,48 @@ impl<T: Config> Pallet<T> {
       Error::<T>::VotingNotOpen
     );
 
-    // --- Get balance of voter
-    let balance = T::Currency::free_balance(&account_id.clone());
+    // --- Get staked balance of voter
+    let available_balance = Self::get_available_vote_balance(proposal_index, account_id.clone());
 
     // --- Ensure balance is some
     ensure!(
-      Self::balance_to_u128(vote_amount) > 0,
-      Error::<T>::VoteBalanceZero
-    );
-
-    // --- Ensure enough balance to vote based on vote_amount
-    ensure!(
-      balance >= vote_amount,
+      available_balance > 0,
       Error::<T>::NotEnoughBalanceToVote
     );
 
-    // --- Get vote power
-    let vote_power: u128 = Self::get_voting_power(account_id.clone(), vote_amount);
+    let vote_amount_as_u128: u128 = Self::balance_to_u128(vote_amount);
 
-    // --- Reserve voting balance of voter
-    T::Currency::reserve(
-      &account_id,
-      vote_amount,
+    ensure!(
+      available_balance >= vote_amount_as_u128,
+      Error::<T>::NotEnoughBalanceToVote
     );
 
-    // --- Increase accounts reserved voting balance in relation to proposal index
-    // VotesBalance::<T>::insert(proposal_index.clone(), account_id.clone(), vote_amount);
+    // --- Get staked balance of voter
+    // let available_balance = get_available_vote_balance(proposal_index: PropIndex, account_id: T::AccountId)
+    // let balance = T::Currency::free_balance(&account_id.clone());
 
+    // // --- Ensure balance is some
+    // ensure!(
+    //   Self::balance_to_u128(vote_amount) > 0,
+    //   Error::<T>::VoteBalanceZero
+    // );
+
+    // --- Ensure enough balance to vote based on vote_amount
+    // ensure!(
+    //   balance >= vote_amount,
+    //   Error::<T>::NotEnoughBalanceToVote
+    // );
+
+    // --- Get vote power
+    // let vote_power: u128 = Self::get_voting_power(account_id.clone(), vote_amount);
+
+    // // --- Reserve voting balance of voter
+    // T::Currency::reserve(
+    //   &account_id,
+    //   vote_amount,
+    // );
+
+    // --- Increase accounts reserved voting balance in relation to proposal index
     VotesBalance::<T>::mutate(proposal_index.clone(), account_id.clone(), |n| *n += vote_amount);
     // VotesBalance::<T>::mutate(proposal_index.clone(), account_id.clone(), |n| n.saturating_add(vote_amount));
 
@@ -945,21 +967,21 @@ impl<T: Config> Pallet<T> {
       Votes::<T>::mutate(
         proposal_index.clone(),
         |params: &mut VotesParams| {
-          params.yay += vote_power;
+          params.yay += vote_amount_as_u128;
         }
       );
     } else if vote == VoteType::Nay {
       Votes::<T>::mutate(
         proposal_index.clone(),
         |params: &mut VotesParams| {
-          params.nay += vote_power;
+          params.nay += vote_amount_as_u128;
         }
       );  
     } else {
       Votes::<T>::mutate(
         proposal_index.clone(),
         |params: &mut VotesParams| {
-          params.abstain += vote_power;
+          params.abstain += vote_amount_as_u128;
         }
       );  
     }
@@ -1074,9 +1096,9 @@ impl<T: Config> Pallet<T> {
   }
 
   fn quorum_reached(votes: VotesParams) -> bool {
-    let quorum = Quorum::<T>::get();
+    // let quorum = Quorum::<T>::get();
     let total_quorum_votes = votes.yay + votes.abstain;
-    total_quorum_votes >= quorum
+    total_quorum_votes >= T::Quorum::get()
   }
 
   /// Activate subnet - Someone must add_subnet once activated
@@ -1109,6 +1131,37 @@ impl<T: Config> Pallet<T> {
 
     // T::SubnetVote::vote_activated(subnet_data.clone().path, vote_subnet_data)
     // Ok(())
+  }
+
+  /// Get the accounts overall stake across:
+  /// - Blockchain stake
+  /// - Blockchain delegate stake
+  /// - Subnet stake
+  /// - Subnet delegate stake
+  fn get_stake_balance(account_id: T::AccountId) -> u128 {
+    let subnet_stake_balance: u128 = T::SubnetVote::get_stake_balance(account_id.clone());
+    let subnet_delegate_stake_balance: u128 = T::SubnetVote::get_delegate_stake_balance(account_id.clone());
+    let blockchain_stake_balance: u128 = 0;
+    let blockchain_delegate_stake_balance: u128 = 0;
+    subnet_stake_balance
+      .saturating_add(subnet_delegate_stake_balance)
+      .saturating_add(blockchain_stake_balance)
+      .saturating_add(blockchain_delegate_stake_balance)
+  }
+
+  fn get_vote_balance(proposal_index: PropIndex, account_id: T::AccountId) -> u128 {
+    let votes_balance = VotesBalance::<T>::get(proposal_index, account_id);
+    Self::balance_to_u128(votes_balance)
+  }
+
+  fn get_available_vote_balance(proposal_index: PropIndex, account_id: T::AccountId) -> u128 {
+    let vote_balance = Self::get_vote_balance(proposal_index, account_id.clone());
+    let stake_balance = Self::get_stake_balance(account_id.clone());
+    // Redundant but check regardless
+    if vote_balance >= stake_balance {
+      return 0;
+    }
+    stake_balance - vote_balance
   }
 }
 

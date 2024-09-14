@@ -164,6 +164,7 @@ parameter_types! {
 	pub const EpochLength: u64 = 100;
   pub const NetworkPalletId: PalletId = PalletId(*b"/network");
   pub const SubnetInitializationCost: u128 = 100_000_000_000_000_000_000;
+  pub const MinProposalStake: u128 = 1_000_000_000_000_000_000;
 }
 
 impl pallet_network::Config for Test {
@@ -176,12 +177,14 @@ impl pallet_network::Config for Test {
   type Randomness = InsecureRandomnessCollectiveFlip;
 	type PalletId = NetworkPalletId;
   type SubnetInitializationCost = SubnetInitializationCost;
+  type MinProposalStake = MinProposalStake;
 }
 
 parameter_types! {
 	pub const VotingPeriod: BlockNumber = DAYS * 21;
 	pub const EnactmentPeriod: BlockNumber = DAYS * 7;
-  pub const MinProposalStake: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
+  pub const MinProposerStake: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
+  pub const Quorum: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
 }
 
 impl pallet_subnet_democracy::Config for Test {
@@ -194,7 +197,8 @@ impl pallet_subnet_democracy::Config for Test {
 	type MaxProposals = ConstU32<32>;
 	type VotingPeriod = VotingPeriod;
 	type EnactmentPeriod = EnactmentPeriod;
-  type MinProposalStake = MinProposalStake;
+  type MinProposerStake = MinProposerStake;
+  type Quorum = Quorum;
 }
 
 impl Config for Test {

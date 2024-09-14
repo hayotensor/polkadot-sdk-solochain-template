@@ -34,14 +34,14 @@ impl<T: Config> Pallet<T> {
   pub fn set_quorum(
     value: u128,
   ) -> DispatchResult {
-    ensure!(
-      value > 0 && value != Quorum::<T>::get(), 
-      Error::<T>::InvalidQuorum
-    );
+    // ensure!(
+    //   value > 0 && value != T::Quorum::get(), 
+    //   Error::<T>::InvalidQuorum
+    // );
 
-    Quorum::<T>::set(value);
+    // Quorum::<T>::set(value);
 
-    Self::deposit_event(Event::SetQuorum(value));
+    // Self::deposit_event(Event::SetQuorum(value));
 
     Ok(())
   }

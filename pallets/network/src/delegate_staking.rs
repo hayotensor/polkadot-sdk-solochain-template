@@ -170,6 +170,17 @@ impl<T: Config> Pallet<T> {
     Ok(())
   }
 
+  pub fn do_switch_delegate_stake(
+    origin: T::RuntimeOrigin, 
+    from_subnet_id: u32,
+    to_subnet_id: u32,
+    hotkey: T::AccountId,
+    delegate_stake_to_be_switched: u128,
+  ) -> DispatchResult {
+
+    Ok(())
+  }
+
   pub fn increase_account_delegate_stake_shares(
     account_id: &T::AccountId,
     subnet_id: u32, 
@@ -213,42 +224,6 @@ impl<T: Config> Pallet<T> {
     // TotalDelegateStake::<T>::mutate(|mut n| *n -= amount);
   }
 
-  // fn can_remove_balance_from_coldkey_account(
-  //   account_id: &T::AccountId,
-  //   amount: <<T as pallet::Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance,
-  // ) -> bool {
-  //   let current_balance = Self::get_coldkey_balance(account_id);
-  //   if amount > current_balance {
-  //     return false;
-  //   }
-
-  //   // This bit is currently untested. @todo
-  //   let new_potential_balance = current_balance - amount;
-  //   let can_withdraw = T::Currency::ensure_can_withdraw(
-  //     &account_id,
-  //     amount,
-  //     WithdrawReasons::except(WithdrawReasons::TIP),
-  //     new_potential_balance,
-  //   )
-  //   .is_ok();
-  //   can_withdraw
-  // }
-
-  // fn remove_balance_from_coldkey_account(
-  //   account_id: &T::AccountId,
-  //   amount: <<T as pallet::Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance,
-  // ) -> bool {
-  //   return match T::Currency::withdraw(
-  //     &account_id,
-  //     amount,
-  //     WithdrawReasons::except(WithdrawReasons::TIP),
-  //     ExistenceRequirement::KeepAlive,
-  //   ) {
-  //     Ok(_result) => true,
-  //     Err(_error) => false,
-  //   };
-  // }
-
   /// Rewards are deposited here
   pub fn increase_delegated_stake(
     subnet_id: u32,
@@ -257,27 +232,6 @@ impl<T: Config> Pallet<T> {
     // -- increase total subnet delegate stake 
     TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id.clone(), |mut n| *n += amount);
   }
-
-  // pub fn add_balance_to_coldkey_account(
-  //   account_id: &T::AccountId,
-  //   amount: <<T as pallet::Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance,
-  // ) {
-  //   T::Currency::deposit_creating(&account_id, amount); // Infallibe
-  // }
-
-  // pub fn get_coldkey_balance(
-  //   account_id: &T::AccountId,
-  // ) -> <<T as pallet::Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance {
-  //   return T::Currency::free_balance(&account_id);
-  // }
-
-  // pub fn u128_to_balance(
-  //   input: u128,
-  // ) -> Option<
-  //   <<T as pallet::Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance,
-  // > {
-  //   input.try_into().ok()
-  // }
 
   pub fn get_delegate_stake_balance(
     subnet_id: u32,
@@ -293,6 +247,25 @@ impl<T: Config> Pallet<T> {
     0
   }
 
+  pub fn convert_account_shares_to_balance(
+    account_id: &T::AccountId,
+    subnet_id: u32
+  ) -> u128 {
+    let account_delegate_stake_shares: u128 = AccountSubnetDelegateStakeShares::<T>::get(&account_id, subnet_id.clone());
+    if account_delegate_stake_shares == 0 {
+      return 0;
+    }
+    let total_model_delegated_stake_shares = TotalSubnetDelegateStakeShares::<T>::get(subnet_id.clone());
+    let total_model_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id.clone());
+
+    // --- Get accounts current balance
+    Self::convert_to_balance(
+      account_delegate_stake_shares,
+      total_model_delegated_stake_shares,
+      total_model_delegated_stake_balance
+    )
+  }
+
   pub fn convert_to_balance(
     shares: u128,
     total_shares: u128,
@@ -301,7 +274,6 @@ impl<T: Config> Pallet<T> {
     if total_shares == 0 {
       return shares;
     }
-    // shares.saturating_mul(total_balance).saturating_div(total_shares)
     shares.saturating_mul(total_balance.saturating_div(total_shares))
   }
 
@@ -313,7 +285,6 @@ impl<T: Config> Pallet<T> {
     if total_shares == 0 {
       return balance;
     }
-    // balance.saturating_mul(total_shares).saturating_div(total_balance)
     balance.saturating_mul(total_shares.saturating_div(total_balance))
   }
 }

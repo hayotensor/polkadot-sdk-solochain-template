@@ -5729,6 +5729,9 @@ fn test_reward_subnets_remove_subnet_node() {
     let epoch_length = EpochLength::get();
     let epochs = SubnetNodeClassEpochs::<Test>::get(SubnetNodeClass::Accountant);
 
+    // shift node classes
+    // validate n-1
+    // attest   n-1
     for num in 0..max_absent+1 {
       System::set_block_number(System::block_number() + epochs * epoch_length + 1);
       Network::shift_node_classes(System::block_number(), epoch_length);
@@ -5739,6 +5742,7 @@ fn test_reward_subnets_remove_subnet_node() {
       // --- Insert validator
       SubnetRewardsValidator::<Test>::insert(subnet_id, epoch as u32, account(0));
   
+      // validate without n-1
       assert_ok!(
         Network::validate(
           RuntimeOrigin::signed(account(0)), 
@@ -5747,7 +5751,7 @@ fn test_reward_subnets_remove_subnet_node() {
         )
       );
   
-      // Attest
+      // Attest without n-1
       for n in 1..n_peers-1 {
         assert_ok!(
           Network::attest(
@@ -5758,16 +5762,18 @@ fn test_reward_subnets_remove_subnet_node() {
       }
       
       Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
-
       let node_absent_count = SequentialAbsentSubnetNode::<Test>::get(subnet_id.clone(), account(n_peers-1));
-      assert_eq!(node_absent_count, num+1);
-
-      log::error!("node_absent_count {:?}", node_absent_count);
 
       if num + 1 > max_absent {
         post_remove_subnet_node_ensures(n_peers-1, subnet_id.clone());
+        // when node is removed they're SequentialAbsentSubnetNode is reset to zero
+        assert_eq!(node_absent_count, 0);  
+      } else {
+        assert_eq!(node_absent_count, num+1);  
       }
 
+      // Check rewards
+      // Ensure only attestors, validators, and validated get rewards
       let submission = SubnetRewardsSubmission::<Test>::get(subnet_id.clone(), epoch as u32).unwrap();
 
       let base_subnet_reward: u128 = BaseSubnetReward::<Test>::get();

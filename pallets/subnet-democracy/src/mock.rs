@@ -166,6 +166,7 @@ parameter_types! {
 	pub const EpochLength: u64 = 100;
   pub const NetworkPalletId: PalletId = PalletId(*b"/network");
   pub const SubnetInitializationCost: u128 = 100_000_000_000_000_000_000;
+  pub const MinProposalStake: u128 = 1_000_000_000_000_000_000;
 }
 
 impl pallet_network::Config for Test {
@@ -175,19 +176,19 @@ impl pallet_network::Config for Test {
   type EpochLength = EpochLength;
   type StringLimit = ConstU32<100>;
 	type InitialTxRateLimit = ConstU64<0>;
-  // type SecsPerBlock = ConstU64<{ SECS_PER_BLOCK as u64 }>;
-	// type Year = ConstU64<{ YEAR as u64 }>;
   // type OffchainSignature = Signature;
 	// type OffchainPublic = AccountPublic;
   type Randomness = InsecureRandomnessCollectiveFlip;
 	type PalletId = NetworkPalletId;
   type SubnetInitializationCost = SubnetInitializationCost;
+  type MinProposalStake = MinProposalStake;
 }
 
 parameter_types! {
 	pub const VotingPeriod: BlockNumber = DAYS * 21;
 	pub const EnactmentPeriod: BlockNumber = DAYS * 7;
-  pub const MinProposalStake: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
+  pub const MinProposerStake: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
+  pub const Quorum: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
 }
 
 impl Config for Test {
@@ -200,7 +201,8 @@ impl Config for Test {
 	type MaxProposals = ConstU32<32>;
 	type VotingPeriod = VotingPeriod;
 	type EnactmentPeriod = EnactmentPeriod;
-  type MinProposalStake = MinProposalStake; // 100 * 1e18
+  type MinProposerStake = MinProposerStake; // 100 * 1e18
+  type Quorum = Quorum;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

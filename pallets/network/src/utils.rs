@@ -146,10 +146,13 @@ impl<T: Config> Pallet<T> {
       TotalSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| *n -= 1);
 
       // Remove subnet_id from AccountSubnets
-      let mut account_model_ids: Vec<u32> = AccountSubnets::<T>::get(account_id.clone());
-      account_model_ids.retain(|&x| x != subnet_id);
+      let mut account_subnet_ids: Vec<u32> = AccountSubnets::<T>::get(account_id.clone());
+      account_subnet_ids.retain(|&x| x != subnet_id);
       // Insert retained subnet_id's
-      AccountSubnets::<T>::insert(account_id.clone(), account_model_ids);
+      AccountSubnets::<T>::insert(account_id.clone(), account_subnet_ids);
+
+      // Reset sequential absent subnet node count
+      SequentialAbsentSubnetNode::<T>::remove(subnet_id, account_id.clone());
 
       // Remove from classifications
       for class_id in SubnetNodeClass::iter() {
@@ -317,5 +320,13 @@ impl<T: Config> Pallet<T> {
 
   //   Ok(())
   // }
+
+  pub fn get_account_total_stake_balance(account_id: T::AccountId) -> u128 {
+		let mut total_stake_balance = 0;
+		for subnet_id in AccountSubnets::<T>::get(account_id.clone()).iter() {
+      total_stake_balance += AccountSubnetStake::<T>::get(&account_id.clone(), subnet_id);
+		}
+		total_stake_balance
+	}
 
 }

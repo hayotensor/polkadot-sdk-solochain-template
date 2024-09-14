@@ -188,6 +188,7 @@ parameter_types! {
 	pub const EpochLength: u64 = 100;
   pub const NetworkPalletId: PalletId = PalletId(*b"/network");
   pub const SubnetInitializationCost: u128 = 100_000_000_000_000_000_000;
+  pub const MinProposalStake: u128 = 1_000_000_000_000_000_000;
 }
 
 impl Config for Test {
@@ -204,6 +205,7 @@ impl Config for Test {
   type Randomness = InsecureRandomnessCollectiveFlip;
 	type PalletId = NetworkPalletId;
   type SubnetInitializationCost = SubnetInitializationCost;
+  type MinProposalStake = MinProposalStake;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
