@@ -31,6 +31,8 @@ pallet-sudo.workspace = true
 pallet-timestamp.workspace = true
 pallet-transaction-payment.workspace = true
 pallet-authorship.workspace = true
+pallet-utility.workspace = true
+
 sp-api.workspace = true
 sp-block-builder.workspace = true
 sp-consensus-aura = { features = ["serde"], workspace = true }
@@ -94,6 +96,7 @@ std = [
 	"pallet-authorship/std",
 	"pallet-rewards/std",
 	"pallet-admin/std",
+	"pallet-utility/std",
 
 	"sp-api/std",
 	"sp-block-builder/std",

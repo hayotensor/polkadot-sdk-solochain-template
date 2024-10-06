@@ -213,6 +213,12 @@ pub mod pallet {
 		DishonestSubnetNodeProposed { subnet_id: u32, account_id: T::AccountId, block: u64},
 		DishonestSubnetNodeVote { subnet_id: u32, account_id: T::AccountId, voter_account_id: T::AccountId, block: u64 },
 		DishonestAccountRemoved { subnet_id: u32, account_id: T::AccountId, block: u64},
+
+		// Validation and Attestation
+		ValidatorSubmission { subnet_id: u32, account_id: T::AccountId, epoch: u32},
+		Attestation { subnet_id: u32, account_id: T::AccountId, epoch: u32},
+
+		Slashing { subnet_id: u32, account_id: T::AccountId, amount: u128},
 	}
 
 	/// Errors that can be returned by this pallet.
@@ -592,7 +598,7 @@ pub mod pallet {
 		21
 	}
 	#[pallet::type_value]
-	pub fn DefaultBaseRewardPerGB() -> u128 {
+	pub fn DefaultBaseRewardPerMB() -> u128 {
 		1e+18 as u128
 	}
 	#[pallet::type_value]
@@ -874,6 +880,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BaseSubnetReward<T> = StorageValue<_, u128, ValueQuery, DefaultBaseSubnetReward>;
 	
+	// TODO: BaseReward → BaseValidatorReward
 	// Base reward per epoch for validators and accountants
 	// This is the base reward to subnet validators on successful attestation
 	// This is the base reward to accountants when they agree to validation data.?
@@ -882,7 +889,7 @@ pub mod pallet {
 
 	// Base reward per MB per epoch based on 4,380 MB per year
 	#[pallet::storage]
-	pub type BaseRewardPerGB<T> = StorageValue<_, u128, ValueQuery, DefaultBaseRewardPerGB>;
+	pub type BaseRewardPerMB<T> = StorageValue<_, u128, ValueQuery, DefaultBaseRewardPerMB>;
 
 	#[pallet::storage]
 	pub type SlashPercentage<T> = StorageValue<_, u128, ValueQuery, DefaultSlashPercentage>;
@@ -1188,7 +1195,6 @@ pub mod pallet {
 
 			let subnet = SubnetsData::<T>::get(subnet_id).unwrap();
 			let subnet_path: Vec<u8> = subnet.path;
-			let model_initialized: u64 = subnet.initialized;
 
 			// ----
 			// Subnets can be removed by
@@ -1198,8 +1204,6 @@ pub mod pallet {
 			//		4. Subnet has min peers after initialization period
 			// ----
 
-			let mut reason_for_removal: Vec<u8> = Vec::new();
-
 			// 1.
 			// Check subnet voted out
 			let activated: bool = match SubnetActivated::<T>::try_get(subnet_path.clone()) {
@@ -1207,6 +1211,8 @@ pub mod pallet {
 				Err(()) => false,
 			};
 
+			let mut reason_for_removal: Vec<u8> = Vec::new();
+			
 			// Push into reason
 			if !activated {
 				reason_for_removal.push(1)
@@ -1241,6 +1247,7 @@ pub mod pallet {
 			let block: u64 = Self::get_current_block_as_u64();
 			let mut has_min_peers: bool = true;
 			if total_subnet_nodes < min_subnet_nodes {
+				let model_initialized: u64 = subnet.initialized;
 				let epoch_length: u64 = T::EpochLength::get();
 				let min_required_model_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
 				// Ensure initialization epochs have passed
@@ -1439,8 +1446,8 @@ pub mod pallet {
 			Self::deposit_event(
 				Event::SubnetNodeAdded { 
 					subnet_id: subnet_id, 
-					account_id: account_id.clone(), 
-					peer_id: peer_id.clone(),
+					account_id: account_id, 
+					peer_id: peer_id,
 					block: block
 				}
 			);
@@ -1529,8 +1536,8 @@ pub mod pallet {
 			Self::deposit_event(
 				Event::SubnetNodeUpdated { 
 					subnet_id: subnet_id, 
-					account_id: account_id.clone(), 
-					peer_id: peer_id.clone(),
+					account_id: account_id, 
+					peer_id: peer_id,
 					block: block
 				}
 			);
@@ -1911,6 +1918,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		/// Activate subnet - called by subnet democracy logic
 		pub fn activate_subnet(
 			activator: T::AccountId,
 			proposer: T::AccountId,
@@ -1987,7 +1995,7 @@ pub mod pallet {
 				proposer: proposer, 
 				activator: activator,
 				subnet_id: subnet_id, 
-				subnet_path: subnet_data.clone().path,
+				subnet_path: subnet_data.path,
 				block: block
 			});
 
@@ -2043,7 +2051,7 @@ pub mod pallet {
 			Self::deposit_event(Event::SubnetRemoved { 
 				account: deactivator, 
 				subnet_id: subnet_id, 
-				subnet_path: subnet_path.clone(),
+				subnet_path: subnet_path,
 				reason: reason_for_removal,
 				block: 0
 			});
@@ -2209,6 +2217,7 @@ pub mod pallet {
 				let epoch: u64 = block / epoch_length;
 
 				// Reward subnets for the previous epoch
+				// Reward before shifting
 				Self::reward_subnets(block, (epoch - 1) as u32, epoch_length);
 
 				// --- Update subnet nodes classifications
@@ -2243,7 +2252,6 @@ pub mod pallet {
 		pub subnet_path: Vec<u8>,
 		pub memory_mb: u128,
 		pub subnet_nodes: Vec<(T::AccountId, PeerId)>,
-		pub accounts: Vec<T::AccountId>,
 	}
 
 	#[pallet::genesis_build]
@@ -2295,103 +2303,103 @@ pub mod pallet {
 			// Increase total subnets count
 			TotalSubnets::<T>::mutate(|n: &mut u32| *n += 1);
 
-			StakeVaultBalance::<T>::mutate(|n: &mut u128| *n += 10000000000000000000);
+			// StakeVaultBalance::<T>::mutate(|n: &mut u128| *n += 10000000000000000000);
 
-			let mut stake_amount: u128 = MinStakeBalance::<T>::get();
+			// let mut stake_amount: u128 = MinStakeBalance::<T>::get();
 			
-			let mut count = 0;
-			for (account_id, peer_id) in &self.subnet_nodes {
-				// Unique subnet_id -> PeerId
-				// Ensure peer ID doesn't already exist within subnet regardless of account_id
-				let peer_exists: bool = match SubnetNodeAccount::<T>::try_get(subnet_id, peer_id.clone()) {
-					Ok(_) => true,
-					Err(()) => false,
-				};
+			// let mut count = 0;
+			// for (account_id, peer_id) in &self.subnet_nodes {
+			// 	// Unique subnet_id -> PeerId
+			// 	// Ensure peer ID doesn't already exist within subnet regardless of account_id
+			// 	let peer_exists: bool = match SubnetNodeAccount::<T>::try_get(subnet_id, peer_id.clone()) {
+			// 		Ok(_) => true,
+			// 		Err(()) => false,
+			// 	};
 
-				if peer_exists {
-					continue;
-				}
+			// 	if peer_exists {
+			// 		continue;
+			// 	}
 
-				// ====================
-				// Initiate stake logic
-				// ====================
-				// T::Currency::withdraw(
-				// 	&account_id,
-				// 	stake_amount,
-				// 	WithdrawReasons::except(WithdrawReasons::TIP),
-				// 	ExistenceRequirement::KeepAlive,
-				// );
+			// 	// ====================
+			// 	// Initiate stake logic
+			// 	// ====================
+			// 	// T::Currency::withdraw(
+			// 	// 	&account_id,
+			// 	// 	stake_amount,
+			// 	// 	WithdrawReasons::except(WithdrawReasons::TIP),
+			// 	// 	ExistenceRequirement::KeepAlive,
+			// 	// );
 
-				// -- increase account subnet staking balance
-				AccountSubnetStake::<T>::insert(
-					account_id,
-					subnet_id,
-					AccountSubnetStake::<T>::get(account_id, subnet_id).saturating_add(stake_amount),
-				);
+			// 	// -- increase account subnet staking balance
+			// 	AccountSubnetStake::<T>::insert(
+			// 		account_id,
+			// 		subnet_id,
+			// 		AccountSubnetStake::<T>::get(account_id, subnet_id).saturating_add(stake_amount),
+			// 	);
 
-				// -- increase account_id total stake
-				TotalAccountStake::<T>::mutate(account_id, |mut n| *n += stake_amount);
+			// 	// -- increase account_id total stake
+			// 	TotalAccountStake::<T>::mutate(account_id, |mut n| *n += stake_amount);
 
-				// -- increase total subnet stake
-				TotalSubnetStake::<T>::mutate(subnet_id, |mut n| *n += stake_amount);
+			// 	// -- increase total subnet stake
+			// 	TotalSubnetStake::<T>::mutate(subnet_id, |mut n| *n += stake_amount);
 
-				// -- increase total stake overall
-				TotalStake::<T>::mutate(|mut n| *n += stake_amount);
+			// 	// -- increase total stake overall
+			// 	TotalStake::<T>::mutate(|mut n| *n += stake_amount);
 
-				// To ensure the AccountId that owns the PeerId, they must sign the PeerId for others to verify
-				// This ensures others cannot claim to own a PeerId they are not the owner of
-				// Self::validate_signature(&Encode::encode(&peer_id), &signature, &signer)?;
+			// 	// To ensure the AccountId that owns the PeerId, they must sign the PeerId for others to verify
+			// 	// This ensures others cannot claim to own a PeerId they are not the owner of
+			// 	// Self::validate_signature(&Encode::encode(&peer_id), &signature, &signer)?;
 
-				// ========================
-				// Insert peer into storage
-				// ========================
-				let subnet_node: SubnetNode<T::AccountId> = SubnetNode {
-					account_id: account_id.clone(),
-					peer_id: peer_id.clone(),
-					initialized: 0,
-				};
-				// Insert SubnetNodesData with account_id as key
-				SubnetNodesData::<T>::insert(subnet_id, account_id.clone(), subnet_node);
+			// 	// ========================
+			// 	// Insert peer into storage
+			// 	// ========================
+			// 	let subnet_node: SubnetNode<T::AccountId> = SubnetNode {
+			// 		account_id: account_id.clone(),
+			// 		peer_id: peer_id.clone(),
+			// 		initialized: 0,
+			// 	};
+			// 	// Insert SubnetNodesData with account_id as key
+			// 	SubnetNodesData::<T>::insert(subnet_id, account_id.clone(), subnet_node);
 
-				// Insert subnet peer account to keep peer_ids unique within subnets
-				SubnetNodeAccount::<T>::insert(subnet_id, peer_id.clone(), account_id.clone());
+			// 	// Insert subnet peer account to keep peer_ids unique within subnets
+			// 	SubnetNodeAccount::<T>::insert(subnet_id, peer_id.clone(), account_id.clone());
 
-				// Insert unstaking reinforcements
-				// This data is specifically used for allowing unstaking after being removed
-				// SubnetAccount is not removed from storage until the peer has unstaked their entire stake balance
-				// This stores the block they are initialized at
-				// If removed, the initialized block will be replace with the removal block
-				let mut model_accounts: BTreeMap<T::AccountId, u64> = SubnetAccount::<T>::get(subnet_id);
-				// let model_account: Option<&u64> = model_accounts.get(&account_id.clone());
-				let block_initialized_or_removed: u64 = match model_accounts.get(&account_id.clone()) {
-					Some(block_initialized_or_removed) => *block_initialized_or_removed,
-					None => 0,
-				};
+			// 	// Insert unstaking reinforcements
+			// 	// This data is specifically used for allowing unstaking after being removed
+			// 	// SubnetAccount is not removed from storage until the peer has unstaked their entire stake balance
+			// 	// This stores the block they are initialized at
+			// 	// If removed, the initialized block will be replace with the removal block
+			// 	let mut model_accounts: BTreeMap<T::AccountId, u64> = SubnetAccount::<T>::get(subnet_id);
+			// 	// let model_account: Option<&u64> = model_accounts.get(&account_id.clone());
+			// 	let block_initialized_or_removed: u64 = match model_accounts.get(&account_id.clone()) {
+			// 		Some(block_initialized_or_removed) => *block_initialized_or_removed,
+			// 		None => 0,
+			// 	};
 
-				// Update to current block
-				model_accounts.insert(account_id.clone(), 0);
-				SubnetAccount::<T>::insert(subnet_id, model_accounts);
+			// 	// Update to current block
+			// 	model_accounts.insert(account_id.clone(), 0);
+			// 	SubnetAccount::<T>::insert(subnet_id, model_accounts);
 
-				if let Ok(mut node_class) = SubnetNodesClasses::<T>::try_get(subnet_id, SubnetNodeClass::Idle) {
-					node_class.insert(account_id.clone(), 0);
-					SubnetNodesClasses::<T>::insert(subnet_id, SubnetNodeClass::Idle, node_class);	
-				} else {
-					// If new subnet, initialize classes
-					let mut node_class: BTreeMap<T::AccountId, u64> = BTreeMap::new();
-					node_class.insert(account_id.clone(), 0);
-					SubnetNodesClasses::<T>::insert(subnet_id, SubnetNodeClass::Idle, node_class);	
-				}
+			// 	if let Ok(mut node_class) = SubnetNodesClasses::<T>::try_get(subnet_id, SubnetNodeClass::Idle) {
+			// 		node_class.insert(account_id.clone(), 0);
+			// 		SubnetNodesClasses::<T>::insert(subnet_id, SubnetNodeClass::Idle, node_class);	
+			// 	} else {
+			// 		// If new subnet, initialize classes
+			// 		let mut node_class: BTreeMap<T::AccountId, u64> = BTreeMap::new();
+			// 		node_class.insert(account_id.clone(), 0);
+			// 		SubnetNodesClasses::<T>::insert(subnet_id, SubnetNodeClass::Idle, node_class);	
+			// 	}
 
-				// Add subnet_id to account
-				// Account can only have a subnet peer per subnet so we don't check if it exists
-				AccountSubnets::<T>::append(account_id.clone(), subnet_id);
+			// 	// Add subnet_id to account
+			// 	// Account can only have a subnet peer per subnet so we don't check if it exists
+			// 	AccountSubnets::<T>::append(account_id.clone(), subnet_id);
 
-				// Increase total subnet peers
-				TotalSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
+			// 	// Increase total subnet peers
+			// 	TotalSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
 
 
-				count += 1;
-			}
+			// 	count += 1;
+			// }
 		}
 	}
 }

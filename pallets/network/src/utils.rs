@@ -151,6 +151,24 @@ impl<T: Config> Pallet<T> {
       // Insert retained subnet_id's
       AccountSubnets::<T>::insert(account_id.clone(), account_subnet_ids);
 
+      // Remove from attestations
+      let epoch_length: u64 = T::EpochLength::get();
+			let epoch: u64 = block / epoch_length;
+
+      SubnetRewardsSubmission::<T>::try_mutate_exists(
+        subnet_id,
+        epoch as u32,
+        |params| -> DispatchResult {
+          let params = if let Some(params) = params {
+            let mut attests = &mut params.attests;
+            if attests.remove(&account_id.clone()) {
+              params.attests = attests.clone();
+            }
+          };
+          Ok(())
+        }
+      );
+    
       // Reset sequential absent subnet node count
       SequentialAbsentSubnetNode::<T>::remove(subnet_id, account_id.clone());
 

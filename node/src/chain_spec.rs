@@ -200,17 +200,16 @@ fn testnet_genesis(
 			// Assign network admin rights.
 			"key": Some(root_key),
 		},
-		"sudo": {
-			"subnet_path": subnet_path,
-			"memory_mb": 560,
-			"subnet_nodes": endowed_accounts.iter().cloned().map(|k| {
+		"network": {
+			"subnetPath": subnet_path,
+			"memoryMb": 560,
+			"subnetNodes": endowed_accounts.iter().cloned().map(|k| {
 				peer_index += 1;
 				(
 					k, 
 					peer(peer_index),
 				)
 			}).collect::<Vec<_>>(),
-			"accounts": endowed_accounts.iter().collect::<Vec<_>>(),
 		},
 	})
 }

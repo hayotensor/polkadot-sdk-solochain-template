@@ -141,7 +141,7 @@ fn post_success_proposal_activate_ensures<T: Config>(path: Vec<u8>, proposal_ind
   assert_eq!(proposal.proposal_status, PropsStatus::Active);
   assert_eq!(proposal.proposal_type, PropsType::Activate);
   // assert_eq!(proposal.subnet_nodes, path);
-  assert_eq!(proposal.max_block, proposal_start_block + block_to_u64::<T>(T::VotingPeriod::get()));
+  assert_eq!(proposal.end_vote_block, proposal_start_block + block_to_u64::<T>(T::VotingPeriod::get()));
 
   let model_initialization_cost = T::SubnetVote::get_model_initialization_cost();
   // assert_eq!(VotesBalance::<T>::get(proposal_index, proposer), model_initialization_cost.clone());
@@ -247,7 +247,7 @@ benchmarks! {
     let proposal = Proposals::<T>::get(proposal_index);
 
     let current_block_number = get_current_block_as_u64::<T>();
-    frame_system::Pallet::<T>::set_block_number(u64_to_block::<T>(current_block_number + proposal.max_block + 1));
+    frame_system::Pallet::<T>::set_block_number(u64_to_block::<T>(current_block_number + proposal.end_vote_block + 1));
 
 	}: execute(RawOrigin::Signed(voter.clone()), proposal_index)
 	verify {
@@ -287,7 +287,7 @@ benchmarks! {
     );
 
     let current_block_number = get_current_block_as_u64::<T>();
-    frame_system::Pallet::<T>::set_block_number(u64_to_block::<T>(current_block_number + proposal.max_block + 1));
+    frame_system::Pallet::<T>::set_block_number(u64_to_block::<T>(current_block_number + proposal.end_vote_block + 1));
 
     // Execute proposal
     assert_ok!(

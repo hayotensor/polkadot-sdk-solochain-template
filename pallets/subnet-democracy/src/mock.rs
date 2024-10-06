@@ -187,6 +187,7 @@ impl pallet_network::Config for Test {
 parameter_types! {
 	pub const VotingPeriod: BlockNumber = DAYS * 21;
 	pub const EnactmentPeriod: BlockNumber = DAYS * 7;
+  pub const VerifyPeriod: BlockNumber = DAYS * 4;
   pub const MinProposerStake: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
   pub const Quorum: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
 }
@@ -201,6 +202,7 @@ impl Config for Test {
 	type MaxProposals = ConstU32<32>;
 	type VotingPeriod = VotingPeriod;
 	type EnactmentPeriod = EnactmentPeriod;
+  type VerifyPeriod = VerifyPeriod;
   type MinProposerStake = MinProposerStake; // 100 * 1e18
   type Quorum = Quorum;
 }

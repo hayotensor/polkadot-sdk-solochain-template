@@ -279,6 +279,13 @@ impl pallet_multisig::Config for Runtime {
 
 impl pallet_insecure_randomness_collective_flip::Config for Runtime {}
 
+impl pallet_utility::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type PalletsOrigin = OriginCaller;
+	type WeightInfo = pallet_utility::weights::SubstrateWeight<Runtime>;
+}
+
 parameter_types! {
 	pub const InitialTxRateLimit: u64 = 0;
 	pub const EpochLength: u64 = 10;
@@ -312,6 +319,7 @@ parameter_types! {
 	// Testnet
 	pub const VotingPeriod: BlockNumber = DAYS * 9;
 	pub const EnactmentPeriod: BlockNumber = DAYS * 12;
+	pub const VerifyPeriod: BlockNumber = DAYS * 4;
 	pub const MinProposerStake: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
 	pub const Quorum: u128 = 10_000_000_000_000_000_000_000; // 10,000 * 1e18
 
@@ -331,6 +339,7 @@ impl pallet_subnet_democracy::Config for Runtime {
 	type MaxProposals = ConstU32<32>;
 	type VotingPeriod = VotingPeriod;
 	type EnactmentPeriod = EnactmentPeriod;
+	type VerifyPeriod = VerifyPeriod;
 	type MinProposerStake = MinProposerStake;
 	type Quorum = Quorum;
 }
@@ -429,6 +438,9 @@ mod runtime {
 
 	#[runtime::pallet_index(13)]
 	pub type Admin = pallet_admin;
+
+	#[runtime::pallet_index(14)]
+	pub type Utility = pallet_utility;
 }
 
 /// The address format for describing accounts.
@@ -478,8 +490,8 @@ mod benches {
 		[pallet_balances, Balances]
 		[pallet_timestamp, Timestamp]
 		[pallet_sudo, Sudo]
-		[pallet_network, Network]
-		[pallet_subnet_democracy, SubnetDemocracy]
+		// [pallet_network, Network]
+		// [pallet_subnet_democracy, SubnetDemocracy]
 	);
 }
 

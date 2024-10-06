@@ -85,8 +85,8 @@ impl<T: Config> Pallet<T> {
     attests.insert(account_id.clone());
 
     let rewards_data: RewardsData<T::AccountId> = RewardsData {
-      validator: account_id,
-      nodes_count: submittable_nodes_count as u32,
+      validator: account_id.clone(),
+      nodes_count: submittable_nodes_count as u32, // how many submittable nodes on epoch that can attest TODO:
       sum: scores_sum,
       attests: attests,
       data: data
@@ -94,6 +94,14 @@ impl<T: Config> Pallet<T> {
 
     SubnetRewardsSubmission::<T>::insert(subnet_id, epoch, rewards_data);
   
+    Self::deposit_event(
+      Event::ValidatorSubmission { 
+        subnet_id: subnet_id, 
+        account_id: account_id, 
+        epoch: epoch,
+      }
+    );
+
     Ok(())
   }
 
@@ -125,6 +133,14 @@ impl<T: Config> Pallet<T> {
         Ok(())
       }
     )?;
+
+    Self::deposit_event(
+      Event::Attestation { 
+        subnet_id: subnet_id, 
+        account_id: account_id, 
+        epoch: epoch,
+      }
+    );
 
     Ok(())
   }
@@ -218,6 +234,15 @@ impl<T: Config> Pallet<T> {
     );
 
     // --- Increase validator penalty count
-    AccountPenaltyCount::<T>::mutate(validator, |n: &mut u32| *n += 1);
+    AccountPenaltyCount::<T>::mutate(validator.clone(), |n: &mut u32| *n += 1);
+
+    Self::deposit_event(
+      Event::Slashing { 
+        subnet_id: subnet_id, 
+        account_id: validator, 
+        amount: slash_amount,
+      }
+    );
+
   }
 }
