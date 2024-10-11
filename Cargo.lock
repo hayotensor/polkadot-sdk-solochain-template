@@ -4840,7 +4840,6 @@ version = "0.0.1"
 dependencies = [
  "jsonrpsee",
  "network-custom-rpc-runtime-api",
- "pallet-network",
  "parity-scale-codec",
  "serde",
  "sp-api",

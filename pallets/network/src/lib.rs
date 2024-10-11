@@ -139,6 +139,15 @@ pub mod pallet {
 		#[pallet::constant]
 		type SubnetInitializationCost: Get<u128>;
 
+		#[pallet::constant]
+		type CooldownEpochs: Get<u64>;
+
+		#[pallet::constant]
+		type DelegateStakeEpochsRemovalWindow: Get<u64>;
+
+		#[pallet::constant]
+		type MaxDelegateStakeUnlockings: Get<u32>;
+		
 		// type OffchainSignature: Verify<Signer = Self::OffchainPublic> + Parameter;
 		// type OffchainPublic: IdentifyAccount<AccountId = Self::AccountId>;
 
@@ -185,7 +194,8 @@ pub mod pallet {
 
 		DelegateStakeAdded(u32, T::AccountId, u128),
 		DelegateStakeRemoved(u32, T::AccountId, u128),
-		
+		DelegateStakeSwitched(u32, u32, T::AccountId, u128),
+
 		// Admin 
 		SetVoteSubnetIn(Vec<u8>),
     SetVoteSubnetOut(Vec<u8>),
@@ -329,6 +339,16 @@ pub mod pallet {
 		CouldNotConvertToShares,
 		// 
 		MaxDelegatedStakeReached,
+		//
+		InsufficientCooldown,
+		//
+		UnstakeWindowFinished,
+		//
+		MaxUnlockingsPerEpochReached,
+		//
+		MaxUnlockingsReached,
+		//
+		NoDelegateStakeUnbondingsOrCooldownNotMet,
 		//
 		RequiredDelegateUnstakeEpochsNotMet,
 		// Conversion to balance was zero
@@ -569,7 +589,7 @@ pub mod pallet {
 	pub fn DefaultAccountTake() -> u128 {
 		0
 	}
-	#[pallet::type_value]
+		#[pallet::type_value]
 	pub fn DefaultMaxStakeBalance() -> u128 {
 		280000000000000000000000
 	}
@@ -596,6 +616,18 @@ pub mod pallet {
 	#[pallet::type_value]
 	pub fn DefaultMinRequiredDelegateUnstakeEpochs() -> u64 {
 		21
+	}
+	#[pallet::type_value]
+	pub fn DefaultDelegateStakeCooldown() -> u64 {
+		0
+	}
+	#[pallet::type_value]
+	pub fn DefaultDelegateStakeUnbondingLedger() -> BTreeMap<u64, u128> {
+		// {
+		// 	epoch_start: u64, // cooldown begin epoch (+ cooldown duration for unlock)
+		// 	shares: u128,
+		// }
+		BTreeMap::new()
 	}
 	#[pallet::type_value]
 	pub fn DefaultBaseRewardPerMB() -> u128 {
@@ -1021,7 +1053,32 @@ pub mod pallet {
 		DefaultAccountTake,
 	>;
 
+	// An accounts stake per subnet
+	#[pallet::storage] // account --> subnet_id --> u64
+	pub type DelegateStakeCooldown<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		Identity,
+		u32,
+		u64,
+		ValueQuery,
+		DefaultDelegateStakeCooldown,
+	>;
 
+	// An accounts stake per subnet
+	#[pallet::storage] // account --> subnet_id --> u64
+	pub type DelegateStakeUnbondingLedger<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		Identity,
+		u32,
+		BTreeMap<u64, u128>,
+		ValueQuery,
+		DefaultDelegateStakeUnbondingLedger,
+	>;
+	
 	//
 	// Accountants
 	//
@@ -1734,20 +1791,75 @@ pub mod pallet {
 				Error::<T>::SubnetNotExist
 			);
 
-			// Update accounts subnet stake add block
-			let mut model_account_delegate_stakes: BTreeMap<T::AccountId, u64> = SubnetAccountDelegateStake::<T>::get(subnet_id);
-			let block: u64 = Self::get_current_block_as_u64();
+			// // Update accounts subnet stake add block
+			// let mut model_account_delegate_stakes: BTreeMap<T::AccountId, u64> = SubnetAccountDelegateStake::<T>::get(subnet_id);
+			// let block: u64 = Self::get_current_block_as_u64();
 
-			// Insert or update the accounts subnet stake add block
-			model_account_delegate_stakes.insert(account_id.clone(), block);
-			SubnetAccount::<T>::insert(subnet_id, model_account_delegate_stakes);
+			// // Insert or update the accounts subnet stake add block
+			// model_account_delegate_stakes.insert(account_id.clone(), block);
+			// SubnetAccountDelegateStake::<T>::insert(subnet_id, model_account_delegate_stakes);
 
 			Self::do_add_delegate_stake(
 				origin, 
 				subnet_id,
-				account_id.clone(),
 				stake_to_be_added,
 			)
+		}
+		
+		// TODO: Add test cases
+		#[pallet::call_index(8)]
+		#[pallet::weight({0})]
+		pub fn transfer_delegate_stake(
+			origin: OriginFor<T>, 
+			from_subnet_id: u32, 
+			to_subnet_id: u32, 
+			delegate_stake_shares_to_be_switched: u128
+		) -> DispatchResult {
+			let account_id: T::AccountId = ensure_signed(origin.clone())?;
+
+			// --- Ensure ``to`` subnet exists
+			ensure!(
+				SubnetsData::<T>::contains_key(to_subnet_id),
+				Error::<T>::SubnetNotExist
+			);
+
+			Self::do_switch_delegate_stake(
+				origin, 
+				from_subnet_id,
+				to_subnet_id,
+				delegate_stake_shares_to_be_switched,
+			)
+		}
+
+		#[pallet::call_index(9)]
+		// #[pallet::weight(T::WeightInfo::remove_stake())]
+		#[pallet::weight({0})]
+		pub fn remove_delegate_stake(
+			origin: OriginFor<T>, 
+			subnet_id: u32, 
+			shares_to_be_removed: u128
+		) -> DispatchResult {
+			Self::do_remove_delegate_stake(
+				origin, 
+				subnet_id,
+				shares_to_be_removed,
+			)
+		}
+
+		#[pallet::call_index(10)]
+		// #[pallet::weight(T::WeightInfo::remove_stake())]
+		#[pallet::weight({0})]
+		pub fn claim_delegate_stake_unbondings(
+			origin: OriginFor<T>, 
+			subnet_id: u32, 
+		) -> DispatchResult {
+			let account_id: T::AccountId = ensure_signed(origin.clone())?;
+			let successful_unbondings: u32 = Self::do_claim_unbondings(&account_id, subnet_id);
+			ensure!(
+				successful_unbondings > 0,
+        Error::<T>::NoDelegateStakeUnbondingsOrCooldownNotMet
+			);
+			Ok(())
 		}
 
 		/// Remove stake balance
@@ -1755,52 +1867,71 @@ pub mod pallet {
 		// Decrease stake on accounts peer if minimum required isn't surpassed
 		// to-do: if removed through consensus, add removed_block to storage and require time 
 		//				to pass until they can remove their stake
-		#[pallet::call_index(8)]
-		// #[pallet::weight(T::WeightInfo::remove_stake())]
-		#[pallet::weight({0})]
-		pub fn remove_delegate_stake(
-			origin: OriginFor<T>, 
-			subnet_id: u32, 
-			stake_to_be_removed: u128
-		) -> DispatchResult {
-			let account_id: T::AccountId = ensure_signed(origin.clone())?;
+		// #[pallet::call_index(10)]
+		// // #[pallet::weight(T::WeightInfo::remove_stake())]
+		// #[pallet::weight({0})]
+		// pub fn remove_delegate_stake(
+		// 	origin: OriginFor<T>, 
+		// 	subnet_id: u32, 
+		// 	shares_to_be_removed: u128
+		// ) -> DispatchResult {
+		// 	let account_id: T::AccountId = ensure_signed(origin.clone())?;
 
-			let min_required_delegate_unstake_epochs = MinRequiredDelegateUnstakeEpochs::<T>::get();
-			let epoch_length: u64 = T::EpochLength::get();
-			let block: u64 = Self::get_current_block_as_u64();
+		// 	let cooldown_epoch: u64 = DelegateStakeCooldown::<T>::get(account_id.clone(), subnet_id);
+		// 	let block: u64 = Self::get_current_block_as_u64();
+		// 	let epoch_length: u64 = T::EpochLength::get();
+		// 	let epoch: u64 = block / epoch_length;
 
-			let mut model_account_delegate_stakes: BTreeMap<T::AccountId, u64> = SubnetAccountDelegateStake::<T>::get(subnet_id);
+		// 	ensure!(
+		// 		epoch > cooldown_epoch + T::CooldownEpochs::get(),
+    //     Error::<T>::InsufficientCooldown
+		// 	);
 
-			let block_added: u64 = match model_account_delegate_stakes.get(&account_id.clone()) {
-				Some(block_added) => *block_added,
-				None => 0,
-			};
+		// 	ensure!(
+		// 		epoch - (cooldown_epoch + T::CooldownEpochs::get()) <= T::DelegateStakeEpochsRemovalWindow::get(),
+    //     Error::<T>::UnstakeWindowFinished
+		// 	);
 
-			// We don't ensure! if the account add block is zero 
-			// If they have no stake, it will be ensure!'d in the delegate_staking.rs
+		// 	if AccountSubnetDelegateStakeShares::<T>::get(&account_id, subnet_id.clone()) == 0 {
+		// 		DelegateStakeCooldown::<T>::insert(account_id.clone(), subnet_id, 0);
+		// 	}
 
-			// Ensure min required epochs have surpassed to unstake
-			// Based on either initialized block or removal block
-			ensure!(
-				block >= Self::get_eligible_epoch_block(
-					epoch_length, 
-					block_added, 
-					min_required_delegate_unstake_epochs
-				),
-				Error::<T>::RequiredDelegateUnstakeEpochsNotMet
-			);
+		// 	// let min_required_delegate_unstake_epochs = MinRequiredDelegateUnstakeEpochs::<T>::get();
+		// 	// let epoch_length: u64 = T::EpochLength::get();
+		// 	// let block: u64 = Self::get_current_block_as_u64();
 
-			// Remove stake
-			Self::do_remove_delegate_stake(
-				origin, 
-				subnet_id,
-				account_id,
-				stake_to_be_removed,
-			)
-		}
+		// 	// let mut model_account_delegate_stakes: BTreeMap<T::AccountId, u64> = SubnetAccountDelegateStake::<T>::get(subnet_id);
+
+		// 	// let block_added: u64 = match model_account_delegate_stakes.get(&account_id.clone()) {
+		// 	// 	Some(block_added) => *block_added,
+		// 	// 	None => 0,
+		// 	// };
+
+		// 	// // We don't ensure! if the account add block is zero 
+		// 	// // If they have no stake, it will be ensure!'d in the delegate_staking.rs
+
+		// 	// // Ensure min required epochs have surpassed to unstake
+		// 	// // Based on either initialized block or removal block
+		// 	// ensure!(
+		// 	// 	block >= Self::get_eligible_epoch_block(
+		// 	// 		epoch_length, 
+		// 	// 		block_added, 
+		// 	// 		min_required_delegate_unstake_epochs
+		// 	// 	),
+		// 	// 	Error::<T>::RequiredDelegateUnstakeEpochsNotMet
+		// 	// );
+
+		// 	// Remove stake
+		// 	Self::do_remove_delegate_stake(
+		// 		origin, 
+		// 		subnet_id,
+		// 		account_id,
+		// 		shares_to_be_removed,
+		// 	)
+		// }
 		
 		/// Delete proposals that are no longer live
-		#[pallet::call_index(9)]
+		#[pallet::call_index(11)]
 		#[pallet::weight({0})]
 		pub fn validate(
 			origin: OriginFor<T>, 
@@ -1823,7 +1954,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(10)]
+		#[pallet::call_index(12)]
 		#[pallet::weight({0})]
 		pub fn attest(
 			origin: OriginFor<T>, 
@@ -1844,7 +1975,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(11)]
+		#[pallet::call_index(13)]
 		#[pallet::weight({0})]
 		pub fn propose(
 			origin: OriginFor<T>, 
@@ -1862,7 +1993,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(12)]
+		#[pallet::call_index(14)]
 		#[pallet::weight({0})]
 		pub fn challenge_proposal(
 			origin: OriginFor<T>, 
@@ -1880,7 +2011,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(13)]
+		#[pallet::call_index(15)]
 		#[pallet::weight({0})]
 		pub fn vote(
 			origin: OriginFor<T>, 
@@ -1899,7 +2030,7 @@ pub mod pallet {
 		}
 
 		/// Allows anyone to increase the subnets delegate stake pool
-		#[pallet::call_index(14)]
+		#[pallet::call_index(16)]
 		#[pallet::weight({0})]
 		pub fn increase_delegate_stake(
 			origin: OriginFor<T>, 

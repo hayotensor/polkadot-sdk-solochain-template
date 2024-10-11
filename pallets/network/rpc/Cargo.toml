@@ -27,7 +27,6 @@ sp-runtime.workspace = true
 
 # Local
 network-custom-rpc-runtime-api = { path = "../runtime-api", default-features = false }
-pallet-network = { path = "../../network", default-features = false }
 
 [features]
 default = ["std"]
@@ -36,6 +35,5 @@ std = [
   "sp-runtime/std",
   "serde/std",
   "network-custom-rpc-runtime-api/std",
-  "pallet-network/std",
   "codec/std",
 ]
