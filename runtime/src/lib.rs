@@ -15,8 +15,9 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, One, Verify},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, MultiSignature,
+	RuntimeDebug
 };
-use codec::Encode;
+use codec::{Encode, Decode, MaxEncodedLen};
 
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
@@ -25,8 +26,14 @@ use sp_version::RuntimeVersion;
 pub use frame_support::{
 	construct_runtime, derive_impl, parameter_types,
 	traits::{
+		fungible::HoldConsideration,
 		ConstBool, ConstU128, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem,
 		StorageInfo,
+		InstanceFilter,
+		VariantCountOf,
+		EitherOfDiverse,
+		EqualPrivilegeOnly,
+		LinearStoragePrice,
 	},
 	weights::{
 		constants::{
@@ -34,15 +41,14 @@ pub use frame_support::{
 		},
 		IdentityFee, Weight,
 	},
+	dispatch::DispatchClass,
 	StorageValue,
 	PalletId,
-};
-use frame_support::{
 	genesis_builder_helper::{build_state, get_preset},
-	traits::VariantCountOf,
 };
-pub use frame_system::Call as SystemCall;
+pub use frame_system::EnsureRoot;
 pub use pallet_balances::Call as BalancesCall;
+pub use frame_system::Call as SystemCall;
 pub use pallet_timestamp::Call as TimestampCall;
 use pallet_transaction_payment::{ConstFeeMultiplier, FungibleAdapter, Multiplier};
 #[cfg(any(feature = "std", test))]
@@ -223,8 +229,8 @@ impl pallet_timestamp::Config for Runtime {
 pub const EXISTENTIAL_DEPOSIT: u128 = 500;
 
 impl pallet_balances::Config for Runtime {
-	type MaxLocks = ConstU32<50>;
-	type MaxReserves = ();
+	type MaxLocks = ConstU32<128>;
+	type MaxReserves = ConstU32<128>;
 	type ReserveIdentifier = [u8; 8];
 	/// The type for recording an account's balance.
 	type Balance = Balance;
@@ -235,7 +241,8 @@ impl pallet_balances::Config for Runtime {
 	type AccountStore = System;
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 	type FreezeIdentifier = RuntimeFreezeReason;
-	type MaxFreezes = VariantCountOf<RuntimeFreezeReason>;
+	// type MaxFreezes = VariantCountOf<RuntimeFreezeReason>;
+	type MaxFreezes = ConstU32<50>;
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type RuntimeFreezeReason = RuntimeHoldReason;
 }
@@ -284,6 +291,170 @@ impl pallet_utility::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = pallet_utility::weights::SubstrateWeight<Runtime>;
+}
+
+pub const fn deposit(items: u32, bytes: u32) -> Balance {
+	pub const ITEMS_FEE: Balance = 2_000 * 10_000;
+	pub const BYTES_FEE: Balance = 100 * 10_000;
+	(items as Balance)
+			.saturating_mul(ITEMS_FEE)
+			.saturating_add((bytes as Balance).saturating_mul(BYTES_FEE))
+}
+
+parameter_types! {
+	// One storage item; key size 32, value size 8; .
+	pub const ProxyDepositBase: Balance = deposit(1, 8);
+	// Additional storage item size of 33 bytes.
+	pub const ProxyDepositFactor: Balance = deposit(0, 33);
+	pub const AnnouncementDepositBase: Balance = deposit(1, 8);
+	pub const AnnouncementDepositFactor: Balance = deposit(0, 66);
+}
+
+/// The type used to represent the kinds of proxying allowed.
+#[derive(
+	Copy,
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	MaxEncodedLen,
+	scale_info::TypeInfo,
+)]
+pub enum ProxyType {
+	Any,
+	// NonTransfer,
+	// Governance,
+	// Staking,
+}
+impl Default for ProxyType {
+	fn default() -> Self {
+		Self::Any
+	}
+}
+impl InstanceFilter<RuntimeCall> for ProxyType {
+	fn filter(&self, c: &RuntimeCall) -> bool {
+		match self {
+			ProxyType::Any => true,
+			// ProxyType::NonTransfer => !matches!(
+			// 	c,
+			// 	RuntimeCall::Balances(..) | 
+			// 	RuntimeCall::Network(pallet_network::Call::add_to_delegate_stake { .. })  |
+			// 	RuntimeCall::Network(pallet_network::Call::remove_delegate_stake { .. })  |
+			// 	RuntimeCall::Network(pallet_network::Call::transfer_delegate_stake { .. })
+			// ),
+			// ProxyType::Governance => matches!(
+			// 	c,
+			// 	RuntimeCall::Democracy(..) |
+			// 		RuntimeCall::Council(..) |
+			// 		RuntimeCall::Society(..) |
+			// 		RuntimeCall::TechnicalCommittee(..) |
+			// 		RuntimeCall::Elections(..) |
+			// 		RuntimeCall::Treasury(..)
+			// ),
+			// ProxyType::Staking => matches!(
+			// 	c,
+			// 	RuntimeCall::Network(pallet_network::Call::add_to_delegate_stake { .. })  |
+			// 	RuntimeCall::Network(pallet_network::Call::remove_delegate_stake { .. })  |
+			// 	RuntimeCall::Network(pallet_network::Call::transfer_delegate_stake { .. })
+			// ),
+			// ProxyType::Staking => {
+			// 	matches!(c, RuntimeCall::Staking(..) | RuntimeCall::FastUnstake(..))
+			// },
+		}
+	}
+	fn is_superset(&self, o: &Self) -> bool {
+		match (self, o) {
+			(x, y) if x == y => true,
+			(ProxyType::Any, _) => true,
+			(_, ProxyType::Any) => false,
+			// (ProxyType::NonTransfer, _) => true,
+			_ => false,
+		}
+	}
+}
+
+impl pallet_proxy::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type Currency = Balances;
+	type ProxyType = ProxyType;
+	type ProxyDepositBase = ProxyDepositBase;
+	type ProxyDepositFactor = ProxyDepositFactor;
+	type MaxProxies = ConstU32<32>;
+	type WeightInfo = pallet_proxy::weights::SubstrateWeight<Runtime>;
+	type MaxPending = ConstU32<32>;
+	type CallHasher = BlakeTwo256;
+	type AnnouncementDepositBase = AnnouncementDepositBase;
+	type AnnouncementDepositFactor = AnnouncementDepositFactor;
+}
+
+parameter_types! {
+	pub const PreimageBaseDeposit: Balance = deposit(2, 64);
+	pub const PreimageByteDeposit: Balance = deposit(0, 1);
+	pub const PreimageHoldReason: RuntimeHoldReason = RuntimeHoldReason::Preimage(pallet_preimage::HoldReason::Preimage);
+}
+
+impl pallet_preimage::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_preimage::weights::SubstrateWeight<Runtime>;
+	type Currency = Balances;
+	type ManagerOrigin = EnsureRoot<AccountId>;
+	type Consideration = HoldConsideration<
+		AccountId,
+		Balances,
+		PreimageHoldReason,
+		LinearStoragePrice<PreimageBaseDeposit, PreimageByteDeposit, Balance>,
+	>;
+}
+
+parameter_types! {
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) *
+		BlockWeights::get().max_block;
+}
+
+impl pallet_scheduler::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeOrigin = RuntimeOrigin;
+	type PalletsOrigin = OriginCaller;
+	type RuntimeCall = RuntimeCall;
+	type MaximumWeight = MaximumSchedulerWeight;
+	type ScheduleOrigin = EnsureRoot<AccountId>;
+	type MaxScheduledPerBlock = ConstU32<10>;
+	type WeightInfo = pallet_scheduler::weights::SubstrateWeight<Runtime>;
+	type OriginPrivilegeCmp = EqualPrivilegeOnly;
+	type Preimages = Preimage;
+}
+
+// /// We assume that ~10% of the block weight is consumed by `on_initialize` handlers.
+// /// This is used to limit the maximal weight of a single extrinsic.
+// const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
+// /// We allow for 2 seconds of compute with a 6 second average block time, with maximum proof size.
+// const MAXIMUM_BLOCK_WEIGHT: Weight =
+// 	Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND.saturating_mul(2), u64::MAX);
+
+parameter_types! {
+	pub const CouncilMotionDuration: BlockNumber = 5 * DAYS;
+	pub const CouncilMaxProposals: u32 = 100;
+	pub const CouncilMaxMembers: u32 = 100;
+	pub MaxCollectivesProposalWeight: Weight = Perbill::from_percent(50) * BlockWeights::get().max_block;
+}
+
+type CouncilCollective = pallet_collective::Instance1;
+impl pallet_collective::Config<CouncilCollective> for Runtime {
+	type RuntimeOrigin = RuntimeOrigin;
+	type Proposal = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
+	type MotionDuration = CouncilMotionDuration;
+	type MaxProposals = CouncilMaxProposals;
+	type MaxMembers = CouncilMaxMembers;
+	type DefaultVote = pallet_collective::PrimeDefaultVote;
+	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
+	type SetMembersOrigin = EnsureRoot<AccountId>;
+	type MaxProposalWeight = MaxCollectivesProposalWeight;
 }
 
 parameter_types! {
@@ -447,6 +618,18 @@ mod runtime {
 
 	#[runtime::pallet_index(14)]
 	pub type Utility = pallet_utility;
+
+	#[runtime::pallet_index(15)]
+	pub type Proxy = pallet_proxy;
+
+	#[runtime::pallet_index(16)]
+	pub type Preimage = pallet_preimage;
+
+	#[runtime::pallet_index(17)]
+	pub type Scheduler = pallet_scheduler;
+
+	#[runtime::pallet_index(18)]
+	pub type Collective = pallet_collective::Pallet<Runtime, Instance1>;
 }
 
 /// The address format for describing accounts.

@@ -32,6 +32,9 @@ pallet-timestamp.workspace = true
 pallet-transaction-payment.workspace = true
 pallet-authorship.workspace = true
 pallet-utility.workspace = true
+pallet-proxy.workspace = true
+pallet-preimage.workspace = true
+pallet-scheduler.workspace = true
 
 sp-api.workspace = true
 sp-block-builder.workspace = true
@@ -59,6 +62,7 @@ network-custom-rpc-runtime-api = { version = "0.0.1", default-features = false, 
 pallet-subnet-democracy = { version = "4.0.0-dev", default-features = false, path = "../pallets/subnet-democracy" }
 pallet-admin = { version = "4.0.0-dev", default-features = false, path = "../pallets/admin" }
 pallet-rewards = { version = "4.0.0-dev", default-features = false, path = "../pallets/rewards" }
+pallet-collective = { version = "37.0", default-features = false, path = "../pallets/collective" }
 
 serde.workspace = true
 serde_json.workspace = true
@@ -97,6 +101,10 @@ std = [
 	"pallet-rewards/std",
 	"pallet-admin/std",
 	"pallet-utility/std",
+	"pallet-proxy/std",
+	"pallet-preimage/std",
+	"pallet-scheduler/std",
+	"pallet-collective/std",
 
 	"sp-api/std",
 	"sp-block-builder/std",
@@ -128,6 +136,7 @@ runtime-benchmarks = [
 	"pallet-sudo/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"pallet-subnet-democracy/runtime-benchmarks",
+	"pallet-proxy/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 ]
 
@@ -146,4 +155,5 @@ try-runtime = [
 	"pallet-insecure-randomness-collective-flip/try-runtime",
 	"pallet-network/try-runtime",
 	"pallet-multisig/try-runtime",
+	"pallet-proxy/try-runtime",
 ]

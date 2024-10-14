@@ -17,7 +17,7 @@ use super::*;
 use crate as pallet_admin;
 use frame_support::{
   parameter_types,
-  traits::Everything,
+  traits::{VariantCountOf, Everything},
   PalletId,
   derive_impl
 };
@@ -101,7 +101,8 @@ impl pallet_balances::Config for Test {
   type RuntimeHoldReason = ();
   type FreezeIdentifier = ();
   // type MaxHolds = ();
-  type MaxFreezes = ();
+  // type MaxFreezes = ();
+  type MaxFreezes = VariantCountOf<RuntimeFreezeReason>;
   type RuntimeFreezeReason = ();
 }
 

@@ -72,6 +72,9 @@ pallet-transaction-payment-rpc-runtime-api = { version = "37.0.0", default-featu
 pallet-multisig = { version = "37.0.0", default-features = false }
 pallet-insecure-randomness-collective-flip = { version = "25.0.0", default-features = false }
 pallet-utility = { version = "37.0.0", default-features = false }
+pallet-proxy = { version = "37.0.0", default-features = false }
+pallet-preimage = { version = "37.0.0", default-features = false }
+pallet-scheduler = { version = "38.0.0", default-features = false }
 scale-info = { version = "2.11.1", default-features = false }
 sp-genesis-builder = { version = "0.15.0", default-features = false }
 sp-offchain = { version = "34.0.0", default-features = false }
@@ -81,4 +84,5 @@ sp-transaction-pool = { version = "34.0.0", default-features = false }
 sp-version = { version = "37.0.0", default-features = false }
 substrate-wasm-builder = { version = "24.0.0", default-features = false }
 sp-tracing = { version = "17.0.0", default-features = false }
+docify = { version = "0.2.7" }
 frame-metadata = "16"
