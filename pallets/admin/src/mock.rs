@@ -166,9 +166,11 @@ parameter_types! {
   pub const NetworkPalletId: PalletId = PalletId(*b"/network");
   pub const SubnetInitializationCost: u128 = 100_000_000_000_000_000_000;
   pub const MinProposalStake: u128 = 1_000_000_000_000_000_000;
-  pub const CooldownEpochs: u64 = 100;
+  pub const DelegateStakeCooldownEpochs: u64 = 100;
+  pub const StakeCooldownEpochs: u64 = 100;
 	pub const DelegateStakeEpochsRemovalWindow: u64 = 10;
   pub const MaxDelegateStakeUnlockings: u32 = 32;
+  pub const MaxStakeUnlockings: u32 = 32;
 }
 
 impl pallet_network::Config for Test {
@@ -181,9 +183,11 @@ impl pallet_network::Config for Test {
   type Randomness = InsecureRandomnessCollectiveFlip;
 	type PalletId = NetworkPalletId;
   type SubnetInitializationCost = SubnetInitializationCost;
-  type CooldownEpochs = CooldownEpochs;
+  type DelegateStakeCooldownEpochs = DelegateStakeCooldownEpochs;
+  type StakeCooldownEpochs = DelegateStakeCooldownEpochs;
 	type DelegateStakeEpochsRemovalWindow = DelegateStakeEpochsRemovalWindow;
   type MaxDelegateStakeUnlockings = MaxDelegateStakeUnlockings;
+  type MaxStakeUnlockings = MaxStakeUnlockings;
   type MinProposalStake = MinProposalStake;
 }
 
@@ -193,6 +197,8 @@ parameter_types! {
   pub const VerifyPeriod: BlockNumber = DAYS * 4;
   pub const MinProposerStake: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
   pub const Quorum: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
+  pub const CancelSlashPercent: u8 = 5;
+  pub const QuorumVotingPowerPercentage: u8 = 40;
 }
 
 impl pallet_subnet_democracy::Config for Test {
@@ -208,6 +214,8 @@ impl pallet_subnet_democracy::Config for Test {
   type VerifyPeriod = VerifyPeriod;
   type MinProposerStake = MinProposerStake;
   type Quorum = Quorum;
+  type CancelSlashPercent = CancelSlashPercent;
+  type QuorumVotingPowerPercentage = QuorumVotingPowerPercentage;
 }
 
 impl Config for Test {

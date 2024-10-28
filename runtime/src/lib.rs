@@ -463,9 +463,11 @@ parameter_types! {
 	pub const NetworkPalletId: PalletId = PalletId(*b"/network");
 	pub const SubnetInitializationCost: u128 = 100_000_000_000_000_000_000;
 	pub const MinProposalStake: u128 = 1_000_000_000_000_000_000; // 1 * 1e18
-	pub const CooldownEpochs: u64 = 100;
+	pub const DelegateStakeCooldownEpochs: u64 = 100;
+	pub const StakeCooldownEpochs: u64 = 100;
 	pub const DelegateStakeEpochsRemovalWindow: u64 = 10;
 	pub const MaxDelegateStakeUnlockings: u32 = 32;
+	pub const MaxStakeUnlockings: u32 = 32;
 }
 
 impl pallet_network::Config for Runtime {
@@ -481,9 +483,11 @@ impl pallet_network::Config for Runtime {
 // 	type OffchainPublic = AccountPublic;
 	type PalletId = NetworkPalletId;
 	type SubnetInitializationCost = SubnetInitializationCost;
-	type CooldownEpochs = CooldownEpochs;
+  type DelegateStakeCooldownEpochs = DelegateStakeCooldownEpochs;
 	type DelegateStakeEpochsRemovalWindow = DelegateStakeEpochsRemovalWindow;
 	type MaxDelegateStakeUnlockings = MaxDelegateStakeUnlockings;
+	type MaxStakeUnlockings = MaxStakeUnlockings;
+	type StakeCooldownEpochs = StakeCooldownEpochs;
 	type Randomness = InsecureRandomnessCollectiveFlip;
 	type MinProposalStake = MinProposalStake;
 }
@@ -494,12 +498,13 @@ parameter_types! {
 	// pub const EnactmentPeriod: BlockNumber = DAYS * 7;
 
 	// Testnet
-	pub const VotingPeriod: BlockNumber = DAYS * 9;
+	pub const VotingPeriod: BlockNumber = DAYS * 13;
 	pub const EnactmentPeriod: BlockNumber = DAYS * 12;
 	pub const VerifyPeriod: BlockNumber = DAYS * 4;
 	pub const MinProposerStake: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
 	pub const Quorum: u128 = 10_000_000_000_000_000_000_000; // 10,000 * 1e18
-
+	pub const CancelSlashPercent: u8 = 5;
+	pub const QuorumVotingPowerPercentage: u8 = 40;
 	// Local
 	// pub const VotingPeriod: BlockNumber = 50; // ~5 minutes
 	// pub const EnactmentPeriod: BlockNumber = 600; // ~60 minutes
@@ -519,6 +524,8 @@ impl pallet_subnet_democracy::Config for Runtime {
 	type VerifyPeriod = VerifyPeriod;
 	type MinProposerStake = MinProposerStake;
 	type Quorum = Quorum;
+	type CancelSlashPercent = CancelSlashPercent;
+	type QuorumVotingPowerPercentage = QuorumVotingPowerPercentage;
 }
 
 pub struct AuraAccountAdapter;

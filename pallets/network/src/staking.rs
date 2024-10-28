@@ -144,6 +144,78 @@ impl<T: Config> Pallet<T> {
     Ok(())
   }
 
+  pub fn add_balance_to_stake_unbonding_ledger(
+    account_id: &T::AccountId,
+    subnet_id: u32, 
+    amount: u128,
+    block: u64,
+  ) -> DispatchResult {
+    let epoch_length: u64 = T::EpochLength::get();
+    let epoch: u64 = block / epoch_length;
+
+    let unbondings = SubnetStakeUnbondingLedger::<T>::get(account_id.clone(), subnet_id);
+
+
+    // One unlocking per epoch
+    ensure!(
+      unbondings.get(&epoch) == None,
+      Error::<T>::MaxUnlockingsPerEpochReached
+    );
+
+    // --- Ensure we don't surpass max unlockings by attempting to unlock unbondings
+    if unbondings.len() as u32 == T::MaxStakeUnlockings::get() {
+      Self::do_claim_stake_unbondings(&account_id,subnet_id);
+    }
+
+    // --- Get updated unbondings after claiming unbondings
+    let mut unbondings = SubnetStakeUnbondingLedger::<T>::get(account_id.clone(), subnet_id);
+
+    // We're about to add another unbonding to the ledger - it must be n-1
+    ensure!(
+      unbondings.len() < T::MaxStakeUnlockings::get() as usize,
+      Error::<T>::MaxUnlockingsReached
+    );
+
+    unbondings.insert(epoch, amount);
+    SubnetStakeUnbondingLedger::<T>::insert(account_id.clone(), subnet_id, unbondings);
+
+    Ok(())
+  }
+
+  // Infallible
+  pub fn do_claim_stake_unbondings(account_id: &T::AccountId, subnet_id: u32) -> u32 {
+    let block: u64 = Self::get_current_block_as_u64();
+    let epoch_length: u64 = T::EpochLength::get();
+    let epoch: u64 = block / epoch_length;
+    let unbondings = SubnetStakeUnbondingLedger::<T>::get(account_id.clone(), subnet_id);
+    let mut unbondings_copy = unbondings.clone();
+
+    // let mut successful_unbondings = BTreeMap::new();
+    let mut successful_unbondings = 0;
+
+    for (unbonding_epoch, amount) in unbondings.iter() {
+      if epoch <= unbonding_epoch + T::StakeCooldownEpochs::get() {
+        continue
+      }
+
+      let stake_to_be_added_as_currency = Self::u128_to_balance(*amount);
+      if !stake_to_be_added_as_currency.is_some() {
+        // Redundant
+        unbondings_copy.remove(&unbonding_epoch);
+        continue
+      }
+      
+      unbondings_copy.remove(&unbonding_epoch);
+      Self::add_balance_to_coldkey_account(&account_id, stake_to_be_added_as_currency.unwrap());
+      successful_unbondings += 1;
+    }
+
+    if unbondings.len() != unbondings_copy.len() {
+      SubnetStakeUnbondingLedger::<T>::insert(account_id.clone(), subnet_id, unbondings_copy);
+    }
+    successful_unbondings
+  }
+
   pub fn increase_account_stake(
     account_id: &T::AccountId,
     subnet_id: u32, 

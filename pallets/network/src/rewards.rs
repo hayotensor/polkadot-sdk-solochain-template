@@ -21,6 +21,7 @@ impl<T: Config> Pallet<T> {
     let base_reward_per_mb: u128 = BaseRewardPerMB::<T>::get();
     let min_attestation_percentage = MinAttestationPercentage::<T>::get();
     let max_absent = MaxSequentialAbsentSubnetNode::<T>::get();
+    let max_subnet_penalty_count = MaxSubnetPenaltyCount::<T>::get();
 
     let node_removal_threshold = NodeConsensusRemovalThreshold::<T>::get();
     let delegate_stake_rewards_percentage: u128 = DelegateStakeRewardsPercentage::<T>::get();
@@ -43,8 +44,6 @@ impl<T: Config> Pallet<T> {
         let min_nodes = data.min_nodes;
         let data_len = submission.data.len();
         let submission_nodes_count = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable).len() as u128;
-        log::error!("submission_nodes_count classes rewards {:?}", submission_nodes_count);
-
 
         // let submission_nodes_count: u128 = submission.nodes_count as u128;
         // log::error!("submission.nodes_count rewards         {:?}", submission_nodes_count);
@@ -166,6 +165,8 @@ impl<T: Config> Pallet<T> {
         // --- Increment down subnet penalty score on successful epochs
         SubnetPenaltyCount::<T>::mutate(subnet_id, |n: &mut u32| n.saturating_dec());
       } else if let Ok(rewards_validator) = SubnetRewardsValidator::<T>::try_get(subnet_id, epoch) {
+        // --- If a validator has been chosen that means they are supposed to be submitting consensus data
+        //     since the subnet is passed its MinRequiredSubnetConsensusSubmitEpochs
         // --- If there is no submission but validator chosen, increase penalty on subnet and validator
         // --- Increase the penalty count for the subnet
         // The next validator on the next epoch can increment the penalty score down
@@ -177,6 +178,15 @@ impl<T: Config> Pallet<T> {
       }
 
       // TODO: Automatically remove subnet if greater than max penalties count
+      // TODO: Get benchmark for removing max subnets in one epoch to ensure does not surpass max weights
+      let subnet_penalty_count = SubnetPenaltyCount::<T>::get(subnet_id);
+      if subnet_penalty_count > max_subnet_penalty_count {
+        // Self::do_remove_subnet(block, subnet_id);
+        Self::deactivate_subnet(
+          data.path,
+          SubnetRemovalReason::MaxPenalties,
+        );
+      }
     }
   }
 

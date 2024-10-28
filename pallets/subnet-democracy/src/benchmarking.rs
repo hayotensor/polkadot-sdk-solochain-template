@@ -30,7 +30,7 @@ use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use crate::Pallet as SubnetVoting;
 use crate::{
   SubnetNode, PropsType, SubnetVote, VotesBalance, ReservableCurrency, PropCount, VoteType,
-  Votes, ActiveProposals, Proposals, PropsStatus, Quorum, PreSubnetData
+  Votes, ActiveProposalsCount, Proposals, PropsStatus, Quorum, PreSubnetData
 };
 use frame_support::dispatch::Vec;
 use scale_info::prelude::{vec, format};
@@ -102,7 +102,7 @@ fn build_subnet_nodes<T: Config>(start: u32, end: u32, deposit_amount: u128) -> 
 }
 
 fn post_proposal_concluded<T: Config>(proposal_index: u32, proposer: T::AccountId) {
-  let active_proposals = ActiveProposals::<T>::get();
+  let active_proposals = ActiveProposalsCount::<T>::get();
   assert_eq!(active_proposals, proposal_index);
 
   // --- Ensure cannot call twice
@@ -150,7 +150,7 @@ fn post_success_proposal_activate_ensures<T: Config>(path: Vec<u8>, proposal_ind
   // let reserved_balance = ReservableCurrency::reserved_balance(&proposer);
   // assert_eq!(reserved_balance, model_initialization_cost.clone());
 
-  let active_proposals = ActiveProposals::<T>::get();
+  let active_proposals = ActiveProposalsCount::<T>::get();
   assert_eq!(active_proposals, proposal_index + 1);
 }
 

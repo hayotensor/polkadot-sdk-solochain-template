@@ -158,8 +158,8 @@ impl<T: Config> Pallet<T> {
     // let remaining_account_delegate_stake_shares: u128 = AccountSubnetDelegateStakeShares::<T>::get(&account_id, subnet_id);
     
     // --- We add the balancer to the account_id.  If the above fails we will not credit this account_id.
-    // Self::add_balance_to_unbonding_ledger(&account_id, subnet_id,  delegate_stake_to_be_removed, block);
-    Self::add_balance_to_unbonding_ledger(&account_id, subnet_id,  delegate_stake_to_be_removed, block).map_err(|e| e)?;
+    // Self::add_balance_to_delegate_stake_unbonding_ledger(&account_id, subnet_id,  delegate_stake_to_be_removed, block);
+    Self::add_balance_to_delegate_stake_unbonding_ledger(&account_id, subnet_id,  delegate_stake_to_be_removed, block).map_err(|e| e)?;
 
     // Set last block for rate limiting
     Self::set_last_tx_block(&account_id, block);
@@ -277,7 +277,7 @@ impl<T: Config> Pallet<T> {
     Ok(())
   }
 
-  pub fn add_balance_to_unbonding_ledger(
+  pub fn add_balance_to_delegate_stake_unbonding_ledger(
     account_id: &T::AccountId,
     subnet_id: u32, 
     amount: u128,
@@ -297,7 +297,7 @@ impl<T: Config> Pallet<T> {
 
     // --- Ensure we don't surpass max unlockings by attempting to unlock unbondings
     if unbondings.len() as u32 == T::MaxDelegateStakeUnlockings::get() {
-      Self::do_claim_unbondings(&account_id,subnet_id);
+      Self::do_claim_delegate_stake_unbondings(&account_id,subnet_id);
     }
 
     // --- Get updated unbondings after claiming unbondings
@@ -316,7 +316,7 @@ impl<T: Config> Pallet<T> {
   }
 
   // Infallible
-  pub fn do_claim_unbondings(account_id: &T::AccountId, subnet_id: u32) -> u32 {
+  pub fn do_claim_delegate_stake_unbondings(account_id: &T::AccountId, subnet_id: u32) -> u32 {
     let block: u64 = Self::get_current_block_as_u64();
     let epoch_length: u64 = T::EpochLength::get();
     let epoch: u64 = block / epoch_length;
@@ -327,7 +327,7 @@ impl<T: Config> Pallet<T> {
     let mut successful_unbondings = 0;
 
     for (unbonding_epoch, amount) in unbondings.iter() {
-      if epoch <= unbonding_epoch + T::CooldownEpochs::get() {
+      if epoch <= unbonding_epoch + T::DelegateStakeCooldownEpochs::get() {
         continue
       }
 

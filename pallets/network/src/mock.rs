@@ -189,9 +189,11 @@ parameter_types! {
   pub const NetworkPalletId: PalletId = PalletId(*b"/network");
   pub const SubnetInitializationCost: u128 = 100_000_000_000_000_000_000;
   pub const MinProposalStake: u128 = 1_000_000_000_000_000_000;
-  pub const CooldownEpochs: u64 = 100;
+  pub const DelegateStakeCooldownEpochs: u64 = 100;
+  pub const StakeCooldownEpochs: u64 = 100;
 	pub const DelegateStakeEpochsRemovalWindow: u64 = 10;
   pub const MaxDelegateStakeUnlockings: u32 = 32;
+  pub const MaxStakeUnlockings: u32 = 32;
 }
 
 impl Config for Test {
@@ -208,9 +210,11 @@ impl Config for Test {
   type Randomness = InsecureRandomnessCollectiveFlip;
 	type PalletId = NetworkPalletId;
   type SubnetInitializationCost = SubnetInitializationCost;
-  type CooldownEpochs = CooldownEpochs;
+  type DelegateStakeCooldownEpochs = DelegateStakeCooldownEpochs;
+  type StakeCooldownEpochs = DelegateStakeCooldownEpochs;
 	type DelegateStakeEpochsRemovalWindow = DelegateStakeEpochsRemovalWindow;
   type MaxDelegateStakeUnlockings = MaxDelegateStakeUnlockings;
+  type MaxStakeUnlockings = MaxStakeUnlockings;
   type MinProposalStake = MinProposalStake;
 }
 

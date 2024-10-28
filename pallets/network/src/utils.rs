@@ -15,6 +15,7 @@
 
 use super::*;
 use frame_system::pallet_prelude::BlockNumberFor;
+use libm::exp;
 
 impl<T: Config> Pallet<T> {
   pub fn get_current_block_as_u64() -> u64 {
@@ -191,6 +192,23 @@ impl<T: Config> Pallet<T> {
   }
 
   pub fn get_min_subnet_nodes(base_node_memory: u128, memory_mb: u128) -> u32 {
+    // TODO: Add non-linear curve to have higher min nodes multiplier for lower memory subnets
+    //       and lower multiplier for higher memory subnets
+    //
+    // We already use a 16mb ``base_mb`` in order to increase the decentalization of subnets so lessening the
+    // number of nodes required for higher memory subnets at a lower multiplier would suffice as most nodes
+    // hosting higher memory subnets would likely be 3/2-4/2x more memory
+
+    // --- TEST
+    let min_mem = 0;
+    let max_mem = 1_000_000;
+    
+
+
+
+
+
+    // --- DEFAULT
     // --- Get min nodes based on default memory settings
     let real_min_subnet_nodes: u128 = memory_mb / base_node_memory;
     let mut min_subnet_nodes: u32 = MinSubnetNodes::<T>::get();
@@ -340,11 +358,76 @@ impl<T: Config> Pallet<T> {
   // }
 
   pub fn get_account_total_stake_balance(account_id: T::AccountId) -> u128 {
+    let min_required_model_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
+    let epoch_length: u64 = T::EpochLength::get();
+    let block: u64 = Self::get_current_block_as_u64();
+
 		let mut total_stake_balance = 0;
-		for subnet_id in AccountSubnets::<T>::get(account_id.clone()).iter() {
-      total_stake_balance += AccountSubnetStake::<T>::get(&account_id.clone(), subnet_id);
-		}
+    for (subnet_id, data) in SubnetsData::<T>::iter() {
+      let min_subnet_nodes = data.min_nodes;
+
+      // --- Ensure model is able to submit consensus or don't include in staking balance for subnet democracy 
+      if block < Self::get_eligible_epoch_block(
+        epoch_length, 
+        data.initialized, 
+        min_required_model_consensus_submit_epochs
+      ) {
+        continue
+      }
+
+      let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
+
+      // --- Ensure min subnet nodes that are submittable are at least the minimum required to include in subnet democracy
+      if (node_sets.len() as u32) < min_subnet_nodes {
+        continue
+      }
+
+      let is_submittable = node_sets.get(&account_id);
+
+      // --- Ensure account is submittable to include in subnet democracy
+      if let Some(is_submittable) = is_submittable {
+        // TODO: Ensure this is removed for subnet node staking cooldown during unbondings
+        total_stake_balance += AccountSubnetStake::<T>::get(&account_id, subnet_id);
+      }
+    }
 		total_stake_balance
 	}
+
+  pub fn get_total_voting_power() -> u128 {
+    let min_required_model_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
+    let epoch_length: u64 = T::EpochLength::get();
+    let block: u64 = Self::get_current_block_as_u64();
+
+    let mut total_voting_power = 0;
+    for (subnet_id, data) in SubnetsData::<T>::iter() {
+      // Before increasing voting power on a specific subnet, ensure that the subnet is:
+      // - eligible for consensus
+      // - has the minimum required submittable nodes
+      let min_subnet_nodes = data.min_nodes;
+
+      // --- Ensure model is able to submit consensus or don't include in staking balance for subnet democracy 
+      if block < Self::get_eligible_epoch_block(
+        epoch_length, 
+        data.initialized, 
+        min_required_model_consensus_submit_epochs
+      ) {
+        continue
+      }
+
+      let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
+
+      // --- Ensure min subnet nodes that are submittable are at least the minimum required to include in subnet democracy
+      if (node_sets.len() as u32) < min_subnet_nodes {
+        continue
+      }
+
+      // Get total subnet node stake balance
+      total_voting_power += TotalSubnetStake::<T>::get(subnet_id);
+
+      // Get total delegate subnet stake balance
+      total_voting_power += TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);
+    }
+    total_voting_power
+  }
 
 }

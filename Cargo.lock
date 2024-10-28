@@ -5283,6 +5283,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "libm",
  "log",
  "pallet-balances",
  "pallet-insecure-randomness-collective-flip",
@@ -5405,6 +5406,8 @@ dependencies = [
  "sp-io 38.0.0",
  "sp-runtime 39.0.2",
  "sp-std 14.0.0",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
 ]
 
 [[package]]

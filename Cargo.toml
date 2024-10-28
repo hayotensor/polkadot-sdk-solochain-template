@@ -85,4 +85,5 @@ sp-version = { version = "37.0.0", default-features = false }
 substrate-wasm-builder = { version = "24.0.0", default-features = false }
 sp-tracing = { version = "17.0.0", default-features = false }
 docify = { version = "0.2.7" }
+libm = "0.2.8"
 frame-metadata = "16"

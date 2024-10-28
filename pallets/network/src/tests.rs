@@ -38,7 +38,7 @@ use crate::{
   DelegateStakeRewardsPercentage, SubnetNodesClasses, SubnetNodeClass, SubnetNodeClassEpochs,
   SubnetPenaltyCount, MaxSequentialAbsentSubnetNode, SequentialAbsentSubnetNode, PreSubnetData,
   CurrentAccountants, TargetAccountantsLength, MinRequiredSubnetConsensusSubmitEpochs, BaseRewardPerMB,
-  DelegateStakeUnbondingLedger
+  DelegateStakeUnbondingLedger, SubnetRemovalReason
 };
 use frame_support::BoundedVec;
 use strum::IntoEnumIterator;
@@ -428,11 +428,18 @@ fn test_remove_subnet() {
     };
     assert_ok!(
       Network::deactivate_subnet(
-        account(0),
-        account(0),
-        add_subnet_data,
+        subnet_path.clone().into(),
+        SubnetRemovalReason::SubnetDemocracy,
       )
     );
+
+    // assert_ok!(
+    //   Network::deactivate_subnet(
+    //     account(0),
+    //     account(0),
+    //     add_subnet_data,
+    //   )
+    // );
   
     // assert_ok!(
     //   Network::vote_model_out(
@@ -1905,7 +1912,7 @@ fn test_remove_delegate_stake_after_remove_subnet() {
     assert_eq!(Network::total_model_stake(1), amount);
     assert_eq!(Network::total_subnet_nodes(1), 1);
 
-    System::set_block_number(System::block_number() + CooldownEpochs::get() * EpochLength::get());
+    System::set_block_number(System::block_number() + DelegateStakeCooldownEpochs::get() * EpochLength::get());
 
     let _ = Balances::deposit_creating(&account(1), amount + 500);
     let starting_delegator_balance = Balances::free_balance(&account(1));
@@ -1952,7 +1959,7 @@ fn test_remove_delegate_stake_after_remove_subnet() {
     //   )
     // );
 
-    // System::set_block_number(System::block_number() + ((EpochLength::get()  + 1) * CooldownEpochs::get()));
+    // System::set_block_number(System::block_number() + ((EpochLength::get()  + 1) * DelegateStakeCooldownEpochs::get()));
 
     // let delegate_shares = AccountSubnetDelegateStakeShares::<Test>::get(account(1), subnet_id.clone());
 
@@ -1998,7 +2005,7 @@ fn test_add_to_delegate_stake() {
       delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
     }
 
-    System::set_block_number(System::block_number() + CooldownEpochs::get() * EpochLength::get());
+    System::set_block_number(System::block_number() + DelegateStakeCooldownEpochs::get() * EpochLength::get());
 
     assert_ok!(
       Network::add_to_delegate_stake(
@@ -2055,7 +2062,7 @@ fn test_add_to_delegate_stake_increase_pool_check_balance() {
       delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
     }
 
-    System::set_block_number(System::block_number() + CooldownEpochs::get() * EpochLength::get());
+    System::set_block_number(System::block_number() + DelegateStakeCooldownEpochs::get() * EpochLength::get());
 
     assert_ok!(
       Network::add_to_delegate_stake(
@@ -2125,7 +2132,7 @@ fn test_remove_to_delegate_stake() {
       delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
     }
 
-    System::set_block_number(System::block_number() + CooldownEpochs::get() * EpochLength::get());
+    System::set_block_number(System::block_number() + DelegateStakeCooldownEpochs::get() * EpochLength::get());
 
     let starting_delegator_balance = Balances::free_balance(&account(0));
 
@@ -2154,7 +2161,7 @@ fn test_remove_to_delegate_stake() {
     assert_eq!(delegate_balance, delegate_stake_to_be_added_as_shares);
 
     let epoch_length = EpochLength::get();
-    let cooldown_epochs = CooldownEpochs::get();
+    let cooldown_epochs = DelegateStakeCooldownEpochs::get();
 
     System::set_block_number(System::block_number() + epoch_length * cooldown_epochs);
 
@@ -2234,7 +2241,7 @@ fn test_remove_to_delegate_stake_max_unlockings_per_epoch_err() {
       delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
     }
 
-    System::set_block_number(System::block_number() + CooldownEpochs::get() * EpochLength::get());
+    System::set_block_number(System::block_number() + DelegateStakeCooldownEpochs::get() * EpochLength::get());
 
     let starting_delegator_balance = Balances::free_balance(&account(0));
 
@@ -2295,7 +2302,7 @@ fn test_remove_to_delegate_stake_max_unlockings_reached_err() {
       delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
     }
 
-    System::set_block_number(System::block_number() + CooldownEpochs::get() * EpochLength::get());
+    System::set_block_number(System::block_number() + DelegateStakeCooldownEpochs::get() * EpochLength::get());
 
     let starting_delegator_balance = Balances::free_balance(&account(0));
 
@@ -2363,7 +2370,7 @@ fn test_switch_delegate_stake() {
       delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
     }
 
-    System::set_block_number(System::block_number() + CooldownEpochs::get() * EpochLength::get());
+    System::set_block_number(System::block_number() + DelegateStakeCooldownEpochs::get() * EpochLength::get());
 
     let starting_delegator_balance = Balances::free_balance(&account(0));
 
@@ -2487,7 +2494,7 @@ fn test_remove_to_delegate_stake_epochs_not_met_err() {
       delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
     }
 
-    System::set_block_number(System::block_number() + CooldownEpochs::get() * EpochLength::get());
+    System::set_block_number(System::block_number() + DelegateStakeCooldownEpochs::get() * EpochLength::get());
 
     assert_ok!(
       Network::add_to_delegate_stake(

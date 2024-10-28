@@ -35,6 +35,8 @@ sp-runtime = { features = ["serde"], workspace = true }
 sp-std.workspace = true
 
 pallet-insecure-randomness-collective-flip.workspace = true
+strum = { version = "0.26.3", features = ["derive"], default-features = false }
+strum_macros = { version = "0.26.3", default-features = false }
 
 [features]
 default = ["std"]
