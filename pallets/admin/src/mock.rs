@@ -17,9 +17,10 @@ use super::*;
 use crate as pallet_admin;
 use frame_support::{
   parameter_types,
-  traits::{VariantCountOf, Everything},
+  traits::{VariantCountOf, Everything, EitherOfDiverse},
   PalletId,
-  derive_impl
+  derive_impl,
+  weights::constants::WEIGHT_REF_TIME_PER_SECOND,
 };
 use frame_system as system;
 use sp_core::{ConstU128, ConstU32, ConstU64, H256, U256};
@@ -30,6 +31,8 @@ use sp_runtime::{
 	},
 	MultiSignature
 };
+pub use frame_system::EnsureRoot;
+use sp_runtime::Perbill;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -43,6 +46,7 @@ frame_support::construct_runtime!(
     Network: pallet_network,
     SubnetDemocracy: pallet_subnet_democracy,
     Admin: pallet_admin,
+    Collective: pallet_collective::<Instance1>
 	}
 );
 
@@ -105,34 +109,6 @@ impl pallet_balances::Config for Test {
   type MaxFreezes = VariantCountOf<RuntimeFreezeReason>;
   type RuntimeFreezeReason = ();
 }
-
-// impl system::Config for Test {
-//   type BaseCallFilter = Everything;
-//   type BlockWeights = ();
-//   type BlockLength = ();
-//   type Block = Block;
-//   type DbWeight = ();
-//   type RuntimeOrigin = RuntimeOrigin;
-//   type RuntimeCall = RuntimeCall;
-//   type Nonce = u64;
-//   type Hash = H256;
-//   type Hashing = BlakeTwo256;
-//   // type AccountId = U256;
-//   type AccountId = AccountId;
-//   // type Lookup = IdentityLookup<Self::AccountId>;
-//   type Lookup = AccountIdLookup<AccountId, ()>;
-//   type RuntimeEvent = RuntimeEvent;
-//   type BlockHashCount = BlockHashCount;
-//   type Version = ();
-//   type PalletInfo = PalletInfo;
-//   type AccountData = pallet_balances::AccountData<u128>;
-//   type OnNewAccount = ();
-//   type OnKilledAccount = ();
-//   type SystemWeightInfo = ();
-//   type SS58Prefix = SS58Prefix;
-//   type OnSetCode = ();
-//   type MaxConsumers = frame_support::traits::ConstU32<16>;
-// }
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
@@ -218,8 +194,41 @@ impl pallet_subnet_democracy::Config for Test {
   type QuorumVotingPowerPercentage = QuorumVotingPowerPercentage;
 }
 
+const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
+
+parameter_types! {
+	pub const CouncilMotionDuration: BlockNumber = 5 * DAYS;
+	pub const CouncilMaxProposals: u32 = 100;
+	pub const CouncilMaxMembers: u32 = 100;
+  pub BlockWeights: frame_system::limits::BlockWeights =
+    frame_system::limits::BlockWeights::with_sensible_defaults(
+      Weight::from_parts(2u64 * WEIGHT_REF_TIME_PER_SECOND, u64::MAX),
+      NORMAL_DISPATCH_RATIO,
+    );
+	pub MaxCollectivesProposalWeight: Weight = Perbill::from_percent(50) * BlockWeights::get().max_block;
+}
+
+type CouncilCollective = pallet_collective::Instance1;
+impl pallet_collective::Config<CouncilCollective> for Test {
+	type RuntimeOrigin = RuntimeOrigin;
+	type Proposal = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
+	type MotionDuration = CouncilMotionDuration;
+	type MaxProposals = CouncilMaxProposals;
+	type MaxMembers = CouncilMaxMembers;
+	type DefaultVote = pallet_collective::PrimeDefaultVote;
+	type WeightInfo = ();
+	type SetMembersOrigin = EnsureRoot<AccountId>;
+	type MaxProposalWeight = MaxCollectivesProposalWeight;
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
+	// type CollectiveOrigin = EitherOfDiverse<
+	// 	EnsureRoot<AccountId>,
+	// 	pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 2, 3>,
+	// >;
+  type CollectiveOrigin = pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 2, 3>;
   type NetworkAdminInterface = Network;
   type SubnetDemocracyAdminInterface = SubnetDemocracy;
 }

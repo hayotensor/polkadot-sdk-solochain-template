@@ -108,7 +108,7 @@ impl<T: Config> Pallet<T> {
       );  
     }
   
-    // --- Ensure that we can conver this u128 to a balance.
+    // --- Ensure that we can convert this u128 to a balance.
     let stake_to_be_removed_as_currency = Self::u128_to_balance(stake_to_be_removed);
     ensure!(
       stake_to_be_removed_as_currency.is_some(),

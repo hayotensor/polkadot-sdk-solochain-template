@@ -560,6 +560,11 @@ impl pallet_rewards::Config for Runtime {
 
 impl pallet_admin::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	// type CollectiveOrigin = EitherOfDiverse<
+	// 	EnsureRoot<AccountId>,
+	// 	pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 2, 3>,
+	// >;
+	type CollectiveOrigin = pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 2, 3>;
 	type NetworkAdminInterface = Network;
 	type SubnetDemocracyAdminInterface = SubnetDemocracy;
 }

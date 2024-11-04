@@ -23,9 +23,10 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		fungible::{HoldConsideration, Inspect, Mutate},
-		ConstU32, ConstU64, StorageVersion,
+		ConstU32, ConstU64, StorageVersion, EitherOfDiverse
 	},
 	Hashable,
+	PalletId,
 };
 use frame_system::{EnsureRoot, EventRecord, Phase};
 use sp_core::{ConstU128, H256};
@@ -47,6 +48,10 @@ frame_support::construct_runtime!(
 		CollectiveMajority: pallet_collective::<Instance2>,
 		DefaultCollective: pallet_collective,
 		Democracy: mock_democracy,
+		InsecureRandomnessCollectiveFlip: pallet_insecure_randomness_collective_flip,
+		Network: pallet_network,
+		SubnetDemocracy: pallet_subnet_democracy,
+		Admin: pallet_admin,
 	}
 );
 
@@ -106,6 +111,83 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type AccountStore = System;
 	type RuntimeHoldReason = RuntimeHoldReason;
+}
+
+impl pallet_insecure_randomness_collective_flip::Config for Test {}
+
+parameter_types! {
+	pub const EpochLength: u64 = 100;
+  pub const NetworkPalletId: PalletId = PalletId(*b"/network");
+  pub const SubnetInitializationCost: u128 = 100_000_000_000_000_000_000;
+  pub const MinProposalStake: u128 = 1_000_000_000_000_000_000;
+  pub const DelegateStakeCooldownEpochs: u64 = 100;
+  pub const StakeCooldownEpochs: u64 = 100;
+	pub const DelegateStakeEpochsRemovalWindow: u64 = 10;
+  pub const MaxDelegateStakeUnlockings: u32 = 32;
+  pub const MaxStakeUnlockings: u32 = 32;
+}
+
+impl pallet_network::Config for Test {
+  type WeightInfo = ();
+	type RuntimeEvent = RuntimeEvent;
+  type Currency = Balances;
+  type EpochLength = EpochLength;
+  type StringLimit = ConstU32<100>;
+	type InitialTxRateLimit = ConstU64<0>;
+  type Randomness = InsecureRandomnessCollectiveFlip;
+	type PalletId = NetworkPalletId;
+  type SubnetInitializationCost = SubnetInitializationCost;
+  type DelegateStakeCooldownEpochs = DelegateStakeCooldownEpochs;
+  type StakeCooldownEpochs = DelegateStakeCooldownEpochs;
+	type DelegateStakeEpochsRemovalWindow = DelegateStakeEpochsRemovalWindow;
+  type MaxDelegateStakeUnlockings = MaxDelegateStakeUnlockings;
+  type MaxStakeUnlockings = MaxStakeUnlockings;
+  type MinProposalStake = MinProposalStake;
+}
+
+pub type BlockNumber = u32;
+
+pub const MILLISECS_PER_BLOCK: u64 = 6000;
+pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
+pub const HOURS: BlockNumber = MINUTES * 60;
+pub const DAYS: BlockNumber = HOURS * 24;
+
+parameter_types! {
+	pub const VotingPeriod: BlockNumber = DAYS * 21;
+	pub const EnactmentPeriod: BlockNumber = DAYS * 7;
+  pub const VerifyPeriod: BlockNumber = DAYS * 4;
+  pub const MinProposerStake: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
+  pub const Quorum: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
+  pub const CancelSlashPercent: u8 = 5;
+  pub const QuorumVotingPowerPercentage: u8 = 40;
+}
+
+impl pallet_subnet_democracy::Config for Test {
+	type WeightInfo = ();
+	type RuntimeEvent = RuntimeEvent;
+	type SubnetVote = Network;
+	type Currency = Balances;
+	type MaxActivateProposals = ConstU32<32>;
+	type MaxDeactivateProposals = ConstU32<32>;
+	type MaxProposals = ConstU32<32>;
+	type VotingPeriod = VotingPeriod;
+	type EnactmentPeriod = EnactmentPeriod;
+  type VerifyPeriod = VerifyPeriod;
+  type MinProposerStake = MinProposerStake;
+  type Quorum = Quorum;
+  type CancelSlashPercent = CancelSlashPercent;
+  type QuorumVotingPowerPercentage = QuorumVotingPowerPercentage;
+}
+
+impl pallet_admin::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	// type CollectiveOrigin = EitherOfDiverse<
+	// 	EnsureRoot<AccountId>,
+	// 	pallet_collective::EnsureProportionAtLeast<AccountId, Instance1, 2, 3>,
+	// >;
+	type CollectiveOrigin = pallet_collective::EnsureProportionAtLeast<AccountId, Instance1, 2, 3>;
+	type NetworkAdminInterface = Network;
+	type SubnetDemocracyAdminInterface = SubnetDemocracy;
 }
 
 parameter_types! {
@@ -215,6 +297,7 @@ impl ExtBuilder {
 				phantom: Default::default(),
 			},
 			default_collective: Default::default(),
+			network: Default::default(),
 		}
 		.build_storage()
 		.unwrap()
@@ -1757,3 +1840,72 @@ fn genesis_build_panics_with_duplicate_members() {
 // 	assert_eq!(<Constant12 as Convert<_, u128>>::convert(1), 12);
 // 	assert_eq!(<Constant12 as Convert<_, u128>>::convert(2), 12);
 // }
+
+
+/// Admin pallet requires 2/3s approvals for function calls
+
+// Make admin pallet function call with 100% approval
+#[test]
+fn proposal_admin_pallet_vote_2_2() {
+	ExtBuilder::default().build_and_execute(|| {
+		let something = pallet_admin::Something::<Test>::get();
+		log::error!("something      {:?}", something);
+		let proposal = RuntimeCall::Admin(pallet_admin::Call::set_peer_vote_premium {
+			value: 1,
+		});
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		let hash = BlakeTwo256::hash_of(&proposal);
+		assert_ok!(Collective::propose(
+			RuntimeOrigin::signed(1),
+			2,
+			Box::new(proposal.clone()),
+			proposal_len
+		));
+		assert_ok!(Collective::vote(RuntimeOrigin::signed(1), hash, 0, true));
+		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 0, true));
+
+		System::set_block_number(4);
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(4),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
+		let something_call = pallet_admin::Something::<Test>::get();
+		log::error!("something_call {:?}", something_call);
+		assert_ne!(something, something_call);
+	})
+}
+
+// Make admin pallet function call with 50% approval
+#[test]
+fn proposal_admin_pallet_vote_1_2() {
+	ExtBuilder::default().build_and_execute(|| {
+		let proposal = RuntimeCall::Admin(pallet_admin::Call::set_peer_vote_premium {
+			value: 1,
+		});
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		let hash = BlakeTwo256::hash_of(&proposal);
+		assert_ok!(Collective::propose(
+			RuntimeOrigin::signed(1),
+			2,
+			Box::new(proposal.clone()),
+			proposal_len
+		));
+		assert_ok!(Collective::vote(RuntimeOrigin::signed(1), hash, 0, true));
+
+		System::set_block_number(4);
+		assert_ok!(Collective::close(
+			RuntimeOrigin::signed(4),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
+		let something_call = pallet_admin::Something::<Test>::get();
+		assert_eq!(something_call, None);
+	})
+}

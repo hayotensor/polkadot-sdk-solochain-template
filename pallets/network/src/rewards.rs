@@ -43,10 +43,10 @@ impl<T: Config> Pallet<T> {
 
         let min_nodes = data.min_nodes;
         let data_len = submission.data.len();
+        // --- Get nodes count to check against attestation count
+        // ``reward_subnuts`` is called before ``shift_node_classes`` so we can know how many nodes are submittable
+        // while in this function that should have in the epoch the rewards are destined for
         let submission_nodes_count = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable).len() as u128;
-
-        // let submission_nodes_count: u128 = submission.nodes_count as u128;
-        // log::error!("submission.nodes_count rewards         {:?}", submission_nodes_count);
 
         let submission_attestations: u128 = submission.attests.len() as u128;
         let mut attestation_percentage: u128 = Self::percent_div(submission_attestations, submission_nodes_count);
@@ -76,6 +76,7 @@ impl<T: Config> Pallet<T> {
           continue;
         }
 
+        // --- If the minimum attestation not reached, assume validator is dishonest, slash, and continue
         if min_attestation_percentage > attestation_percentage {
           // --- Slash validator and increase penalty score
           Self::slash_validator(subnet_id, validator, attestation_percentage);
@@ -85,7 +86,7 @@ impl<T: Config> Pallet<T> {
         }
 
         let sum: u128 = submission.sum;
-        let mut rewarded: BTreeSet<T::AccountId> = BTreeSet::new();
+        // let mut rewarded: BTreeSet<T::AccountId> = BTreeSet::new();
         for subnet_node in SubnetNodesData::<T>::iter_prefix_values(subnet_id) {
           let account_id: T::AccountId = subnet_node.account_id;
           let peer_id: PeerId = subnet_node.peer_id;
@@ -117,14 +118,13 @@ impl<T: Config> Pallet<T> {
 
               // --- Ensure maximum sequential removal consensus threshold is reached
               if absent_count + 1 > max_absent {
-                Self::do_remove_subnet_node(block, subnet_id, account_id.clone());
+                Self::perform_remove_subnet_node(block, subnet_id, account_id.clone());
               }
             }
             continue;
           }
 
           // --- If not attested, do not receive rewards
-          // --- Increase account penalty score???
           // We don't penalize accounts for not attesting data in case data is corrupted
           // It is up to subnet nodes to remove them via consensus
           if !submission.attests.contains(&account_id) {
@@ -172,6 +172,10 @@ impl<T: Config> Pallet<T> {
         // The next validator on the next epoch can increment the penalty score down
         SubnetPenaltyCount::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
 
+        // NOTE:
+        //  Each subnet increases the penalty score if they don't have the minimum subnet nodes required by the time
+        //  the subnet is enabled for emissions. This happens by the blockchain validator before choosing the subnet validator
+
         // If validator didn't submit anything, then slash
         // Even if a subnet is in a broken state, the chosen validator must submit blank data
         Self::slash_validator(subnet_id, rewards_validator, 0);
@@ -187,6 +191,8 @@ impl<T: Config> Pallet<T> {
           SubnetRemovalReason::MaxPenalties,
         );
       }
+
+      // TODO: Check delegate stake amount is above minimum required
     }
   }
 
@@ -288,7 +294,7 @@ impl<T: Config> Pallet<T> {
 
               // --- Ensure maximum sequential removal consensus threshold is reached
               if absent_count + 1 > max_absent {
-                Self::do_remove_subnet_node(block, subnet_id, account_id.clone());
+                Self::perform_remove_subnet_node(block, subnet_id, account_id.clone());
               }
             }
             continue;
@@ -452,7 +458,7 @@ impl<T: Config> Pallet<T> {
 
               // --- Ensure maximum sequential removal consensus threshold is reached
               if absent_count + 1 > max_absent {
-                Self::do_remove_subnet_node(block, subnet_id, account_id.clone());
+                Self::perform_remove_subnet_node(block, subnet_id, account_id.clone());
               }
             }
             continue;
@@ -606,7 +612,7 @@ impl<T: Config> Pallet<T> {
 
               // --- Ensure maximum sequential removal consensus threshold is reached
               if absent_count + 1 > max_absent {
-                Self::do_remove_subnet_node(block, subnet_id, account_id.clone());
+                Self::perform_remove_subnet_node(block, subnet_id, account_id.clone());
               }
             }
             continue;

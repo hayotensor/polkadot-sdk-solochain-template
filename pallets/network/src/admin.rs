@@ -17,6 +17,40 @@ use super::*;
 use sp_std::vec::Vec;
 
 impl<T: Config> Pallet<T> {
+  pub fn set_min_nodes_slope_parameters(params: MinNodesCurveParametersSet) -> DispatchResult {
+    // let one_hundred = params.one_hundred;
+    // let two_hundred = params.two_hundred;
+    let one_hundred = Self::PERCENTAGE_FACTOR;
+    let two_hundred = Self::TWO_HUNDRED_PERCENT_FACTOR;
+    let x_curve_start = params.x_curve_start;
+    let y_end = params.y_end;
+    let y_start = params.y_start;
+    let x_rise = Self::PERCENTAGE_FACTOR / 100;
+
+    ensure!(
+      y_start > y_end,
+      Error::<T>::SubnetNotExist
+    );
+
+    // --- Linear Slope check
+    let x_start_plus_1 = x_curve_start + x_rise;
+    let x_start_plus_1_adj = (x_start_plus_1 - x_curve_start) * one_hundred / (one_hundred - x_curve_start);
+    let y_start_minus_1 = (y_start - y_end) * (one_hundred - x_start_plus_1_adj) / one_hundred + y_end; 
+    let y_rise = y_start - y_start_minus_1;
+    let slope = y_rise * one_hundred / x_rise;
+    let j = slope * two_hundred / one_hundred;
+    let q = one_hundred * one_hundred / j * y_start / one_hundred;
+    let max_x = one_hundred * one_hundred / j * y_start / one_hundred + (x_curve_start * one_hundred / two_hundred);
+    
+    ensure!(
+      max_x >= one_hundred,
+      Error::<T>::SubnetNotExist
+    );
+
+    MinNodesCurveParameters::<T>::put(params);
+
+    Ok(())
+  }
   pub fn set_vote_model_in(path: Vec<u8>, memory_mb: u128) -> DispatchResult {
     // ensure subnet doesn't exists by path
     ensure!(
@@ -79,24 +113,6 @@ impl<T: Config> Pallet<T> {
   }
 
   pub fn set_min_subnet_nodes(value: u32) -> DispatchResult {
-    // let max_subnet_nodes = MaxSubnetNodes::<T>::get();
-
-    // let peer_removal_threshold = NodeRemovalThreshold::<T>::get();
-    // let min_value = Self::percent_div_round_up(1 as u128, Self::PERCENTAGE_FACTOR - peer_removal_threshold);
-
-    // // Ensure over 10
-    // // Ensure less than MaxSubnetNodes
-    // // Ensure divisible by NodeRemovalThreshold
-    // //  • e.g. if the threshold is .8, we need a minimum of
-    // ensure!(
-    //   value >= 9 && value <= max_subnet_nodes && value >= min_value as u32,
-    //   Error::<T>::InvalidMinSubnetNodes
-    // );
-
-    // MinSubnetNodes::<T>::set(value);
-
-    // Self::deposit_event(Event::SetMinSubnetNodes(value));
-
     Ok(())
   }
 

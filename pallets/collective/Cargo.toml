@@ -23,9 +23,13 @@ frame-system = { workspace = true }
 sp-core = { workspace = true }
 sp-io = { workspace = true }
 sp-runtime = { workspace = true }
+pallet-insecure-randomness-collective-flip.workspace = true
+pallet-network = { version = "4.0.0-dev", default-features = false, path = "../network" }
+pallet-subnet-democracy = { version = "4.0.0-dev", default-features = false, path = "../subnet-democracy" }
 
 [dev-dependencies]
 pallet-balances = { workspace = true, default-features = false }
+pallet-admin = { version = "4.0.0-dev", default-features = false, path = "../admin" }
 
 [features]
 default = ["std"]

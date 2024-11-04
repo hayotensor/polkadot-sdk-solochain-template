@@ -216,6 +216,7 @@ pub mod pallet {
     ProposalIsDeactvation,
     /// Not a subnet node for activation proposal
     NotSubnetNode,
+    SubnetMemoryIsZero,
   }
 
   /// `pallet-rewards` events
@@ -1210,6 +1211,11 @@ impl<T: Config> Pallet<T> {
     ensure!(
       ActivateProposalsCount::<T>::get() < T::MaxActivateProposals::get(),
       Error::<T>::MaxActivateProposals
+    );
+
+    ensure!(
+      subnet_data.clone().memory_mb > 0,
+      Error::<T>::SubnetMemoryIsZero
     );
 
     // Remove duplicates based on peer_id and account_id

@@ -119,14 +119,14 @@ impl<T: Config> Pallet<T> {
   pub fn do_remove_account_subnet_nodes(block: u64, account_id: T::AccountId) {
     let model_ids: Vec<u32> = AccountSubnets::<T>::get(account_id.clone());
     for subnet_id in model_ids.iter() {
-      Self::do_remove_subnet_node(block, *subnet_id, account_id.clone());
+      Self::perform_remove_subnet_node(block, *subnet_id, account_id.clone());
     }
   }
 
   /// Remove subnet peer from subnet
   // to-do: Add slashing to subnet peers stake balance
   // note: We don't reset AccountPenaltyCount
-  pub fn do_remove_subnet_node(block: u64, subnet_id: u32, account_id: T::AccountId) {
+  pub fn perform_remove_subnet_node(block: u64, subnet_id: u32, account_id: T::AccountId) {
     // Take and remove SubnetNodesData account_id as key
     // `take()` returns and removes data
     if let Ok(subnet_node) = SubnetNodesData::<T>::try_get(subnet_id, account_id.clone()) {
@@ -156,6 +156,8 @@ impl<T: Config> Pallet<T> {
       let epoch_length: u64 = T::EpochLength::get();
 			let epoch: u64 = block / epoch_length;
 
+      let submittable_node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
+
       SubnetRewardsSubmission::<T>::try_mutate_exists(
         subnet_id,
         epoch as u32,
@@ -164,6 +166,13 @@ impl<T: Config> Pallet<T> {
             let mut attests = &mut params.attests;
             if attests.remove(&account_id.clone()) {
               params.attests = attests.clone();
+            }
+            // Mutate down if node was counted towards ``nodes_count``
+            // Redundant now 
+            // TODO: Remove for mainnet
+            let nodes_count = params.nodes_count;
+            if submittable_node_sets.get(&account_id.clone()).is_some() {
+              params.nodes_count = nodes_count - 1;
             }
           };
           Ok(())
@@ -192,29 +201,59 @@ impl<T: Config> Pallet<T> {
   }
 
   pub fn get_min_subnet_nodes(base_node_memory: u128, memory_mb: u128) -> u32 {
-    // TODO: Add non-linear curve to have higher min nodes multiplier for lower memory subnets
-    //       and lower multiplier for higher memory subnets
-    //
-    // We already use a 16mb ``base_mb`` in order to increase the decentalization of subnets so lessening the
-    // number of nodes required for higher memory subnets at a lower multiplier would suffice as most nodes
-    // hosting higher memory subnets would likely be 3/2-4/2x more memory
-
-    // --- TEST
-    let min_mem = 0;
-    let max_mem = 1_000_000;
-    
-
-
-
-
-
     // --- DEFAULT
     // --- Get min nodes based on default memory settings
-    let real_min_subnet_nodes: u128 = memory_mb / base_node_memory;
-    let mut min_subnet_nodes: u32 = MinSubnetNodes::<T>::get();
-    if real_min_subnet_nodes as u32 > min_subnet_nodes {
-      min_subnet_nodes = real_min_subnet_nodes as u32;
+    let simple_min_subnet_nodes: u128 = memory_mb / base_node_memory;
+
+    // --- Parameters
+    let params: MinNodesCurveParametersSet = MinNodesCurveParameters::<T>::get();
+    let one_hundred = Self::PERCENTAGE_FACTOR;
+    let two_hundred = Self::TWO_HUNDRED_PERCENT_FACTOR;
+    let x_curve_start = params.x_curve_start;
+    let y_end = params.y_end;
+    let y_start = params.y_start;
+    let x_rise = Self::PERCENTAGE_FACTOR / 100;
+
+    let max_subnet_memory = MaxSubnetMemoryMB::<T>::get();
+
+    let mut subnet_mem_position = one_hundred;
+    
+    // Redundant since subnet memory cannot be surpassed beyond the max subnet memory
+    // If max subnet memory in curve is surpassed
+    if memory_mb < max_subnet_memory {
+      subnet_mem_position = memory_mb * one_hundred / max_subnet_memory;
     }
+
+    // The position of the range where ``memory_mb`` is located
+    // let subnet_mem_position = memory_mb * one_hundred / max_subnet_memory;
+    let mut min_subnet_nodes: u32 = MinSubnetNodes::<T>::get();
+
+    if subnet_mem_position <= x_curve_start {
+      if simple_min_subnet_nodes as u32 > min_subnet_nodes {
+        min_subnet_nodes = simple_min_subnet_nodes as u32;
+      }
+      return min_subnet_nodes
+    }
+
+    let mut x = 0;
+
+    if subnet_mem_position >= x_curve_start && subnet_mem_position <= one_hundred {
+      // If subnet memory position is in between range
+      x = (subnet_mem_position-x_curve_start) * one_hundred / (one_hundred-x_curve_start);
+    } else if subnet_mem_position > one_hundred {
+      // If subnet memory is greater than 100%
+      x = one_hundred;
+    }
+
+    let y = (y_start - y_end) * (one_hundred - x) / one_hundred + y_end;
+
+    let min_subnet_nodes_on_curve = y * simple_min_subnet_nodes / one_hundred;
+    
+    // Redundant
+    if min_subnet_nodes_on_curve as u32 > min_subnet_nodes {
+      min_subnet_nodes = min_subnet_nodes_on_curve as u32;
+    }
+
     min_subnet_nodes
   }
 
@@ -317,12 +356,23 @@ impl<T: Config> Pallet<T> {
         continue
       }
 
-      Self::choose_validator(
-        block,
-        subnet_id,
-        min_subnet_nodes,
-        epoch,
-      );
+      // TODO: Get delegate total supply and ensure is above minimum required balance
+      //       Otherwise, remove subnet
+
+      let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
+
+      // Only choose validator if min nodes are present
+      // The ``SubnetPenaltyCount`` when surpassed doesn't penalize anyone, only removes the subnet from the chain
+      if (node_sets.len() as u32) < min_subnet_nodes {
+        SubnetPenaltyCount::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
+      } else {
+        Self::choose_validator(
+          block,
+          subnet_id,
+          min_subnet_nodes,
+          epoch,
+        );  
+      }
 
       Self::choose_accountants(
         block,
@@ -429,5 +479,25 @@ impl<T: Config> Pallet<T> {
     }
     total_voting_power
   }
-
+  
+  /// The minimum delegate stake balance for a subnet to stay live
+  pub fn get_min_subnet_delegate_stake_balance(min_subnet_nodes: u32) -> u128 {
+    // --- Get minimum stake balance per subnet node
+    let min_stake_balance = MinStakeBalance::<T>::get();
+    // --- Get minimum subnet stake balance
+    let min_subnet_stake_balance = min_stake_balance * min_subnet_nodes as u128;
+    // --- Get required delegate stake balance for a subnet to have to stay live
+    let min_subnet_delegate_stake_balance = Self::percent_mul(
+      min_subnet_stake_balance, 
+      MinSubnetDelegateStakePercentage::<T>::get()
+    );
+    // --- Get absolute minimum required subnet delegate stake balance
+    let min_subnet_delegate_stake = MinSubnetDelegateStake::<T>::get();
+    // --- Return here if the absolute minimum required subnet delegate stake balance is greater
+    //     than the calculated minimum requirement
+    if min_subnet_delegate_stake > min_subnet_delegate_stake_balance {
+      return min_subnet_delegate_stake
+    }
+    min_subnet_delegate_stake_balance
+  }
 }

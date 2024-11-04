@@ -60,6 +60,7 @@ impl<T: Config> Pallet<T> {
 
     // --- Ensure the minimum required subnet peers exist
     // --- Only accountants can vote on proposals
+    // --- Get all eligible voters from this block
     let accountant_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
     let accountant_nodes_count = accountant_nodes.len();
 
@@ -76,7 +77,7 @@ impl<T: Config> Pallet<T> {
     let block: u64 = Self::get_current_block_as_u64();
 
     ensure!(
-      !Self::account_has_active_proposal2(
+      !Self::account_has_active_proposal(
         subnet_id, 
         defendant_account_id.clone().1, 
         block,
@@ -105,9 +106,6 @@ impl<T: Config> Pallet<T> {
       ExistenceRequirement::KeepAlive,
     );
 
-    let mut yay: BTreeSet<T::AccountId> = BTreeSet::new();
-    yay.insert(account_id.clone());
-
     let proposal_index = ProposalsCount::<T>::get();
 
     Proposals::<T>::insert(
@@ -121,7 +119,7 @@ impl<T: Config> Pallet<T> {
         defendant_bond: 0,
         eligible_voters: accountant_nodes,
         votes: VoteParams {
-          yay: yay,
+          yay: BTreeSet::new(),
           nay: BTreeSet::new(),
         },
         start_block: block,
@@ -166,7 +164,7 @@ impl<T: Config> Pallet<T> {
     // --- Ensure incomplete
     ensure!(
       !proposal.complete,
-      Error::<T>::ProposalUnchallenged
+      Error::<T>::ProposalComplete
     );
     
     let challenge_period = ChallengePeriod::<T>::get();
@@ -184,6 +182,8 @@ impl<T: Config> Pallet<T> {
       Error::<T>::ProposalChallenged
     );
 
+    // --- Get plaintiffs bond to match
+    // We get the plaintiff bond in case this amount is updated in between proposals
     let proposal_bid_amount_as_balance = Self::u128_to_balance(proposal.plaintiff_bond);
 
     let can_withdraw: bool = Self::can_remove_balance_from_coldkey_account(
@@ -205,15 +205,12 @@ impl<T: Config> Pallet<T> {
       ExistenceRequirement::KeepAlive,
     );
 
-    let mut nay: BTreeSet<T::AccountId> = BTreeSet::new();
-    nay.insert(account_id);
-
     Proposals::<T>::mutate(
       subnet_id,
       0,
       |params: &mut ProposalParams<T::AccountId>| {
-        params.votes.nay = nay;
         params.defendant_data = data;
+        params.defendant_bond = proposal.plaintiff_bond;
         params.challenge_block = block;
       }
     );
@@ -233,6 +230,23 @@ impl<T: Config> Pallet<T> {
         return Err(Error::<T>::ProposalInvalid.into()),
     };
 
+    let plaintiff = proposal.plaintiff;
+    let defendant = proposal.defendant;
+
+    // --- Ensure not plaintiff or defendant
+    ensure!(
+      account_id.clone() != plaintiff && account_id.clone() != defendant,
+      Error::<T>::PartiesCannotVote
+    );
+
+    // --- Ensure account has peer
+    // Proposal voters are calculated within ``do_proposal`` as ``eligible_voters`` so we check if they
+    // are still nodes
+    ensure!(
+      SubnetNodesData::<T>::contains_key(subnet_id, account_id.clone()),
+      Error::<T>::SubnetNodeNotExist
+    );
+    
     // --- Ensure challenged
     ensure!(
       proposal.challenge_block != 0,
@@ -242,7 +256,7 @@ impl<T: Config> Pallet<T> {
     // --- Ensure incomplete
     ensure!(
       !proposal.complete,
-      Error::<T>::ProposalUnchallenged
+      Error::<T>::ProposalComplete
     );
     
     let voting_period = VotingPeriod::<T>::get();
@@ -252,13 +266,13 @@ impl<T: Config> Pallet<T> {
     // Voting period starts after the challenge block
     ensure!(
       block < proposal.challenge_block + voting_period,
-      Error::<T>::ProposalChallenged
+      Error::<T>::VotingPeriodInvalid
     );
 
     // --- Ensure is eligible to vote
     ensure!(
       proposal.eligible_voters.get(&account_id).is_some(),
-      Error::<T>::ProposalChallenged
+      Error::<T>::NotEligible
     );
 
     let yays: BTreeSet<T::AccountId> = proposal.votes.yay;
@@ -267,7 +281,7 @@ impl<T: Config> Pallet<T> {
     // --- Ensure hasn't already voted
     ensure!(
       yays.get(&account_id) == None && nays.get(&account_id) == None,
-      Error::<T>::ProposalChallenged
+      Error::<T>::AlreadyVoted
     );
 
     Proposals::<T>::mutate(
@@ -308,11 +322,18 @@ impl<T: Config> Pallet<T> {
       Error::<T>::ProposalChallenged
     );
 
+    // --- Ensure incomplete
+    ensure!(
+      !proposal.complete,
+      Error::<T>::ProposalComplete
+    );
+    
     Proposals::<T>::mutate(
       subnet_id,
       proposal_id,
       |params: &mut ProposalParams<T::AccountId>| {
         params.complete = true;
+        params.plaintiff_bond = 0;
       }
     );
 
@@ -323,7 +344,9 @@ impl<T: Config> Pallet<T> {
     Ok(())
   }
 
-  pub fn do_finanlize_proposal(
+  /// Finalize the proposal and come to a conclusion
+  /// Either plaintiff or defendant win, or neither win if no consensus or quorum is met
+  pub fn do_finalize_proposal(
     account_id: T::AccountId, 
     subnet_id: u32,
     proposal_id: u32,
@@ -343,7 +366,7 @@ impl<T: Config> Pallet<T> {
     // --- Ensure incomplete
     ensure!(
       !proposal.complete,
-      Error::<T>::ProposalUnchallenged
+      Error::<T>::ProposalComplete
     );
     
     let voting_period = VotingPeriod::<T>::get();
@@ -352,7 +375,7 @@ impl<T: Config> Pallet<T> {
     // --- Ensure voting period is completed
     ensure!(
       block > proposal.challenge_block + voting_period,
-      Error::<T>::ProposalChallenged
+      Error::<T>::VotingPeriodInvalid
     );
 
     // TODO: include enactment period for executing proposals
@@ -366,32 +389,33 @@ impl<T: Config> Pallet<T> {
     let yays_percentage: u128 = Self::percent_div(yays_len, voters_len);
     let nays_percentage: u128 = Self::percent_div(nays_len, voters_len);
 
-    let consensus_threshold: u128 = ProposalConsensusThreshold::<T>::get();
-    let quorum_reached: bool = voting_percentage >= ProposalQuorum::<T>::get();
-
     let plaintiff_bond_as_balance = Self::u128_to_balance(proposal.plaintiff_bond);
     let defendant_bond_as_balance = Self::u128_to_balance(proposal.defendant_bond);
 
-    // --- If quorum not reached and both voting options didn't succeed consensus then complete
-    if !quorum_reached || 
-        (yays_percentage < consensus_threshold && 
-        nays_percentage < consensus_threshold && 
-        quorum_reached)
-      {
-      Proposals::<T>::mutate(
-        subnet_id,
-        proposal_id,
-        |params: &mut ProposalParams<T::AccountId>| {
-          params.complete = true;
-        }
-      );
+    let quorum_reached: bool = voting_percentage >= ProposalQuorum::<T>::get();
+    let consensus_threshold: u128 = ProposalConsensusThreshold::<T>::get();
 
-      // Give plaintiff and defendant bonds back
-      T::Currency::deposit_creating(&proposal.plaintiff, plaintiff_bond_as_balance.unwrap());
-      T::Currency::deposit_creating(&proposal.defendant, defendant_bond_as_balance.unwrap());
-      // return 
-      return Ok(())
-    }
+    // // --- If quorum not reached and both voting options didn't succeed consensus then complete
+    // if !quorum_reached || 
+    //     (yays_percentage < consensus_threshold && 
+    //     nays_percentage < consensus_threshold && 
+    //     quorum_reached)
+    //   {
+    //   Proposals::<T>::mutate(
+    //     subnet_id,
+    //     proposal_id,
+    //     |params: &mut ProposalParams<T::AccountId>| {
+    //       params.complete = true;
+    //       params.plaintiff_bond = 0;
+    //       params.defendant_bond = 0;
+    //     }
+    //   );
+
+    //   // Give plaintiff and defendant bonds back
+    //   T::Currency::deposit_creating(&proposal.plaintiff, plaintiff_bond_as_balance.unwrap());
+    //   T::Currency::deposit_creating(&proposal.defendant, defendant_bond_as_balance.unwrap());
+    //   return Ok(())
+    // }
 
     // --- Mark as complete
     Proposals::<T>::mutate(
@@ -399,14 +423,29 @@ impl<T: Config> Pallet<T> {
       proposal_id,
       |params: &mut ProposalParams<T::AccountId>| {
         params.complete = true;
+        params.plaintiff_bond = 0;
+        params.defendant_bond = 0;
       }
     );
+
+    // --- If quorum not reached and both voting options didn't succeed consensus then complete
+    if !quorum_reached || 
+      (yays_percentage < consensus_threshold && 
+      nays_percentage < consensus_threshold && 
+      quorum_reached)
+    {
+      // Give plaintiff and defendant bonds back
+      T::Currency::deposit_creating(&proposal.plaintiff, plaintiff_bond_as_balance.unwrap());
+      T::Currency::deposit_creating(&proposal.defendant, defendant_bond_as_balance.unwrap());
+      return Ok(())
+    }
 
     // --- At this point we know that one of the voting options are in consensus
     if yays_len > nays_len {
       // --- Plaintiff wins
       // --- Remove defendant
-      Self::do_remove_subnet_node(block, subnet_id, proposal.defendant);
+      Self::perform_remove_subnet_node(block, subnet_id, proposal.defendant);
+      // --- Return bond
       T::Currency::deposit_creating(&proposal.plaintiff, plaintiff_bond_as_balance.unwrap());
       // --- Distribute bond to voters in consensus
       Self::distribute_bond(
@@ -430,34 +469,40 @@ impl<T: Config> Pallet<T> {
 
   pub fn distribute_bond(
     bond: u128, 
-    voters: BTreeSet<T::AccountId>,
+    mut distributees: BTreeSet<T::AccountId>,
     winner: &T::AccountId
   ) {
-    let voters_len = voters.len();
+    // --- Insert winner to distributees
+    //     Parties cannot vote but receive distribution
+    distributees.insert(winner.clone());
+    let voters_len = distributees.len();
     let distribution_amount = bond.saturating_div(voters_len as u128);
     let distribution_amount_as_balance = Self::u128_to_balance(distribution_amount);
+    // Redundant
     if !distribution_amount_as_balance.is_some() {
       return
     }
 
     let mut total_distributed: u128 = 0;
-    for voter in voters {
+    // --- Distribute losers bond to consensus
+    for account in distributees {
       total_distributed += distribution_amount;
-      T::Currency::deposit_creating(&voter, distribution_amount_as_balance.unwrap());
+      T::Currency::deposit_creating(&account, distribution_amount_as_balance.unwrap());
     }
 
+    // --- Take care of dust and send to winner
     if total_distributed < bond {
       let remaining_bond = bond - total_distributed;
       let remaining_bid_as_balance = Self::u128_to_balance(remaining_bond);
       if remaining_bid_as_balance.is_some() {
-        T::Currency::deposit_creating(winner, remaining_bid_as_balance.unwrap());
+        T::Currency::deposit_creating(&winner.clone(), remaining_bid_as_balance.unwrap());
       }
     }
   }
 
   /// Does a subnet node have a proposal against them under the following conditions
   /// Proposal must not be completed to qualify or awaiting challenge
-  fn account_has_active_proposal2(
+  fn account_has_active_proposal(
     subnet_id: u32, 
     account_id: T::AccountId, 
     block: u64,
@@ -493,4 +538,11 @@ impl<T: Config> Pallet<T> {
     active_proposal
   }
 
+  fn remove_proposal(subnet_id: u32, proposal_id: u32) {
+
+  }
+
+  fn delete_completed_proposals() {
+
+  }
 }
