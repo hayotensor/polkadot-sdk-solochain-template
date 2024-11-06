@@ -20,6 +20,7 @@
 
 // cargo build --release --features runtime-benchmarks
 // cargo test --release --features runtime-benchmarks
+// Build only admin pallet
 // cargo build --package pallet-admin --features runtime-benchmarks
 use super::*;
 // use crate::mock::*;
@@ -30,37 +31,16 @@ use frame_support::{
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use crate::Pallet as Admin;
-use frame_support::dispatch::Vec;
 use scale_info::prelude::vec;
-// use crate::mock::Network;
 
 const SEED: u32 = 0;
 
-// fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
-// 	let caller: T::AccountId = account(name, index, SEED);
-// 	// Give the account half of the maximum value of the `Balance` type.
-// 	// Otherwise some transfers will fail with an overflow error.
-// 	let deposit_amount: u128 = 10000000000000000000000;
-// 	T::Currency::deposit_creating(&caller, deposit_amount.try_into().ok().expect("REASON"));
-// 	caller
-// }
-
 benchmarks! {
-  set_vote_model_in {
+  set_vote_subnet_in {
 		let model_path: Vec<u8> = "petals-team-3/StableBeluga2".into();
-	}: set_vote_model_in(RawOrigin::Root, model_path.clone(), 50000)
+	}: set_vote_subnet_in(RawOrigin::Root, model_path.clone(), 50000)
 	verify {
-    // let value = pallet_network::SubnetVoteIn::get(model_path.clone());
-		// let value = pallet_network::<T>::SubnetVoteIn::get(model_path.clone()).unwrap();
-		// let value = pallet_network::SubnetVoteIn::get(model_path.clone());
-    // let value1 = pallet_network::SubnetVoteIn::<T>::get(model_path.clone());
-		// let value = pallet_network::model_vote_in(model_path.clone());
-
-    // assert_eq!(value, Some(true));
-    // let value = pallet_network::SubnetVoteOut::<T>::get(model_path.clone());
-    // assert_eq!(value, Some(false));
 		assert_eq!(Some(true), Some(true));
-
 	}
 
 	impl_benchmark_test_suite!(

@@ -32,94 +32,94 @@ fn account(id: u8) -> AccountIdOf<Test> {
 }
 
 #[test]
-fn test_set_vote_model_in() {
+fn test_set_vote_subnet_in() {
   new_test_ext().execute_with(|| {
-    let model_path: Vec<u8> = "petals-team-3/StableBeluga2".into();
+    let subnet_path: Vec<u8> = "petals-team-3/StableBeluga2".into();
 
-    let value = pallet_network::SubnetActivated::<Test>::get(model_path.clone());
+    let value = pallet_network::SubnetActivated::<Test>::get(subnet_path.clone());
     assert_eq!(value.active, false);
 
     assert_ok!(
-      Admin::set_vote_model_in(
+      Admin::set_vote_subnet_in(
         RuntimeOrigin::root(),
-        model_path.clone(),
+        subnet_path.clone(),
         50000
       )
     );
 
-    // let value1 = pallet_network::SubnetActivated::<Test>::get(model_path.clone());
+    // let value1 = pallet_network::SubnetActivated::<Test>::get(subnet_path.clone());
     // assert_eq!(value1, Some(true));
   })
 }
 
-// fn test_set_vote_model_out() {
+// fn test_set_vote_subnet_out() {
 //   new_test_ext().execute_with(|| {
-//     let model_path: Vec<u8> = "petals-team-3/StableBeluga2".into();
+//     let subnet_path: Vec<u8> = "petals-team-3/StableBeluga2".into();
 
-//     let value = pallet_network::SubnetActivated::<Test>::get(model_path.clone());
+//     let value = pallet_network::SubnetActivated::<Test>::get(subnet_path.clone());
 //     assert_eq!(value, None);
 
 //     assert_ok!(
-//       Admin::set_vote_model_in(
+//       Admin::set_vote_subnet_in(
 //         RuntimeOrigin::root(),
-//         model_path.clone(),
+//         subnet_path.clone(),
 //         50000
 //       )
 //     );
 
-//     let value = pallet_network::SubnetActivated::<Test>::get(model_path.clone());
+//     let value = pallet_network::SubnetActivated::<Test>::get(subnet_path.clone());
 //     assert_eq!(value, Some(false));
 
 //     assert_err!(
-//       Admin::set_vote_model_out(
+//       Admin::set_vote_subnet_out(
 //         RuntimeOrigin::root(),
-//         model_path.clone(),
+//         subnet_path.clone(),
 //       ),
 //       pallet_network::Error::<Test>::SubnetNotExist
 //     );
 
 //     assert_ok!(
-//       Network::add_model(
+//       Network::add_subnet(
 //         RuntimeOrigin::signed(account(0)),
-//         model_path.clone(),
+//         subnet_path.clone(),
 //       ) 
 //     );
 
 //     assert_ok!(
-//       Admin::set_vote_model_out(
+//       Admin::set_vote_subnet_out(
 //         RuntimeOrigin::root(),
-//         model_path.clone(),
+//         subnet_path.clone(),
 //       )
 //     );
 
-//     let value = pallet_network::SubnetActivated::<Test>::get(model_path.clone());
+//     let value = pallet_network::SubnetActivated::<Test>::get(subnet_path.clone());
 //     assert_eq!(value, Some(false));
-//     let value = pallet_network::SubnetActivated::<Test>::get(model_path.clone());
+//     let value = pallet_network::SubnetActivated::<Test>::get(subnet_path.clone());
 //     assert_eq!(value, Some(true));
 //   })
 // }
 
 #[test]
-fn test_set_max_models() {
+fn test_set_max_subnets() {
   new_test_ext().execute_with(|| {
     assert_ok!(
-      Admin::set_max_models(
+      Admin::set_max_subnets(
         RuntimeOrigin::root(),
         11,
       )
     );
 
-    let value = Network::max_models();
+    let value = Network::max_subnets();
     assert_eq!(value, 11);
 
     assert_ok!(
-      Admin::set_max_models(
+      Admin::set_max_subnets(
         RuntimeOrigin::root(),
         12,
       )
     );
 
-    let value = Network::max_models();
+    let value = Network::max_subnets();
     assert_eq!(value, 12);
   })
 }
@@ -262,10 +262,10 @@ fn test_set_tx_rate_limit() {
 // }
 
 // #[test]
-// fn test_set_min_required_model_consensus_submit_epochs() {
+// fn test_set_min_required_subnet_consensus_submit_epochs() {
 //   new_test_ext().execute_with(|| {
 //     assert_ok!(
-//       Admin::set_min_required_model_consensus_submit_epochs(
+//       Admin::set_min_required_subnet_consensus_submit_epochs(
 //         RuntimeOrigin::root(),
 //         999,
 //       )
@@ -443,10 +443,10 @@ fn test_set_tx_rate_limit() {
 // }
 
 // #[test]
-// fn test_set_max_model_rewards_weight() {
+// fn test_set_max_subnet_rewards_weight() {
 //   new_test_ext().execute_with(|| {
 //     assert_err!(
-//       Admin::set_max_model_rewards_weight(
+//       Admin::set_max_subnet_rewards_weight(
 //         RuntimeOrigin::root(),
 //         10001,
 //       ),
@@ -454,24 +454,24 @@ fn test_set_tx_rate_limit() {
 //     );
 
 //     assert_err!(
-//       Admin::set_max_model_rewards_weight(
+//       Admin::set_max_subnet_rewards_weight(
 //         RuntimeOrigin::root(),
 //         0,
 //       ),
 //       pallet_network::Error::<Test>::InvalidPercent
 //     );
 
-//     let max_model_rewards_weight = 9999;
+//     let max_subnet_rewards_weight = 9999;
 
 //     assert_ok!(
-//       Admin::set_max_model_rewards_weight(
+//       Admin::set_max_subnet_rewards_weight(
 //         RuntimeOrigin::root(),
-//         max_model_rewards_weight,
+//         max_subnet_rewards_weight,
 //       )
 //     );
 
 //     let value = pallet_network::MaxSubnetRewardsWeight::<Test>::get();
-//     assert_eq!(value, max_model_rewards_weight);
+//     assert_eq!(value, max_subnet_rewards_weight);
 //   })
 // }
 
@@ -501,10 +501,10 @@ fn test_set_tx_rate_limit() {
 // }
 
 // #[test]
-// fn test_set_model_per_peer_init_cost() {
+// fn test_set_subnet_per_peer_init_cost() {
 //   new_test_ext().execute_with(|| {
 //     assert_err!(
-//       Admin::set_model_per_peer_init_cost(
+//       Admin::set_subnet_per_peer_init_cost(
 //         RuntimeOrigin::root(),
 //         0,
 //       ),
@@ -514,7 +514,7 @@ fn test_set_tx_rate_limit() {
 //     let cost = 999;
 
 //     assert_ok!(
-//       Admin::set_model_per_peer_init_cost(
+//       Admin::set_subnet_per_peer_init_cost(
 //         RuntimeOrigin::root(),
 //         cost,
 //       )
@@ -526,10 +526,10 @@ fn test_set_tx_rate_limit() {
 // }
 
 // #[test]
-// fn test_set_model_consensus_unconfirmed_threshold() {
+// fn test_set_subnet_consensus_unconfirmed_threshold() {
 //   new_test_ext().execute_with(|| {
 //     assert_err!(
-//       Admin::set_model_consensus_unconfirmed_threshold(
+//       Admin::set_subnet_consensus_unconfirmed_threshold(
 //         RuntimeOrigin::root(),
 //         10000,
 //       ),
@@ -539,7 +539,7 @@ fn test_set_tx_rate_limit() {
 //     let threshold = 5100;
 
 //     assert_ok!(
-//       Admin::set_model_consensus_unconfirmed_threshold(
+//       Admin::set_subnet_consensus_unconfirmed_threshold(
 //         RuntimeOrigin::root(),
 //         threshold,
 //       )

@@ -22,17 +22,17 @@ pub use network_custom_rpc_runtime_api::NetworkRuntimeApi;
 #[rpc(client, server)]
 pub trait NetworkCustomApi<BlockHash> {
 	#[method(name = "network_getSubnetNodes")]
-	fn get_subnet_nodes(&self, model_id: u32, at: Option<BlockHash>) -> RpcResult<Vec<u8>>;
+	fn get_subnet_nodes(&self, subnet_id: u32, at: Option<BlockHash>) -> RpcResult<Vec<u8>>;
 	#[method(name = "network_getSubnetNodesIncluded")]
-	fn get_subnet_nodes_included(&self, model_id: u32, at: Option<BlockHash>) -> RpcResult<Vec<u8>>;
+	fn get_subnet_nodes_included(&self, subnet_id: u32, at: Option<BlockHash>) -> RpcResult<Vec<u8>>;
 	#[method(name = "network_getSubnetNodesSubmittable")]
-	fn get_subnet_nodes_submittable(&self, model_id: u32, at: Option<BlockHash>) -> RpcResult<Vec<u8>>;
+	fn get_subnet_nodes_submittable(&self, subnet_id: u32, at: Option<BlockHash>) -> RpcResult<Vec<u8>>;
 	#[method(name = "network_getSubnetNodesUnconfirmedCount")]
-	fn get_subnet_nodes_model_unconfirmed_count(&self, model_id: u32, at: Option<BlockHash>) -> RpcResult<u32>;
+	fn get_subnet_nodes_subnet_unconfirmed_count(&self, subnet_id: u32, at: Option<BlockHash>) -> RpcResult<u32>;
 	#[method(name = "network_getConsensusData")]
-	fn get_consensus_data(&self, model_id: u32, epoch: u32, at: Option<BlockHash>) -> RpcResult<Vec<u8>>;
+	fn get_consensus_data(&self, subnet_id: u32, epoch: u32, at: Option<BlockHash>) -> RpcResult<Vec<u8>>;
 	#[method(name = "network_getAccountantData")]
-	fn get_accountant_data(&self, model_id: u32, id: u32, at: Option<BlockHash>) -> RpcResult<Vec<u8>>;
+	fn get_accountant_data(&self, subnet_id: u32, id: u32, at: Option<BlockHash>) -> RpcResult<Vec<u8>>;
 	#[method(name = "network_getMinimumSubnetNodes")]
 	fn get_minimum_subnet_nodes(&self, subnet_id: u32, memory_mb: u128, at: Option<BlockHash>) -> RpcResult<u32>;
 }
@@ -97,45 +97,45 @@ where
 	C: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	C::Api: NetworkRuntimeApi<Block>,
 {
-	fn get_subnet_nodes(&self, model_id: u32, at: Option<<Block as BlockT>::Hash>) -> RpcResult<Vec<u8>> {
+	fn get_subnet_nodes(&self, subnet_id: u32, at: Option<<Block as BlockT>::Hash>) -> RpcResult<Vec<u8>> {
 		let api = self.client.runtime_api();
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
-		api.get_subnet_nodes(at, model_id).map_err(|e| {
+		api.get_subnet_nodes(at, subnet_id).map_err(|e| {
 			Error::RuntimeError(format!("Unable to get subnet nodes: {:?}", e)).into()
 		})
 	}
-	fn get_subnet_nodes_included(&self, model_id: u32, at: Option<<Block as BlockT>::Hash>) -> RpcResult<Vec<u8>> {
+	fn get_subnet_nodes_included(&self, subnet_id: u32, at: Option<<Block as BlockT>::Hash>) -> RpcResult<Vec<u8>> {
 		let api = self.client.runtime_api();
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
-		api.get_subnet_nodes_included(at, model_id).map_err(|e| {
+		api.get_subnet_nodes_included(at, subnet_id).map_err(|e| {
 			Error::RuntimeError(format!("Unable to get subnet nodes: {:?}", e)).into()
 		})
 	}
-	fn get_subnet_nodes_submittable(&self, model_id: u32, at: Option<<Block as BlockT>::Hash>) -> RpcResult<Vec<u8>> {
+	fn get_subnet_nodes_submittable(&self, subnet_id: u32, at: Option<<Block as BlockT>::Hash>) -> RpcResult<Vec<u8>> {
 		let api = self.client.runtime_api();
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
-		api.get_subnet_nodes_submittable(at, model_id).map_err(|e| {
+		api.get_subnet_nodes_submittable(at, subnet_id).map_err(|e| {
 			Error::RuntimeError(format!("Unable to get subnet nodes: {:?}", e)).into()
 		})
 	}
-	fn get_subnet_nodes_model_unconfirmed_count(&self, model_id: u32, at: Option<<Block as BlockT>::Hash>) -> RpcResult<u32> {
+	fn get_subnet_nodes_subnet_unconfirmed_count(&self, subnet_id: u32, at: Option<<Block as BlockT>::Hash>) -> RpcResult<u32> {
 		let api = self.client.runtime_api();
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
-		api.get_subnet_nodes_model_unconfirmed_count(at, model_id).map_err(|e| {
+		api.get_subnet_nodes_subnet_unconfirmed_count(at, subnet_id).map_err(|e| {
 			Error::RuntimeError(format!("Unable to get subnet nodes: {:?}", e)).into()
 		})
 	}
-	fn get_consensus_data(&self, model_id: u32, epoch: u32, at: Option<<Block as BlockT>::Hash>) -> RpcResult<Vec<u8>> {
+	fn get_consensus_data(&self, subnet_id: u32, epoch: u32, at: Option<<Block as BlockT>::Hash>) -> RpcResult<Vec<u8>> {
 		let api = self.client.runtime_api();
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
-		api.get_consensus_data(at, model_id, epoch).map_err(|e| {
+		api.get_consensus_data(at, subnet_id, epoch).map_err(|e| {
 			Error::RuntimeError(format!("Unable to get subnet nodes: {:?}", e)).into()
 		})
 	}
-	fn get_accountant_data(&self, model_id: u32, id: u32, at: Option<<Block as BlockT>::Hash>) -> RpcResult<Vec<u8>> {
+	fn get_accountant_data(&self, subnet_id: u32, id: u32, at: Option<<Block as BlockT>::Hash>) -> RpcResult<Vec<u8>> {
 		let api = self.client.runtime_api();
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
-		api.get_accountant_data(at, model_id, id).map_err(|e| {
+		api.get_accountant_data(at, subnet_id, id).map_err(|e| {
 			Error::RuntimeError(format!("Unable to get subnet nodes: {:?}", e)).into()
 		})
 	}

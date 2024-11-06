@@ -78,7 +78,7 @@ impl<T: Config> Pallet<T> {
 
     let submittable_nodes_count = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable).len();
 
-    // If data.len() is 0 then the validator is deeming the epoch as invalid
+    // If data.len() is 0 then the validator is deeming the epoch as invalid3
 
     // --- Validator auto-attests the epoch
     let mut attests: BTreeSet<T::AccountId> = BTreeSet::new();
@@ -213,11 +213,11 @@ impl<T: Config> Pallet<T> {
 
     // --- Get stake balance
     // This could be greater than the target stake balance
-    let account_model_stake: u128 = AccountSubnetStake::<T>::get(validator.clone(), subnet_id);
+    let account_subnet_stake: u128 = AccountSubnetStake::<T>::get(validator.clone(), subnet_id);
 
     // --- Get slash amount up to max slash
     //
-    let mut slash_amount: u128 = Self::percent_mul(account_model_stake, SlashPercentage::<T>::get());
+    let mut slash_amount: u128 = Self::percent_mul(account_subnet_stake, SlashPercentage::<T>::get());
     // --- Update slash amount up to attestation percent
     slash_amount = Self::percent_mul(slash_amount, Self::PERCENTAGE_FACTOR - attestation_percentage);
     // --- Update slash amount up to max slash

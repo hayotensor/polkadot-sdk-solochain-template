@@ -92,7 +92,7 @@ impl<T: Config> Pallet<T> {
     subnet_nodes
   }
 
-  pub fn get_subnet_nodes_model_unconfirmed_count(
+  pub fn get_subnet_nodes_subnet_unconfirmed_count(
     subnet_id: u32,
   ) -> u32 {
     if !SubnetsData::<T>::contains_key(subnet_id.clone()) {

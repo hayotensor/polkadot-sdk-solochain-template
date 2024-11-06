@@ -62,7 +62,7 @@ network-custom-rpc-runtime-api = { version = "0.0.1", default-features = false, 
 pallet-subnet-democracy = { version = "4.0.0-dev", default-features = false, path = "../pallets/subnet-democracy" }
 pallet-admin = { version = "4.0.0-dev", default-features = false, path = "../pallets/admin" }
 pallet-rewards = { version = "4.0.0-dev", default-features = false, path = "../pallets/rewards" }
-pallet-collective = { version = "37.0", default-features = false, path = "../pallets/collective" }
+pallet-collective = { version = "37.0.0", default-features = false, path = "../pallets/collective" }
 
 serde.workspace = true
 serde_json.workspace = true
@@ -135,8 +135,10 @@ runtime-benchmarks = [
 	"pallet-grandpa/runtime-benchmarks",
 	"pallet-sudo/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
+	"pallet-network/runtime-benchmarks",
 	"pallet-subnet-democracy/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
+	"pallet-collective/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 ]
 
@@ -156,4 +158,5 @@ try-runtime = [
 	"pallet-network/try-runtime",
 	"pallet-multisig/try-runtime",
 	"pallet-proxy/try-runtime",
+	"pallet-collective/try-runtime",
 ]

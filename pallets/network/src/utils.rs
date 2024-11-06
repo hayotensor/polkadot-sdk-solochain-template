@@ -117,8 +117,8 @@ impl<T: Config> Pallet<T> {
 
   // Remove all account's subnet peers across all of their subnets
   pub fn do_remove_account_subnet_nodes(block: u64, account_id: T::AccountId) {
-    let model_ids: Vec<u32> = AccountSubnets::<T>::get(account_id.clone());
-    for subnet_id in model_ids.iter() {
+    let subnet_ids: Vec<u32> = AccountSubnets::<T>::get(account_id.clone());
+    for subnet_id in subnet_ids.iter() {
       Self::perform_remove_subnet_node(block, *subnet_id, account_id.clone());
     }
   }
@@ -139,9 +139,9 @@ impl<T: Config> Pallet<T> {
 
       // Update SubnetAccount to reflect removal block instead of initialized block
       // Node will be able to unstake after required epochs have passed
-      let mut model_accounts: BTreeMap<T::AccountId, u64> = SubnetAccount::<T>::get(subnet_id);
-      model_accounts.insert(account_id.clone(), block);
-      SubnetAccount::<T>::insert(subnet_id, model_accounts);
+      let mut subnet_accounts: BTreeMap<T::AccountId, u64> = SubnetAccount::<T>::get(subnet_id);
+      subnet_accounts.insert(account_id.clone(), block);
+      SubnetAccount::<T>::insert(subnet_id, subnet_accounts);
 
       // Update total subnet peers by substracting 1
       TotalSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| *n -= 1);
@@ -229,6 +229,7 @@ impl<T: Config> Pallet<T> {
     let mut min_subnet_nodes: u32 = MinSubnetNodes::<T>::get();
 
     if subnet_mem_position <= x_curve_start {
+      log::error!("subnet_mem_position <= x_curve_start");
       if simple_min_subnet_nodes as u32 > min_subnet_nodes {
         min_subnet_nodes = simple_min_subnet_nodes as u32;
       }
@@ -247,8 +248,9 @@ impl<T: Config> Pallet<T> {
 
     let y = (y_start - y_end) * (one_hundred - x) / one_hundred + y_end;
 
-    let min_subnet_nodes_on_curve = y * simple_min_subnet_nodes / one_hundred;
-    
+    // let min_subnet_nodes_on_curve = y * simple_min_subnet_nodes / one_hundred;
+    let min_subnet_nodes_on_curve = Self::percent_mul_round_up(y, simple_min_subnet_nodes);
+
     // Redundant
     if min_subnet_nodes_on_curve as u32 > min_subnet_nodes {
       min_subnet_nodes = min_subnet_nodes_on_curve as u32;
@@ -264,7 +266,7 @@ impl<T: Config> Pallet<T> {
     ) as u32 + min_subnet_nodes
   }
 
-  pub fn get_model_initialization_cost(block: u64) -> u128 {
+  pub fn get_subnet_initialization_cost(block: u64) -> u128 {
     T::SubnetInitializationCost::get()
   }
 
@@ -341,17 +343,17 @@ impl<T: Config> Pallet<T> {
   }
 
   pub fn do_choose_validator_and_accountants(block: u64, epoch: u32, epoch_length: u64) {
-    let min_required_model_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
+    let min_required_subnet_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
     let target_accountants_len: u32 = TargetAccountantsLength::<T>::get();
 
     for (subnet_id, data) in SubnetsData::<T>::iter() {
       let min_subnet_nodes = data.min_nodes;
 
-      // --- Ensure model is able to submit consensus
+      // --- Ensure subnet is able to submit consensus
       if block < Self::get_eligible_epoch_block(
         epoch_length, 
         data.initialized, 
-        min_required_model_consensus_submit_epochs
+        min_required_subnet_consensus_submit_epochs
       ) {
         continue
       }
@@ -408,7 +410,7 @@ impl<T: Config> Pallet<T> {
   // }
 
   pub fn get_account_total_stake_balance(account_id: T::AccountId) -> u128 {
-    let min_required_model_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
+    let min_required_subnet_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
     let epoch_length: u64 = T::EpochLength::get();
     let block: u64 = Self::get_current_block_as_u64();
 
@@ -416,11 +418,11 @@ impl<T: Config> Pallet<T> {
     for (subnet_id, data) in SubnetsData::<T>::iter() {
       let min_subnet_nodes = data.min_nodes;
 
-      // --- Ensure model is able to submit consensus or don't include in staking balance for subnet democracy 
+      // --- Ensure subnet is able to submit consensus or don't include in staking balance for subnet democracy 
       if block < Self::get_eligible_epoch_block(
         epoch_length, 
         data.initialized, 
-        min_required_model_consensus_submit_epochs
+        min_required_subnet_consensus_submit_epochs
       ) {
         continue
       }
@@ -444,7 +446,7 @@ impl<T: Config> Pallet<T> {
 	}
 
   pub fn get_total_voting_power() -> u128 {
-    let min_required_model_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
+    let min_required_subnet_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
     let epoch_length: u64 = T::EpochLength::get();
     let block: u64 = Self::get_current_block_as_u64();
 
@@ -455,11 +457,11 @@ impl<T: Config> Pallet<T> {
       // - has the minimum required submittable nodes
       let min_subnet_nodes = data.min_nodes;
 
-      // --- Ensure model is able to submit consensus or don't include in staking balance for subnet democracy 
+      // --- Ensure subnet is able to submit consensus or don't include in staking balance for subnet democracy 
       if block < Self::get_eligible_epoch_block(
         epoch_length, 
         data.initialized, 
-        min_required_model_consensus_submit_epochs
+        min_required_subnet_consensus_submit_epochs
       ) {
         continue
       }

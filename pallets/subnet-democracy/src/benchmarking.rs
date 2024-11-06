@@ -30,9 +30,10 @@ use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use crate::Pallet as SubnetVoting;
 use crate::{
   SubnetNode, PropsType, SubnetVote, VotesBalance, ReservableCurrency, PropCount, VoteType,
-  Votes, ActiveProposalsCount, Proposals, PropsStatus, Quorum, PreSubnetData
+  ActiveProposalsCount, Proposals, PropsStatus, PreSubnetData
 };
-use frame_support::dispatch::Vec;
+// use frame_support::dispatch::Vec;
+use sp_runtime::Vec;
 use scale_info::prelude::{vec, format};
 use pallet_network::{MinStakeBalance, MinSubnetNodes};
 // use pallet_balances::*;
@@ -50,7 +51,7 @@ fn peer(id: u32) -> PeerId {
 	PeerId(peer_id.into())
 }
 
-fn default_model_path() -> Vec<u8> {
+fn default_subnet_path() -> Vec<u8> {
   DEFAULT_MODEL_PATH.into()
 }
 
@@ -82,7 +83,7 @@ pub fn block_to_u64<T: frame_system::Config>(input: BlockNumberFor<T>) -> u64 {
 
 fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	let caller: T::AccountId = account(name, index, SEED);
-	let deposit_amount: u128 = T::SubnetVote::get_model_initialization_cost();
+	let deposit_amount: u128 = T::SubnetVote::get_subnet_initialization_cost();
   T::Currency::deposit_creating(&caller, deposit_amount.try_into().ok().expect("REASON"));
 	caller
 }
@@ -143,19 +144,19 @@ fn post_success_proposal_activate_ensures<T: Config>(path: Vec<u8>, proposal_ind
   // assert_eq!(proposal.subnet_nodes, path);
   assert_eq!(proposal.end_vote_block, proposal_start_block + block_to_u64::<T>(T::VotingPeriod::get()));
 
-  let model_initialization_cost = T::SubnetVote::get_model_initialization_cost();
-  // assert_eq!(VotesBalance::<T>::get(proposal_index, proposer), model_initialization_cost.clone());
+  let subnet_initialization_cost = T::SubnetVote::get_subnet_initialization_cost();
+  // assert_eq!(VotesBalance::<T>::get(proposal_index, proposer), subnet_initialization_cost.clone());
 
   // let reserved_balance = <pallet_balances::Pallet<T> as ReservableCurrency<T>>::reserved_balance(&proposer);
   // let reserved_balance = ReservableCurrency::reserved_balance(&proposer);
-  // assert_eq!(reserved_balance, model_initialization_cost.clone());
+  // assert_eq!(reserved_balance, subnet_initialization_cost.clone());
 
   let active_proposals = ActiveProposalsCount::<T>::get();
   assert_eq!(active_proposals, proposal_index + 1);
 }
 
 fn post_activate_cancel_ensures<T: Config>(proposal_index: u32, proposer: T::AccountId, path: Vec<u8>) {
-  let is_active = T::SubnetVote::get_model_path_exist(path);
+  let is_active = T::SubnetVote::get_subnet_path_exist(path);
   // assert_eq!(is_active, None);
 
   let proposal = Proposals::<T>::get(proposal_index);
@@ -215,7 +216,7 @@ benchmarks! {
 	verify {
     assert_eq!(1, 1);
 		post_success_proposal_activate_ensures::<T>(
-      default_model_path(), 
+      default_subnet_path(), 
       prop_count, 
       proposer.clone(), 
       block_to_u64::<T>(frame_system::Pallet::<T>::block_number())

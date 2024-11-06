@@ -107,7 +107,7 @@ impl<T: Config> Pallet<T> {
       max_accountants = node_sets_len;
     }
 
-    // `-1` is for overflow
+    // `-1` for overflow
     let account_ids_len = account_ids.len() - 1;
 
     // --- Ensure no duplicates

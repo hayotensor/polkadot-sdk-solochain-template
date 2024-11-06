@@ -691,7 +691,8 @@ mod benches {
 		[pallet_balances, Balances]
 		[pallet_timestamp, Timestamp]
 		[pallet_sudo, Sudo]
-		// [pallet_network, Network]
+		[pallet_network, Network]
+		[pallet_collective, Collective]
 		// [pallet_subnet_democracy, SubnetDemocracy]
 	);
 }
@@ -865,29 +866,28 @@ impl_runtime_apis! {
 	}
 
 	impl network_custom_rpc_runtime_api::NetworkRuntimeApi<Block> for Runtime {
-		fn get_subnet_nodes(model_id: u32) -> Vec<u8> {
-			let result = Network::get_subnet_nodes(model_id);
+		fn get_subnet_nodes(subnet_id: u32) -> Vec<u8> {
+			let result = Network::get_subnet_nodes(subnet_id);
 			result.encode()
 		}
-		fn get_subnet_nodes_included(model_id: u32) -> Vec<u8> {
-			let result = Network::get_subnet_nodes_included(model_id);
+		fn get_subnet_nodes_included(subnet_id: u32) -> Vec<u8> {
+			let result = Network::get_subnet_nodes_included(subnet_id);
 			result.encode()
 		}
-		fn get_subnet_nodes_submittable(model_id: u32) -> Vec<u8> {
-			let result = Network::get_subnet_nodes_submittable(model_id);
+		fn get_subnet_nodes_submittable(subnet_id: u32) -> Vec<u8> {
+			let result = Network::get_subnet_nodes_submittable(subnet_id);
 			result.encode()
 		}
-		fn get_subnet_nodes_model_unconfirmed_count(model_id: u32) -> u32 {
-			let result = Network::get_subnet_nodes_model_unconfirmed_count(model_id);
+		fn get_subnet_nodes_subnet_unconfirmed_count(subnet_id: u32) -> u32 {
+			let result = Network::get_subnet_nodes_subnet_unconfirmed_count(subnet_id);
 			result
-			// result.encode()
 		}
-		fn get_consensus_data(model_id: u32, epoch: u32) -> Vec<u8> {
-			let result = Network::get_consensus_data(model_id, epoch);
+		fn get_consensus_data(subnet_id: u32, epoch: u32) -> Vec<u8> {
+			let result = Network::get_consensus_data(subnet_id, epoch);
 			result.encode()
 		}
-		fn get_accountant_data(model_id: u32, id: u32) -> Vec<u8> {
-			let result = Network::get_accountant_data(model_id, id);
+		fn get_accountant_data(subnet_id: u32, id: u32) -> Vec<u8> {
+			let result = Network::get_accountant_data(subnet_id, id);
 			result.encode()
 		}
 		fn get_minimum_subnet_nodes(subnet_id: u32, memory_mb: u128) -> u32 {

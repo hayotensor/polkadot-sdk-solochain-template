@@ -51,55 +51,31 @@ impl<T: Config> Pallet<T> {
 
     Ok(())
   }
-  pub fn set_vote_model_in(path: Vec<u8>, memory_mb: u128) -> DispatchResult {
-    // ensure subnet doesn't exists by path
-    ensure!(
-      !SubnetPaths::<T>::contains_key(path.clone()),
-      Error::<T>::SubnetNotExist
-    );
-    
-    let pre_subnet_data = PreSubnetData {
-      path: path.clone(),
-      memory_mb: memory_mb,
-    };
-  
-    let vote_subnet_data = VoteSubnetData {
-      data: pre_subnet_data,
-      active: true,
-    };
 
-		SubnetActivated::<T>::insert(path.clone(), vote_subnet_data);
-
-    Self::deposit_event(Event::SetVoteSubnetIn(path.clone()));
-
+  pub fn set_base_subnet_node_memory_mb(value: u128) -> DispatchResult {
+    BaseSubnetNodeMemoryMB::<T>::put(value);
     Ok(())
   }
 
-  pub fn set_vote_model_out(path: Vec<u8>) -> DispatchResult {
-    // ensure subnet exists by path
-    ensure!(
-      SubnetPaths::<T>::contains_key(path.clone()),
-      Error::<T>::SubnetNotExist
-    );
-
-    let pre_subnet_data = PreSubnetData {
-      path: path.clone(),
-      memory_mb: 0,
-    };
-  
-    let vote_subnet_data = VoteSubnetData {
-      data: pre_subnet_data,
-      active: false,
-    };
-
-		SubnetActivated::<T>::insert(path.clone(), vote_subnet_data);
-
-    Self::deposit_event(Event::SetVoteSubnetOut(path.clone()));
-
+  pub fn set_max_subnet_memory_mb(value: u128) -> DispatchResult {
+    MaxSubnetMemoryMB::<T>::put(value);
     Ok(())
   }
 
-  pub fn set_max_models(value: u32) -> DispatchResult {
+  pub fn set_overall_max_subnet_memory_mb(value: u128) -> DispatchResult {
+    TotalMaxSubnetMemoryMB::<T>::put(value);
+    Ok(())
+  }
+
+  pub fn set_vote_subnet_in(path: Vec<u8>, memory_mb: u128) -> DispatchResult {
+    Ok(())
+  }
+
+  pub fn set_vote_subnet_out(path: Vec<u8>) -> DispatchResult {
+    Ok(())
+  }
+
+  pub fn set_max_subnets(value: u32) -> DispatchResult {
     ensure!(
       value <= 100,
       Error::<T>::InvalidMaxSubnets
@@ -160,7 +136,8 @@ impl<T: Config> Pallet<T> {
 
   // Set the time required for a subnet to be in storage before consensus can be formed
   // This allows time for peers to become subnet peers to the subnet doesn't increment `no-consensus'`
-  pub fn set_min_required_model_consensus_submit_epochs(value: u64) -> DispatchResult {
+  pub fn set_min_required_subnet_consensus_submit_epochs(value: u64) -> DispatchResult {
+    MinRequiredSubnetConsensusSubmitEpochs::<T>::put(value);
     Ok(())
   }
 
@@ -192,7 +169,7 @@ impl<T: Config> Pallet<T> {
     Ok(())
   }
 
-  pub fn set_max_model_rewards_weight(value: u128) -> DispatchResult {
+  pub fn set_max_subnet_rewards_weight(value: u128) -> DispatchResult {
     Ok(())
   }
 
@@ -200,11 +177,11 @@ impl<T: Config> Pallet<T> {
     Ok(())
   }
 
-  pub fn set_model_per_peer_init_cost(value: u128) -> DispatchResult {
+  pub fn set_subnet_per_peer_init_cost(value: u128) -> DispatchResult {
     Ok(())
   }
 
-  pub fn set_model_consensus_unconfirmed_threshold(value: u128) -> DispatchResult {
+  pub fn set_subnet_consensus_unconfirmed_threshold(value: u128) -> DispatchResult {
     Ok(())
   }
 

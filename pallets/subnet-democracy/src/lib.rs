@@ -251,7 +251,7 @@ pub mod pallet {
     pub proposer_stake: u128, // Activate: Non refundable, Deactivate: Refundable
     pub proposal_status: PropsStatus,
     pub proposal_type: PropsType, // Activation or Deactivation
-    pub path: Vec<u8>, // path for downloading model used in subnet, can be anything (HuggingFace, IPFS, etc.)
+    pub path: Vec<u8>, // path for downloading subnet used in subnet, can be anything (HuggingFace, IPFS, etc.)
     pub subnet_data: PreSubnetData,
 		pub subnet_nodes: Vec<SubnetNode<AccountId>>,
     pub subnet_nodes_verified: BTreeSet<AccountId>,
@@ -521,7 +521,7 @@ pub mod pallet {
     ///  - The subnet isn't already proposed to be deactivated via PropsStatus::Active
     ///
     /// The PreSubnetData is used to dictate the subnets rewards and node requirements.
-    /// Memory must be accurate to usage of the model for servers/
+    /// Memory must be accurate to usage of the subnet for servers/
     /// Higher memory requirements will garner higher rewards but also require increased node requirements.
     /// Lower memory requirements will garner lower rewards but require lesser noes to operate the subnet.
     #[pallet::call_index(0)]
@@ -554,7 +554,7 @@ pub mod pallet {
 
       if proposal_type == PropsType::Activate {
         // --- Stake the value of initializing a new subnet
-        let subnet_initialization_cost = T::SubnetVote::get_model_initialization_cost();
+        let subnet_initialization_cost = T::SubnetVote::get_subnet_initialization_cost();
         proposer_stake = subnet_initialization_cost;
         let subnet_initialization_cost_as_balance = Self::u128_to_balance(subnet_initialization_cost);
     
@@ -1194,7 +1194,7 @@ impl<T: Config> Pallet<T> {
     // --- Ensure path doesn't already exist in Network or SubnetVoting
     // If it doesn't already exist, then it has either been not proposed or deactivated
     ensure!(
-      !T::SubnetVote::get_model_path_exist(subnet_data.clone().path),
+      !T::SubnetVote::get_subnet_path_exist(subnet_data.clone().path),
       Error::<T>::SubnetPathExists
     );
 
@@ -1266,13 +1266,13 @@ impl<T: Config> Pallet<T> {
 
   fn try_propose_deactivate(account_id: T::AccountId, path: Vec<u8>) -> DispatchResult {
     // --- Ensure subnet ID exists to be removed
-    let subnet_id = T::SubnetVote::get_model_id_by_path(path.clone());
+    let subnet_id = T::SubnetVote::get_subnet_id_by_path(path.clone());
     ensure!(
       subnet_id != 0,
       Error::<T>::SubnetIdNotExists
     );
 
-    // --- Ensure model has had enough time to initialize
+    // --- Ensure subnet has had enough time to initialize
     ensure!(
       T::SubnetVote::is_subnet_initialized(subnet_id),
       Error::<T>::ProposalInvalid
@@ -1437,9 +1437,9 @@ impl<T: Config> Pallet<T> {
     ActiveProposalsCount::<T>::mutate(|n: &mut u32| n.saturating_dec());
 
     if proposal.proposal_type == PropsType::Activate {
-      Self::try_activate_model(activator, proposal.clone().proposer, proposal.clone().subnet_data);
+      Self::try_activate_subnet(activator, proposal.clone().proposer, proposal.clone().subnet_data);
     } else {
-      Self::try_deactivate_model(activator, proposal.clone().proposer, proposal.clone().subnet_data);
+      Self::try_deactivate_subnet(activator, proposal.clone().proposer, proposal.clone().subnet_data);
     }
 
     // --- Proposal stake unservered in the `execute`, update to reflect no reserves 
@@ -1527,7 +1527,7 @@ impl<T: Config> Pallet<T> {
   }
 
   /// Activate subnet - Someone must add_subnet once activated
-  fn try_activate_model(activator: T::AccountId, proposer: T::AccountId, subnet_data: PreSubnetData) -> DispatchResult {
+  fn try_activate_subnet(activator: T::AccountId, proposer: T::AccountId, subnet_data: PreSubnetData) -> DispatchResult {
     let vote_subnet_data = VoteSubnetData {
       data: subnet_data.clone(),
       active: true,
@@ -1541,7 +1541,7 @@ impl<T: Config> Pallet<T> {
     )
   }
 
-  fn try_deactivate_model(activator: T::AccountId, proposer: T::AccountId, subnet_data: PreSubnetData) -> DispatchResult {
+  fn try_deactivate_subnet(activator: T::AccountId, proposer: T::AccountId, subnet_data: PreSubnetData) -> DispatchResult {
     let vote_subnet_data = VoteSubnetData {
       data: subnet_data.clone(),
       active: false,

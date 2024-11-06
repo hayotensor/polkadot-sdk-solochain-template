@@ -128,9 +128,9 @@ impl<T: Config> Pallet<T> {
     
     // --- 8. If subnet stake balance is zero, remove from SubnetAccount
     if remaining_account_stake_balance == 0 {
-      let mut model_accounts = SubnetAccount::<T>::get(subnet_id);
-      model_accounts.remove(&account_id);
-      SubnetAccount::<T>::insert(subnet_id.clone(), model_accounts);
+      let mut subnet_accounts = SubnetAccount::<T>::get(subnet_id);
+      subnet_accounts.remove(&account_id);
+      SubnetAccount::<T>::insert(subnet_id.clone(), subnet_accounts);
     }
 
     // --- 9. We add the balancer to the account_id.  If the above fails we will not credit this account_id.

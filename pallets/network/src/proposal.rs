@@ -108,6 +108,9 @@ impl<T: Config> Pallet<T> {
 
     let proposal_index = ProposalsCount::<T>::get();
 
+    // TODO: Test adding quorum and consensus into the Proposal storage
+    //       by using the amount of nodes in the subnet
+    //       It's possible the quorum or consensus for smaller subnets may not be divisible
     Proposals::<T>::insert(
       subnet_id,
       proposal_index,
@@ -338,6 +341,7 @@ impl<T: Config> Pallet<T> {
     );
 
     let plaintiff_bond_as_balance = Self::u128_to_balance(proposal.plaintiff_bond);
+
     // Give plaintiff bond back
     T::Currency::deposit_creating(&proposal.plaintiff, plaintiff_bond_as_balance.unwrap());
 
@@ -394,28 +398,6 @@ impl<T: Config> Pallet<T> {
 
     let quorum_reached: bool = voting_percentage >= ProposalQuorum::<T>::get();
     let consensus_threshold: u128 = ProposalConsensusThreshold::<T>::get();
-
-    // // --- If quorum not reached and both voting options didn't succeed consensus then complete
-    // if !quorum_reached || 
-    //     (yays_percentage < consensus_threshold && 
-    //     nays_percentage < consensus_threshold && 
-    //     quorum_reached)
-    //   {
-    //   Proposals::<T>::mutate(
-    //     subnet_id,
-    //     proposal_id,
-    //     |params: &mut ProposalParams<T::AccountId>| {
-    //       params.complete = true;
-    //       params.plaintiff_bond = 0;
-    //       params.defendant_bond = 0;
-    //     }
-    //   );
-
-    //   // Give plaintiff and defendant bonds back
-    //   T::Currency::deposit_creating(&proposal.plaintiff, plaintiff_bond_as_balance.unwrap());
-    //   T::Currency::deposit_creating(&proposal.defendant, defendant_bond_as_balance.unwrap());
-    //   return Ok(())
-    // }
 
     // --- Mark as complete
     Proposals::<T>::mutate(

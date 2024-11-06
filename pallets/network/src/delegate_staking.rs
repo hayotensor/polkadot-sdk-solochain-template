@@ -392,8 +392,8 @@ impl<T: Config> Pallet<T> {
     // TotalDelegateStake::<T>::mutate(|mut n| *n -= amount);
   }
 
-  /// Rewards are deposited here
-  pub fn increase_delegated_stake(
+  /// Rewards are deposited here from the ``rewards.rs`` or by donations
+  pub fn do_increase_delegate_stake(
     subnet_id: u32,
     amount: u128,
   ) {
