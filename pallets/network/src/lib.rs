@@ -1826,7 +1826,7 @@ pub mod pallet {
 			)
 		}
 		
-		// TODO: Add test cases
+		/// Swaps the balance of the ``from_subnet_id`` shares to ``to_subnet_id``
 		#[pallet::call_index(8)]
 		#[pallet::weight({0})]
 		pub fn transfer_delegate_stake(
@@ -1852,6 +1852,7 @@ pub mod pallet {
 		}
 
 		/// Remove delegate stake and add to delegate stake unboding ledger
+		/// Enter shares and will convert to balance automatically
 		#[pallet::call_index(9)]
 		// #[pallet::weight(T::WeightInfo::remove_stake())]
 		#[pallet::weight({0})]
@@ -1892,7 +1893,13 @@ pub mod pallet {
 			amount: u128,
 		) -> DispatchResult {
 			let account_id: T::AccountId = ensure_signed(origin)?;
-	
+			
+			// --- Ensure subnet exists, otherwise at risk of burning tokens
+			ensure!(
+				SubnetsData::<T>::contains_key(subnet_id),
+				Error::<T>::SubnetNotExist
+			);
+
 			let amount_as_balance = Self::u128_to_balance(amount);
 
 			ensure!(

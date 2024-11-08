@@ -153,12 +153,14 @@ impl<T: Config> Pallet<T> {
     );
 
     // --- We remove the shares from the account.
-    Self::decrease_account_delegate_stake_shares(&account_id, subnet_id, delegate_stake_to_be_removed, delegate_stake_shares_to_be_removed);
+    // Self::decrease_account_delegate_stake_shares(&account_id, subnet_id, delegate_stake_to_be_removed, delegate_stake_shares_to_be_removed);
 
     // let remaining_account_delegate_stake_shares: u128 = AccountSubnetDelegateStakeShares::<T>::get(&account_id, subnet_id);
     
     // --- We add the balancer to the account_id.  If the above fails we will not credit this account_id.
-    Self::add_balance_to_delegate_stake_unbonding_ledger(&account_id, subnet_id,  delegate_stake_to_be_removed, block).map_err(|e| e)?;
+    // Self::add_balance_to_delegate_stake_unbonding_ledger(&account_id, subnet_id,  delegate_stake_to_be_removed, block);
+    // Self::add_balance_to_delegate_stake_unbonding_ledger(&account_id, subnet_id,  delegate_stake_to_be_removed, block).map_err(|e| e)?;
+    Self::add_balance_to_delegate_stake_unbonding_ledger(&account_id, subnet_id,  delegate_stake_shares_to_be_removed, block).map_err(|e| e)?;
 
     // Set last block for rate limiting
     Self::set_last_tx_block(&account_id, block);
@@ -279,7 +281,7 @@ impl<T: Config> Pallet<T> {
   pub fn add_balance_to_delegate_stake_unbonding_ledger(
     account_id: &T::AccountId,
     subnet_id: u32, 
-    balance: u128,
+    shares: u128,
     block: u64,
   ) -> DispatchResult {
     let epoch_length: u64 = T::EpochLength::get();
@@ -308,7 +310,7 @@ impl<T: Config> Pallet<T> {
       Error::<T>::MaxUnlockingsReached
     );
 
-    unbondings.insert(epoch, balance);
+    unbondings.insert(epoch, shares);
     DelegateStakeUnbondingLedger::<T>::insert(account_id.clone(), subnet_id, unbondings);
 
     Ok(())
@@ -324,18 +326,33 @@ impl<T: Config> Pallet<T> {
 
     let mut successful_unbondings = 0;
 
-    for (unbonding_epoch, balance) in unbondings.iter() {
+    for (unbonding_epoch, shares) in unbondings.iter() {
       if epoch <= unbonding_epoch + T::DelegateStakeCooldownEpochs::get() {
         continue
       }
+
+      let total_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<T>::get(subnet_id);
+      let total_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);
   
-      let delegate_stake_to_be_added_as_currency = Self::u128_to_balance(*balance);
+      // --- Get accounts current balance
+      let balance = Self::convert_to_balance(
+        *shares,
+        total_subnet_delegated_stake_shares,
+        total_subnet_delegated_stake_balance
+      );
+
+      log::error!("do_claim_delegate_stake_unbondings shares {:?}", shares);
+      log::error!("do_claim_delegate_stake_unbondings balance {:?}", balance);
+  
+      let delegate_stake_to_be_added_as_currency = Self::u128_to_balance(balance);
       if !delegate_stake_to_be_added_as_currency.is_some() {
         // Redundant
         unbondings_copy.remove(&unbonding_epoch);
         continue
       }
       
+      Self::decrease_account_delegate_stake_shares(&account_id, subnet_id, balance, *shares);
+
       unbondings_copy.remove(&unbonding_epoch);
       Self::add_balance_to_coldkey_account(&account_id, delegate_stake_to_be_added_as_currency.unwrap());
       successful_unbondings += 1;

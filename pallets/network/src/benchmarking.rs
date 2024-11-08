@@ -21,19 +21,22 @@ use super::*;
 
 #[allow(unused)]
 use crate::Pallet as Network;
-use crate::{SubnetPaths, MinRequiredUnstakeEpochs, TotalStake, TotalSubnetDelegateStakeBalance, TotalSubnetDelegateStakeShares};
+use crate::{
+	SubnetPaths, 
+	MinRequiredUnstakeEpochs, 
+	TotalStake, TotalSubnetDelegateStakeBalance, TotalSubnetDelegateStakeShares, DelegateStakeUnbondingLedger};
 use frame_benchmarking::v2::*;
 // use frame_benchmarking::{account, whitelist_account, BenchmarkError};
 use frame_support::{
 	assert_noop, assert_ok,
-	traits::{Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable},
+	traits::{EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable},
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use sp_runtime::Vec;
 use sp_core::OpaquePeerId as PeerId;
 use scale_info::prelude::vec;
 use scale_info::prelude::format;
-
+use sp_runtime::SaturatedConversion;
 const SEED: u32 = 0;
 
 
@@ -44,6 +47,8 @@ const DEFAULT_SUBNET_PATH_2: &str = "petals-team/StableBeluga3";
 const DEFAULT_SUBNET_NODE_STAKE: u128 = 1000e+18 as u128;
 const DEFAULT_STAKE_TO_BE_ADDED: u128 = 1000e+18 as u128;
 const DEFAULT_DELEGATE_STAKE_TO_BE_ADDED: u128 = 1000e+18 as u128;
+
+pub type BalanceOf<T> = <T as Config>::Currency;
 
 fn peer(id: u32) -> PeerId {
 	// let peer_id = format!("12D3KooWD3eckifWpRn9wQpMG9R9hX3sD158z7EqHWmweQAJU5SA{id}");
@@ -111,6 +116,14 @@ pub fn get_current_block_as_u64<T: frame_system::Config>() -> u64 {
 	TryInto::try_into(<frame_system::Pallet<T>>::block_number())
 		.ok()
 		.expect("blockchain will not exceed 2^64 blocks; QED.")
+}
+
+pub fn u128_to_balance<T: frame_system::Config + pallet::Config>(
+	input: u128,
+) -> Option<
+	<<T as pallet::Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance,
+> {
+	input.try_into().ok()
 }
 
 #[benchmarks]
@@ -284,6 +297,10 @@ mod benchmarks {
     // The first depositor will lose a percentage of their deposit depending on the size
     // https://docs.openzeppelin.com/contracts/4.x/erc4626#inflation-attack
     assert_eq!(delegate_balance, delegate_stake_to_be_added_as_shares);
+		assert!(
+      (delegate_balance >= Network::<T>::percent_mul(DEFAULT_DELEGATE_STAKE_TO_BE_ADDED, 9999)) &&
+      (delegate_balance <= DEFAULT_DELEGATE_STAKE_TO_BE_ADDED)
+    );
 	}
 
 	#[benchmark]
@@ -307,7 +324,7 @@ mod benchmarks {
 		let total_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<T>::get(from_subnet_id);
     let total_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(from_subnet_id);
 
-		let mut from_delegate_balance = Network::<T>::convert_to_balance(
+		let from_delegate_balance = Network::<T>::convert_to_balance(
       delegate_shares,
       total_subnet_delegated_stake_shares,
       total_subnet_delegated_stake_balance
@@ -318,7 +335,7 @@ mod benchmarks {
 			RawOrigin::Signed(delegate_account.clone()), 
 			from_subnet_id, 
 			to_subnet_id, 
-			total_subnet_delegated_stake_shares
+			delegate_shares
 		);
 
     let from_delegate_shares = AccountSubnetDelegateStakeShares::<T>::get(delegate_account.clone(), from_subnet_id);
@@ -345,16 +362,129 @@ mod benchmarks {
     );
 	}
 
+	#[benchmark]
+	fn remove_delegate_stake() {
+		build_subnet::<T>(DEFAULT_SUBNET_PATH.into());
+		let subnet_id = 1;
+		let delegate_account: T::AccountId = funded_account::<T>("delegate_account", 0);
+		assert_ok!(
+			Network::<T>::add_to_delegate_stake(
+				RawOrigin::Signed(delegate_account.clone()).into(), 
+				subnet_id, 
+				DEFAULT_DELEGATE_STAKE_TO_BE_ADDED
+			)
+		);
+		let delegate_shares = AccountSubnetDelegateStakeShares::<T>::get(delegate_account.clone(), subnet_id);
 
-	// #[benchmark]
-	// fn cause_error() {
-	// 	Something::<T>::put(100u32);
-	// 	let caller: T::AccountId = whitelisted_caller();
-	// 	#[extrinsic_call]
-	// 	cause_error(RawOrigin::Signed(caller));
+		#[extrinsic_call]
+		remove_delegate_stake(
+			RawOrigin::Signed(delegate_account.clone()), 
+			subnet_id, 
+			delegate_shares
+		);
 
-	// 	assert_eq!(Something::<T>::get(), Some(101u32));
-	// }
+    let unbondings: BTreeMap<u64, u128> = DelegateStakeUnbondingLedger::<T>::get(delegate_account.clone(), subnet_id);
+    assert_eq!(unbondings.len(), 1);
+
+		let (epoch, balance) = unbondings.iter().next().unwrap();
+    assert_eq!(*epoch, 0);
+    assert_eq!(*balance, delegate_shares);
+	}
+
+	#[benchmark]
+	fn claim_delegate_stake_unbondings() {
+		build_subnet::<T>(DEFAULT_SUBNET_PATH.into());
+		let subnet_id = 1;
+		let delegate_account: T::AccountId = funded_account::<T>("delegate_account", 0);
+		assert_ok!(
+			Network::<T>::add_to_delegate_stake(
+				RawOrigin::Signed(delegate_account.clone()).into(), 
+				subnet_id, 
+				DEFAULT_DELEGATE_STAKE_TO_BE_ADDED
+			)
+		);
+		let delegate_shares = AccountSubnetDelegateStakeShares::<T>::get(delegate_account.clone(), subnet_id);
+
+		assert_ok!(
+			Network::<T>::remove_delegate_stake(
+				RawOrigin::Signed(delegate_account.clone()).into(), 
+				subnet_id, 
+				delegate_shares
+			)
+		);
+
+		let epoch_length = T::EpochLength::get();
+    let delegate_stake_cooldown_epochs = T::DelegateStakeCooldownEpochs::get();
+
+		let unbondings: BTreeMap<u64, u128> = DelegateStakeUnbondingLedger::<T>::get(delegate_account.clone(), subnet_id);
+    assert_eq!(unbondings.len(), 1);
+    let (ledger_epoch, ledger_balance) = unbondings.iter().next().unwrap();
+
+		frame_system::Pallet::<T>::set_block_number(
+			frame_system::Pallet::<T>::block_number() + 
+			u64_to_block::<T>((epoch_length + 1) * delegate_stake_cooldown_epochs)
+		);
+
+		let balance = T::Currency::free_balance(&delegate_account.clone());
+
+		#[extrinsic_call]
+		claim_delegate_stake_unbondings(
+			RawOrigin::Signed(delegate_account.clone()), 
+			subnet_id, 
+		);
+
+		let after_claim_balance = T::Currency::free_balance(&delegate_account.clone());
+		let ledger_balance_as_balance = u128_to_balance::<T>(*ledger_balance);
+    assert_eq!(after_claim_balance, balance + ledger_balance_as_balance.unwrap());
+
+    let unbondings: BTreeMap<u64, u128> = DelegateStakeUnbondingLedger::<T>::get(delegate_account.clone(), subnet_id);
+    assert_eq!(unbondings.len(), 0);
+	}
+
+	#[benchmark]
+	fn increase_delegate_stake() {
+		build_subnet::<T>(DEFAULT_SUBNET_PATH.into());
+		let subnet_id = 1;
+		let delegate_account: T::AccountId = funded_account::<T>("delegate_account", 0);
+		assert_ok!(
+			Network::<T>::add_to_delegate_stake(
+				RawOrigin::Signed(delegate_account.clone()).into(), 
+				subnet_id, 
+				DEFAULT_DELEGATE_STAKE_TO_BE_ADDED
+			)
+		);
+
+		let delegate_shares = AccountSubnetDelegateStakeShares::<T>::get(delegate_account.clone(), subnet_id);
+		let total_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<T>::get(subnet_id);
+    let total_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);
+
+		let delegate_balance = Network::<T>::convert_to_balance(
+      delegate_shares,
+      total_subnet_delegated_stake_shares,
+      total_subnet_delegated_stake_balance
+    );
+
+		let funder = funded_account::<T>("funder", 0);
+
+		#[extrinsic_call]
+		increase_delegate_stake(RawOrigin::Signed(funder), subnet_id, DEFAULT_SUBNET_NODE_STAKE);
+		
+		let increased_delegate_shares = AccountSubnetDelegateStakeShares::<T>::get(delegate_account.clone(), subnet_id);
+		let increased_total_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<T>::get(subnet_id);
+    let increased_total_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);
+
+		let increased_delegate_balance = Network::<T>::convert_to_balance(
+      increased_delegate_shares,
+      increased_total_subnet_delegated_stake_shares,
+      increased_total_subnet_delegated_stake_balance
+    );
+		assert_eq!(increased_total_subnet_delegated_stake_balance, total_subnet_delegated_stake_balance + DEFAULT_SUBNET_NODE_STAKE);
+
+		assert_ne!(increased_delegate_balance, delegate_balance);
+		assert!(increased_delegate_balance > delegate_balance);
+
+	}
+
 
 	impl_benchmark_test_suite!(Network, crate::mock::new_test_ext(), crate::mock::Test);
 }

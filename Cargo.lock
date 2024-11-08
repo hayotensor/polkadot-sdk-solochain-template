@@ -5161,6 +5161,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-atomic-swap"
+version = "37.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core 34.0.0",
+ "sp-io 38.0.0",
+ "sp-runtime 39.0.2",
+]
+
+[[package]]
 name = "pallet-aura"
 version = "36.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8543,6 +8557,7 @@ dependencies = [
  "log",
  "network-custom-rpc-runtime-api",
  "pallet-admin",
+ "pallet-atomic-swap",
  "pallet-aura",
  "pallet-authorship",
  "pallet-balances",

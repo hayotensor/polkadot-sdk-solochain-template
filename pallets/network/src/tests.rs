@@ -1790,7 +1790,7 @@ fn test_remove_stake_after_remove_subnet() {
 ///
 
 #[test]
-fn test_remove_delegate_stake_after_remove_subnet() {
+fn test_remove_claim_delegate_stake_after_remove_subnet() {
   new_test_ext().execute_with(|| {
     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
 
@@ -1860,6 +1860,9 @@ fn test_remove_delegate_stake_after_remove_subnet() {
     );
 
     let post_balance = Balances::free_balance(&account(1));
+    log::error!("post_balance                      {:?}", post_balance);
+    log::error!("starting_delegator_balance        {:?}", starting_delegator_balance);
+    log::error!("post_balance Network::percent_mul {:?}", Network::percent_mul(starting_delegator_balance, 9999));
 
     assert!(
       (post_balance >= Network::percent_mul(starting_delegator_balance, 9999)) &&
@@ -1918,7 +1921,7 @@ fn test_add_to_delegate_stake() {
     let total_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<Test>::get(subnet_id);
     let total_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<Test>::get(subnet_id);
 
-    let mut delegate_balance = Network::convert_to_balance(
+    let delegate_balance = Network::convert_to_balance(
       delegate_shares,
       total_subnet_delegated_stake_shares,
       total_subnet_delegated_stake_balance
@@ -1926,6 +1929,11 @@ fn test_add_to_delegate_stake() {
     // The first depositor will lose a percentage of their deposit depending on the size
     // https://docs.openzeppelin.com/contracts/4.x/erc4626#inflation-attack
     assert_eq!(delegate_balance, delegate_stake_to_be_added_as_shares);
+
+    assert!(
+      (delegate_balance >= Network::percent_mul(amount, 9999)) &&
+      (delegate_balance <= amount)
+    );
   });
 }
 
@@ -1971,7 +1979,7 @@ fn test_add_to_delegate_stake_increase_pool_check_balance() {
     let total_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<Test>::get(subnet_id);
     let total_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<Test>::get(subnet_id);
 
-    let mut delegate_balance = Network::convert_to_balance(
+    let delegate_balance = Network::convert_to_balance(
       delegate_shares,
       total_subnet_delegated_stake_shares,
       total_subnet_delegated_stake_balance
@@ -1979,6 +1987,10 @@ fn test_add_to_delegate_stake_increase_pool_check_balance() {
     // The first depositor will lose a percentage of their deposit depending on the size
     // https://docs.openzeppelin.com/contracts/4.x/erc4626#inflation-attack
     assert_eq!(delegate_balance, delegate_stake_to_be_added_as_shares);
+    assert!(
+      (delegate_balance >= Network::percent_mul(amount, 9999)) &&
+      (delegate_balance <= amount)
+    );
 
     let increase_delegate_stake_amount: u128 = 1000000000000000000000;
     Network::do_increase_delegate_stake(
@@ -1989,18 +2001,22 @@ fn test_add_to_delegate_stake_increase_pool_check_balance() {
     // ensure balance has increase
     let total_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<Test>::get(subnet_id);
     let total_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<Test>::get(subnet_id);
-    let mut post_delegate_balance = Network::convert_to_balance(
+    let post_delegate_balance = Network::convert_to_balance(
       delegate_shares,
       total_subnet_delegated_stake_shares,
       total_subnet_delegated_stake_balance
     );
     assert!(delegate_balance < post_delegate_balance);
     assert_ne!(delegate_balance, post_delegate_balance);
+    assert!(
+      (post_delegate_balance >= Network::percent_mul(amount + increase_delegate_stake_amount, 9999)) &&
+      (post_delegate_balance <= amount + increase_delegate_stake_amount)
+    );
   });
 }
 
 #[test]
-fn test_remove_to_delegate_stake() {
+fn test_claim_removal_of_delegate_stake() {
   new_test_ext().execute_with(|| {
     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
 
@@ -2023,8 +2039,6 @@ fn test_remove_to_delegate_stake() {
     if total_subnet_delegated_stake_shares == 0 {
       delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
     }
-
-    // System::set_block_number(System::block_number() + DelegateStakeCooldownEpochs::get() * EpochLength::get());
 
     let starting_delegator_balance = Balances::free_balance(&account(0));
 
@@ -2051,6 +2065,10 @@ fn test_remove_to_delegate_stake() {
     // The first depositor will lose a percentage of their deposit depending on the size
     // https://docs.openzeppelin.com/contracts/4.x/erc4626#inflation-attack
     assert_eq!(delegate_balance, delegate_stake_to_be_added_as_shares);
+    assert!(
+      (delegate_balance >= Network::percent_mul(amount, 9999)) &&
+      (delegate_balance <= amount)
+    );
 
     let epoch_length = EpochLength::get();
     let cooldown_epochs = DelegateStakeCooldownEpochs::get();
@@ -2072,9 +2090,9 @@ fn test_remove_to_delegate_stake() {
 
     let unbondings: BTreeMap<u64, u128> = DelegateStakeUnbondingLedger::<Test>::get(account(0), subnet_id);
     assert_eq!(unbondings.len(), 1);
-    let (first_key, first_value) = unbondings.iter().next().unwrap();
-    assert_eq!(first_key, &epoch);
-    assert!(*first_value <= delegate_balance);
+    let (ledger_epoch, ledger_balance) = unbondings.iter().next().unwrap();
+    assert_eq!(ledger_epoch, &epoch);
+    assert!(*ledger_balance <= delegate_balance);
 
     assert_err!(
       Network::claim_delegate_stake_unbondings(
@@ -2086,6 +2104,8 @@ fn test_remove_to_delegate_stake() {
 
     System::set_block_number(System::block_number() + ((epoch_length  + 1) * cooldown_epochs));
 
+    let pre_claim_balance = Balances::free_balance(&account(0));
+
     assert_ok!(
       Network::claim_delegate_stake_unbondings(
         RuntimeOrigin::signed(account(0)),
@@ -2093,7 +2113,9 @@ fn test_remove_to_delegate_stake() {
       )
     );
 
-    let post_balance = Balances::free_balance(&account(0));
+    let after_claim_balance = Balances::free_balance(&account(0));
+
+    assert_eq!(after_claim_balance, pre_claim_balance + *ledger_balance);
 
     assert!(
       (post_balance >= Network::percent_mul(starting_delegator_balance, 9999)) &&
@@ -2408,6 +2430,10 @@ fn test_remove_to_delegate_stake_epochs_not_met_err() {
     // The first depositor will lose a percentage of their deposit depending on the size
     // https://docs.openzeppelin.com/contracts/4.x/erc4626#inflation-attack
     assert_eq!(delegate_balance, delegate_stake_to_be_added_as_shares);
+    assert!(
+      (delegate_balance >= Network::percent_mul(amount, 9999)) &&
+      (delegate_balance <= amount)
+    );
 
     // assert_err!(
     //   Network::remove_delegate_stake(
@@ -2472,6 +2498,10 @@ fn test_remove_delegate_stake_after_subnet_remove() {
     // The first depositor will lose a percentage of their deposit depending on the size
     // https://docs.openzeppelin.com/contracts/4.x/erc4626#inflation-attack
     assert_eq!(delegate_balance, delegate_stake_to_be_added_as_shares);
+    assert!(
+      (delegate_balance >= Network::percent_mul(amount, 9999)) &&
+      (delegate_balance <= amount)
+    );
 
     let epoch_length = EpochLength::get();
     let cooldown_epochs = DelegateStakeCooldownEpochs::get();
@@ -2500,9 +2530,9 @@ fn test_remove_delegate_stake_after_subnet_remove() {
 
     let unbondings: BTreeMap<u64, u128> = DelegateStakeUnbondingLedger::<Test>::get(account(0), subnet_id);
     assert_eq!(unbondings.len(), 1);
-    let (first_key, first_value) = unbondings.iter().next().unwrap();
-    assert_eq!(first_key, &epoch);
-    assert!(*first_value <= delegate_balance);
+    let (ledger_epoch, ledger_balance) = unbondings.iter().next().unwrap();
+    assert_eq!(ledger_epoch, &epoch);
+    assert!(*ledger_balance <= delegate_balance);
 
     assert_err!(
       Network::claim_delegate_stake_unbondings(

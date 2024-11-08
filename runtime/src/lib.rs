@@ -326,7 +326,8 @@ parameter_types! {
 )]
 pub enum ProxyType {
 	Any,
-	// NonTransfer,
+	DelegateStaking,
+	NonTransfer,
 	// Governance,
 	// Staking,
 }
@@ -339,6 +340,17 @@ impl InstanceFilter<RuntimeCall> for ProxyType {
 	fn filter(&self, c: &RuntimeCall) -> bool {
 		match self {
 			ProxyType::Any => true,
+			ProxyType::NonTransfer => !matches!(
+				c,
+				RuntimeCall::Balances(..)
+			),
+			ProxyType::DelegateStaking => matches!(
+				c,
+				RuntimeCall::Network(pallet_network::Call::add_to_delegate_stake { .. })
+				| RuntimeCall::Network(pallet_network::Call::transfer_delegate_stake { .. })
+				| RuntimeCall::Network(pallet_network::Call::remove_delegate_stake { .. })
+				| RuntimeCall::Network(pallet_network::Call::claim_delegate_stake_unbondings { .. })
+			),
 			// ProxyType::NonTransfer => !matches!(
 			// 	c,
 			// 	RuntimeCall::Balances(..) | 
@@ -560,13 +572,15 @@ impl pallet_rewards::Config for Runtime {
 
 impl pallet_admin::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	// type CollectiveOrigin = EitherOfDiverse<
-	// 	EnsureRoot<AccountId>,
-	// 	pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 2, 3>,
-	// >;
 	type CollectiveOrigin = pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 2, 3>;
 	type NetworkAdminInterface = Network;
 	type SubnetDemocracyAdminInterface = SubnetDemocracy;
+}
+
+impl pallet_atomic_swap::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type SwapAction = pallet_atomic_swap::BalanceSwapAction<AccountId, Balances>;
+	type ProofLimit = ConstU32<1024>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -642,6 +656,9 @@ mod runtime {
 
 	#[runtime::pallet_index(18)]
 	pub type Collective = pallet_collective::Pallet<Runtime, Instance1>;
+
+	#[runtime::pallet_index(19)]
+	pub type AtomicSwap = pallet_atomic_swap;
 }
 
 /// The address format for describing accounts.
