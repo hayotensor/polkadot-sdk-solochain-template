@@ -67,6 +67,38 @@ impl<T: Config> Pallet<T> {
     Ok(())
   }
 
+  pub fn set_subnet_memory(subnet_id: u32, memory_mb: u128) -> DispatchResult {
+    ensure!(
+      SubnetsData::<T>::contains_key(subnet_id),
+      Error::<T>::SubnetNotExist
+    );
+
+    ensure!(
+      memory_mb <= MaxSubnetMemoryMB::<T>::get(),
+      Error::<T>::InvalidMaxSubnetMemoryMB
+    );
+
+    let subnet = SubnetsData::<T>::get(subnet_id).unwrap();
+
+    let base_node_memory: u128 = BaseSubnetNodeMemoryMB::<T>::get();
+
+    let min_subnet_nodes: u32 = Self::get_min_subnet_nodes(base_node_memory, memory_mb);
+    let target_subnet_nodes: u32 = Self::get_target_subnet_nodes(base_node_memory, min_subnet_nodes);
+
+    let subnet_data = SubnetData {
+      id: subnet_id,
+      path: subnet.path,
+      min_nodes: min_subnet_nodes,
+      target_nodes: target_subnet_nodes,
+      memory_mb: memory_mb,  
+      initialized: subnet.initialized,
+    };
+
+    SubnetsData::<T>::insert(subnet_id, subnet_data);
+
+    Ok(())
+  }
+
   pub fn set_vote_subnet_in(path: Vec<u8>, memory_mb: u128) -> DispatchResult {
     Ok(())
   }

@@ -29,7 +29,7 @@ use crate::{
   Error, SubnetNodeData, AccountPenaltyCount, TotalStake, 
   StakeVaultBalance, SubnetPaths, MinRequiredUnstakeEpochs, MaxAccountPenaltyCount, MinSubnetNodes, TotalSubnetNodes,
   SubnetNodesData, SubnetNodeAccount,
-  SubnetAccount,
+  SubnetAccount, SubnetsData,
   AccountSubnetStake, MinStakeBalance,
   VotingPeriod, Proposals, ProposalsCount, ChallengePeriod, VoteType,
   AccountSubnetDelegateStakeShares, TotalSubnetDelegateStakeShares, TotalSubnetDelegateStakeBalance,
@@ -38,7 +38,8 @@ use crate::{
   DelegateStakeRewardsPercentage, SubnetNodesClasses, SubnetNodeClass, SubnetNodeClassEpochs,
   SubnetPenaltyCount, MaxSequentialAbsentSubnetNode, SequentialAbsentSubnetNode, PreSubnetData,
   CurrentAccountants, TargetAccountantsLength, MinRequiredSubnetConsensusSubmitEpochs, BaseRewardPerMB,
-  DelegateStakeUnbondingLedger, SubnetRemovalReason, ProposalBidAmount, BaseSubnetNodeMemoryMB
+  DelegateStakeUnbondingLedger, SubnetRemovalReason, ProposalBidAmount, BaseSubnetNodeMemoryMB,
+  MinSubnetDelegateStakePercentage
 };
 use frame_support::BoundedVec;
 use strum::IntoEnumIterator;
@@ -437,13 +438,13 @@ fn test_remove_subnet() {
 }
 
 #[test]
-fn test_remove_subnet_err() {
+fn test_remove_subnet_subnet_initializing() {
   new_test_ext().execute_with(|| {
     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
-
     build_subnet(subnet_path.clone());
+    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    assert_eq!(Network::total_subnets(), 1);
+    assert_eq!(Network::total_subnets(), subnet_id);
 
     assert_err!(
       Network::remove_subnet(
@@ -451,6 +452,139 @@ fn test_remove_subnet_err() {
         255,
       ),
       Error::<Test>::SubnetNotExist
+    );
+
+    assert_err!(
+      Network::remove_subnet(
+        RuntimeOrigin::signed(account(0)),
+        subnet_id,
+      ),
+      Error::<Test>::SubnetInitializing
+    );
+
+  })
+}
+
+#[test]
+fn test_get_min_subnet_delegate_stake_balance() {
+  new_test_ext().execute_with(|| {
+    let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
+    // build_subnet(subnet_path.clone());
+    let cost = Network::get_subnet_initialization_cost(0);
+    let _ = Balances::deposit_creating(&account(0), cost+1000);
+  
+    let add_subnet_data = PreSubnetData {
+      path: subnet_path.clone().into(),
+      memory_mb: 500_000,
+    };
+    assert_ok!(
+      Network::activate_subnet(
+        account(0),
+        account(0),
+        add_subnet_data,
+      )
+    );
+  
+    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+    let min_stake_balance = get_min_stake_balance();
+    let subnet = SubnetsData::<Test>::get(subnet_id).unwrap();
+    let min_subnet_delegate_stake_percentage = MinSubnetDelegateStakePercentage::<Test>::get();
+
+    let subnet_min_stake_supply = min_stake_balance * subnet.min_nodes as u128;
+    let presumed_min = Network::percent_mul(subnet_min_stake_supply, min_subnet_delegate_stake_percentage);
+
+    let min_subnet_delegate_stake = Network::get_min_subnet_delegate_stake_balance(subnet.min_nodes);
+
+    log::error!("min_subnet_delegate_stake {:?}",min_subnet_delegate_stake );
+    assert_eq!(presumed_min, min_subnet_delegate_stake);
+  })
+}
+
+#[test]
+fn test_remove_subnet_min_delegate_stake_balance_met() {
+  new_test_ext().execute_with(|| {
+    let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
+    build_subnet(subnet_path.clone());
+    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+    
+    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+
+    let subnet = SubnetsData::<Test>::get(subnet_id).unwrap();
+
+    let min_subnet_delegate_stake = Network::get_min_subnet_delegate_stake_balance(subnet.min_nodes);
+
+
+    let _ = Balances::deposit_creating(&account(1), min_subnet_delegate_stake + 500);
+    let starting_delegator_balance = Balances::free_balance(&account(1));
+
+    assert_ok!(
+      Network::add_to_delegate_stake(
+        RuntimeOrigin::signed(account(1)),
+        subnet_id,
+        min_subnet_delegate_stake,
+      ) 
+    );
+
+    let epoch_length = EpochLength::get();
+    let min_required_subnet_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<Test>::get();
+
+    System::set_block_number(System::block_number() + min_required_subnet_consensus_submit_epochs * (epoch_length + 1));
+
+    assert_err!(
+      Network::remove_subnet(
+        RuntimeOrigin::signed(account(0)),
+        subnet_id,
+      ),
+      Error::<Test>::SubnetMinDelegateStakeBalanceMet
+    );
+  })
+}
+
+#[test]
+fn test_remove_subnet_below_min_delegate_stake_balance() {
+  new_test_ext().execute_with(|| {
+    let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
+    build_subnet(subnet_path.clone());
+    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+    
+    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+
+    let subnet = SubnetsData::<Test>::get(subnet_id).unwrap();
+
+    let min_subnet_delegate_stake = Network::get_min_subnet_delegate_stake_balance(subnet.min_nodes);
+
+
+    let _ = Balances::deposit_creating(&account(1), min_subnet_delegate_stake + 500);
+    let starting_delegator_balance = Balances::free_balance(&account(1));
+
+    assert_ok!(
+      Network::add_to_delegate_stake(
+        RuntimeOrigin::signed(account(1)),
+        subnet_id,
+        min_subnet_delegate_stake,
+      ) 
+    );
+
+    let epoch_length = EpochLength::get();
+    let min_required_subnet_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<Test>::get();
+
+    System::set_block_number(System::block_number() + min_required_subnet_consensus_submit_epochs * (epoch_length + 1));
+
+    let delegate_shares = AccountSubnetDelegateStakeShares::<Test>::get(account(1), subnet_id);
+
+    assert_ok!(
+      Network::remove_delegate_stake(
+        RuntimeOrigin::signed(account(1)),
+        subnet_id,
+        delegate_shares,
+      ) 
+    );
+
+    assert_ok!(
+      Network::remove_subnet(
+        RuntimeOrigin::signed(account(0)),
+        subnet_id,
+      )
     );
   })
 }
@@ -1917,9 +2051,13 @@ fn test_add_to_delegate_stake() {
     let delegate_shares = AccountSubnetDelegateStakeShares::<Test>::get(account(0), subnet_id);
     assert_eq!(delegate_shares, delegate_stake_to_be_added_as_shares);
     assert_ne!(delegate_shares, 0);
+    // 1000 is for inflation attack mitigation
+    assert_eq!(amount - 1000, delegate_shares);
 
     let total_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<Test>::get(subnet_id);
     let total_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<Test>::get(subnet_id);
+
+    assert_eq!(amount, total_subnet_delegated_stake_balance);
 
     let delegate_balance = Network::convert_to_balance(
       delegate_shares,

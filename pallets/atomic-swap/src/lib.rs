@@ -252,7 +252,7 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_.
 		///
 		/// - `target`: Receiver of the atomic swap.
-		/// - `hashed_proof`: The blake2_256 hash of the secret proof.
+		/// - `hashed_proof`: The blake2_256, keccak_256, or sha2_256 hash of the secret proof.
 		/// - `balance`: Funds to be sent from origin.
 		/// - `duration`: Locked duration of the atomic swap. For safety reasons, it is recommended
 		///   that the revealer uses a shorter duration than the counterparty, to prevent the

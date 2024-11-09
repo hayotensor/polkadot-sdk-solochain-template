@@ -330,6 +330,7 @@ pub mod pallet {
 		InvalidSubnetConsensusUnconfirmedThreshold,
 		/// Invalid remove subnet peer epoch percentage, must be in 1e4 format and greater than 20.00
 		InvalidRemoveSubnetNodeEpochPercentage,
+		InvalidMaxSubnetMemoryMB,
 		// staking
 		/// u128 -> BalanceOf conversion error
 		CouldNotConvertToBalance,
@@ -421,6 +422,7 @@ pub mod pallet {
 		DataEmpty,
 
 		InvalidSubnetRewardsSubmission,
+		SubnetInitializing,
 
 
 		// Validation and Attestation
@@ -636,7 +638,7 @@ pub mod pallet {
 		2
 	}
 	#[pallet::type_value]
-	pub fn DefaultMinDelegateStakeSubnetPercentage() -> u128 {
+	pub fn DefaultMinSubnetDelegateStakePercentage() -> u128 {
 		// 10000
 		1000000000
 	}
@@ -667,17 +669,19 @@ pub mod pallet {
 	}
 	#[pallet::type_value]
 	pub fn DefaultDelegateStakeUnbondingLedger() -> BTreeMap<u64, u128> {
+		// We use epochs because cooldowns are based on epochs
 		// {
 		// 	epoch_start: u64, // cooldown begin epoch (+ cooldown duration for unlock)
-		// 	shares: u128,
+		// 	balance: u128,
 		// }
 		BTreeMap::new()
 	}
 	#[pallet::type_value]
 	pub fn DefaultSubnetStakeUnbondingLedger() -> BTreeMap<u64, u128> {
+		// We use epochs because cooldowns are based on epochs
 		// {
 		// 	epoch_start: u64, // cooldown begin epoch (+ cooldown duration for unlock)
-		// 	shares: u128,
+		// 	balance: u128,
 		// }
 		BTreeMap::new()
 	}
@@ -1115,10 +1119,10 @@ pub mod pallet {
 
 	/// The minimum delegate stake percentage for a subnet to have at any given time
 	// Based on the minimum subnet stake balance based on minimum nodes for a subnet
-	// i.e. if a subnet has a minimum node required of 10 and 100 TENSOR per node, and a MinDelegateStakeSubnetPercentage of 100%
+	// i.e. if a subnet has a minimum node required of 10 and 100 TENSOR per node, and a MinSubnetDelegateStakePercentage of 100%
 	//			then the minimum delegate stake balance towards a subnet must be 1000 TENSOR
 	#[pallet::storage]
-	pub type MinSubnetDelegateStakePercentage<T: Config> = StorageValue<_, u128, ValueQuery, DefaultMinDelegateStakeSubnetPercentage>;
+	pub type MinSubnetDelegateStakePercentage<T: Config> = StorageValue<_, u128, ValueQuery, DefaultMinSubnetDelegateStakePercentage>;
 
 	/// The absolute minimum delegate stake balance required for a subnet
 	#[pallet::storage]
@@ -1351,6 +1355,10 @@ pub mod pallet {
 	/// The [`weight`] macro is used to assign a weight to each call.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Anyone can remove a subnet if:
+		/// - The time period allotted to initialize a subnet to reach consensus submissions
+		///   and
+		/// - The delegate stake balance is below the minimum required threshold
 		#[pallet::call_index(0)]
 		#[pallet::weight({0})]
 		pub fn remove_subnet(
@@ -1379,6 +1387,20 @@ pub mod pallet {
 			// ----
 			
 			let subnet = SubnetsData::<T>::get(subnet_id).unwrap();
+
+			let min_required_subnet_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
+			let block: u64 = Self::get_current_block_as_u64();
+
+			// --- Ensure the subnet has passed it's required period to begin consensus submissions
+			ensure!(
+				block > Self::get_eligible_epoch_block(
+					T::EpochLength::get(), 
+					subnet.initialized, 
+					min_required_subnet_consensus_submit_epochs
+				),
+				Error::<T>::SubnetInitializing
+			);
+
 			let subnet_path: Vec<u8> = subnet.path;
 
 			let subnet_delegate_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);

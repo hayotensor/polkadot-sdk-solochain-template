@@ -152,7 +152,7 @@ impl<T: Config> Pallet<T> {
       Error::<T>::TxRateLimitExceeded
     );
 
-    // --- We remove the shares from the account.
+    // --- We remove the shares from the account and balance from the pool
     Self::decrease_account_delegate_stake_shares(&account_id, subnet_id, delegate_stake_to_be_removed, delegate_stake_shares_to_be_removed);
 
     // let remaining_account_delegate_stake_shares: u128 = AccountSubnetDelegateStakeShares::<T>::get(&account_id, subnet_id);
@@ -210,7 +210,7 @@ impl<T: Config> Pallet<T> {
       Error::<T>::CouldNotConvertToBalance
     );
 
-    // --- We remove the shares from the account.
+    // --- We remove the shares from the account and balance from the pool
     Self::decrease_account_delegate_stake_shares(&account_id, from_subnet_id, delegate_stake_to_be_transferred, delegate_stake_shares_to_be_switched);
 
 
@@ -322,6 +322,7 @@ impl<T: Config> Pallet<T> {
     let unbondings = DelegateStakeUnbondingLedger::<T>::get(account_id.clone(), subnet_id);
     let mut unbondings_copy = unbondings.clone();
 
+    // --- Count the unbondings so the user knows if it was unsuccessful
     let mut successful_unbondings = 0;
 
     for (unbonding_epoch, balance) in unbondings.iter() {
@@ -410,10 +411,16 @@ impl<T: Config> Pallet<T> {
     );
 
     // -- increase total subnet delegate stake balance
-    TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| *n += amount);
+    TotalSubnetDelegateStakeBalance::<T>::insert(
+      subnet_id, 
+      TotalSubnetDelegateStakeBalance::<T>::get(subnet_id).saturating_add(amount),
+    );
 
     // -- increase total subnet delegate stake shares
-    TotalSubnetDelegateStakeShares::<T>::mutate(subnet_id, |mut n| *n += shares);
+    TotalSubnetDelegateStakeShares::<T>::insert(
+      subnet_id, 
+      TotalSubnetDelegateStakeShares::<T>::get(subnet_id).saturating_add(shares),
+    );
   }
   
   pub fn decrease_account_delegate_stake_shares(
@@ -430,10 +437,16 @@ impl<T: Config> Pallet<T> {
     );
 
     // -- increase total subnet delegate stake balance
-    TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| *n += amount);
+    TotalSubnetDelegateStakeBalance::<T>::insert(
+      subnet_id, 
+      TotalSubnetDelegateStakeBalance::<T>::get(subnet_id).saturating_sub(amount),
+    );
 
     // -- decrease total subnet delegate stake shares
-    TotalSubnetDelegateStakeShares::<T>::mutate(subnet_id, |mut n| *n -= shares);
+    TotalSubnetDelegateStakeShares::<T>::insert(
+      subnet_id, 
+      TotalSubnetDelegateStakeShares::<T>::get(subnet_id).saturating_sub(shares),
+    );
 
     // -- decrease total stake overall
     // TotalDelegateStake::<T>::mutate(|mut n| *n -= amount);
@@ -445,7 +458,12 @@ impl<T: Config> Pallet<T> {
     amount: u128,
   ) {
     // -- increase total subnet delegate stake 
-    TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| *n += amount);
+    // TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| *n += amount);
+    TotalSubnetDelegateStakeBalance::<T>::insert(
+      subnet_id, 
+      TotalSubnetDelegateStakeBalance::<T>::get(subnet_id).saturating_add(amount),
+    );
+
   }
 
   // pub fn get_delegate_stake_balance(
