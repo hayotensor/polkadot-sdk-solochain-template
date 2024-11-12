@@ -39,7 +39,9 @@ use crate::{
   SubnetPenaltyCount, MaxSequentialAbsentSubnetNode, SequentialAbsentSubnetNode, PreSubnetData,
   CurrentAccountants, TargetAccountantsLength, MinRequiredSubnetConsensusSubmitEpochs, BaseRewardPerMB,
   DelegateStakeUnbondingLedger, SubnetRemovalReason, ProposalBidAmount, BaseSubnetNodeMemoryMB,
-  MinSubnetDelegateStakePercentage
+  MinSubnetDelegateStakePercentage, AccountSubnets,
+  TotalAccountStake,
+  TotalSubnetStake,
 };
 use frame_support::BoundedVec;
 use strum::IntoEnumIterator;
@@ -680,7 +682,6 @@ fn test_add_subnet_node_max_peers_err() {
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
     for n in 0..n_peers {
       let _ = Balances::deposit_creating(&account(n), deposit_amount);
 
@@ -737,8 +738,6 @@ fn test_add_subnet_node_subnet_err() {
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     let amount: u128 = 1000;
     assert_err!(
       Network::add_subnet_node(
@@ -765,8 +764,6 @@ fn test_add_subnet_node_subnet_account_ineligible_err() {
     assert_eq!(Network::total_subnets(), 1);
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     let amount: u128 = 1000;
 
@@ -799,8 +796,6 @@ fn test_add_subnet_node_not_exists_err() {
     let _ = Balances::deposit_creating(&account(0), deposit_amount);
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     assert_ok!(
       Network::add_subnet_node(
@@ -865,8 +860,6 @@ fn test_add_subnet_node_stake_err() {
     let _ = Balances::deposit_creating(&account(0), deposit_amount);
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     assert_err!(
       Network::add_subnet_node(
         RuntimeOrigin::signed(account(0)),
@@ -896,8 +889,6 @@ fn test_add_subnet_node_stake_not_enough_balance_err() {
 
     let _ = Balances::deposit_creating(&account(255), deposit_amount);
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     assert_err!(
       Network::add_subnet_node(
@@ -931,8 +922,6 @@ fn test_add_subnet_node_invalid_peer_id_err() {
     let _ = Balances::deposit_creating(&account(0), deposit_amount);
     amount_staked += amount;
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     let peer_id = format!("2");
     let peer: PeerId = PeerId(peer_id.into());
     assert_err!(
@@ -961,9 +950,10 @@ fn test_add_subnet_node_remove_readd_err() {
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     let _ = Balances::deposit_creating(&account(0), deposit_amount);
+
+    // Add block so SubnetAccount BTreeMap doesn't default to ``0``
+    System::set_block_number(System::block_number() + 1);
 
     assert_ok!(
       Network::add_subnet_node(
@@ -1006,8 +996,6 @@ fn test_add_subnet_node_remove_readd() {
     let mut amount_staked: u128 = 0;
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     let _ = Balances::deposit_creating(&account(0), deposit_amount);
 
@@ -1056,8 +1044,6 @@ fn test_add_subnet_node_remove_stake_partial_readd() {
     let mut amount_staked: u128 = 0;
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     let _ = Balances::deposit_creating(&account(0), deposit_amount);
 
@@ -1120,8 +1106,6 @@ fn test_add_subnet_node_remove_stake_readd() {
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     let _ = Balances::deposit_creating(&account(0), deposit_amount);
 
     assert_ok!(
@@ -1173,18 +1157,17 @@ fn test_add_subnet_node() {
     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
 
     build_subnet(subnet_path.clone());
+    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+
     assert_eq!(Network::total_subnets(), 1);
 
     let n_peers: u32 = Network::max_subnet_nodes();
 
+    let block_number = System::block_number();
+
     let deposit_amount: u128 = 1000000000000000000000000;
     let amount: u128 = 1000000000000000000000;
     let mut amount_staked: u128 = 0;
-
-    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     amount_staked = build_subnet_nodes(subnet_id, 0, n_peers, deposit_amount, amount);
 
     let node_set = SubnetNodesClasses::<Test>::get(subnet_id, SubnetNodeClass::Idle);
@@ -1192,6 +1175,38 @@ fn test_add_subnet_node() {
 
     assert_eq!(Network::total_stake(), amount_staked);
     assert_eq!(Network::total_subnet_stake(subnet_id), amount_staked);
+    assert_eq!(TotalSubnetNodes::<Test>::get(subnet_id), n_peers);
+
+    for n in 0..n_peers {
+      let subnet_node_data = SubnetNodesData::<Test>::try_get(subnet_id, account(n)).unwrap();
+      assert_eq!(subnet_node_data.account_id, account(n));
+      assert_eq!(subnet_node_data.peer_id, peer(n));
+      assert_eq!(subnet_node_data.initialized, block_number);  
+
+      let subnet_node_account = SubnetNodeAccount::<Test>::get(subnet_id, peer(n));
+      assert_eq!(subnet_node_account, account(n));
+  
+      let subnet_accounts = SubnetAccount::<Test>::get(subnet_id);
+      let block_initialized = subnet_accounts.get(&account(n)).unwrap();
+      assert_eq!(block_initialized, &block_number);
+  
+      let account_subnets = AccountSubnets::<Test>::get(account(n));
+      assert_eq!(account_subnets.len(), 1);
+      assert_eq!(account_subnets[0], subnet_id);
+  
+      let account_subnet_stake = AccountSubnetStake::<Test>::get(account(n), subnet_id);
+      assert_eq!(account_subnet_stake, amount);
+  
+      let total_account_stake = TotalAccountStake::<Test>::get(account(n));
+      assert_eq!(total_account_stake, amount);
+  
+    }
+
+    let total_subnet_stake = TotalSubnetStake::<Test>::get(subnet_id);
+    assert_eq!(total_subnet_stake, amount_staked);
+
+    let total_stake = TotalStake::<Test>::get();
+    assert_eq!(total_subnet_stake, amount_staked);
   })
 }
 
@@ -1208,8 +1223,6 @@ fn test_update_subnet_node_peer_id_existing_err() {
     let mut amount_staked: u128 = 0;
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     let _ = Balances::deposit_creating(&account(0), deposit_amount);
 
@@ -1320,7 +1333,6 @@ fn test_remove_peer_err() {
 
 
     build_subnet(subnet_path.clone());
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     assert_err!(
       Network::remove_subnet_node(
@@ -1379,8 +1391,6 @@ fn test_remove_peer_unstake_epochs_err() {
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     let epoch_length = EpochLength::get();
 
     System::set_block_number(System::block_number() + epoch_length);
@@ -1415,8 +1425,6 @@ fn test_remove_peer_unstake_epochs_err() {
     post_remove_subnet_node_ensures(0, subnet_id);
 
     assert_eq!(Network::total_subnet_nodes(1), 0);
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     assert_err!(
       Network::remove_stake(
@@ -1453,8 +1461,6 @@ fn test_remove_peer_unstake_total_balance() {
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     assert_ok!(
       Network::add_subnet_node(
         RuntimeOrigin::signed(account(0)),
@@ -1480,8 +1486,6 @@ fn test_remove_peer_unstake_total_balance() {
     post_remove_subnet_node_ensures(0, subnet_id);
 
     assert_eq!(Network::total_subnet_nodes(1), 0);
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
     
     let epoch_length = EpochLength::get();
     let min_required_unstake_epochs = MinRequiredUnstakeEpochs::<Test>::get();
@@ -1503,48 +1507,64 @@ fn test_remove_peer_unstake_total_balance() {
 
 
 #[test]
-fn test_remove_peer() {
+fn test_remove_subnet_node() {
   new_test_ext().execute_with(|| {
     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
-
-
     build_subnet(subnet_path.clone());
-    let deposit_amount: u128 = 1000000000000000000000000;
-    let amount: u128 = 1000000000000000000000;
-    let _ = Balances::deposit_creating(&account(0), deposit_amount);
-
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
+    let deposit_amount: u128 = 1000000000000000000000000;
+    let amount: u128 = 1000000000000000000000;
+    let mut amount_staked: u128 = 0;
+    let n_peers: u32 = Network::max_subnet_nodes();
+    amount_staked = build_subnet_nodes(subnet_id, 0, n_peers, deposit_amount, amount);
 
-    assert_ok!(
-      Network::add_subnet_node(
-        RuntimeOrigin::signed(account(0)),
-        subnet_id,
-        peer(0),
-        amount,
-      ) 
-    );
-    post_successful_add_subnet_node_asserts(0, subnet_id, amount);
+    let remove_n_peers = n_peers / 2;
 
-    assert_eq!(Network::total_subnet_nodes(1), 1);
-    assert_eq!(Network::account_subnet_stake(account(0), 1), amount);
-    assert_eq!(Network::total_account_stake(account(0)), amount);
-    assert_eq!(Network::total_stake(), amount);
-    assert_eq!(Network::total_subnet_stake(1), amount);
+    let block_number = System::block_number();
 
-    // make_subnet_node_removable();
-    // should be able to be removed is initialization period doesn't reach inclusion epochs
+    for n in 0..remove_n_peers {
+      assert_ok!(
+        Network::remove_subnet_node(
+          RuntimeOrigin::signed(account(n)),
+          subnet_id,
+        ) 
+      );
+    }
 
-    assert_ok!(
-      Network::remove_subnet_node(
-        RuntimeOrigin::signed(account(0)),
-        subnet_id,
-      ) 
-    );
-    post_remove_subnet_node_ensures(0, subnet_id);
-    assert_eq!(Network::total_subnet_nodes(1), 0);
+    let node_set = SubnetNodesClasses::<Test>::get(subnet_id, SubnetNodeClass::Idle);
+    assert_eq!(node_set.len(), (n_peers - remove_n_peers) as usize);
 
+    assert_eq!(Network::total_stake(), amount_staked);
+    assert_eq!(Network::total_subnet_stake(subnet_id), amount_staked);
+    assert_eq!(TotalSubnetNodes::<Test>::get(subnet_id), n_peers - remove_n_peers);
+
+    for n in 0..remove_n_peers {
+      let subnet_node_data = SubnetNodesData::<Test>::try_get(subnet_id, account(n));
+      assert_eq!(subnet_node_data, Err(()));
+
+      let subnet_node_account = SubnetNodeAccount::<Test>::try_get(subnet_id, peer(n));
+      assert_eq!(subnet_node_account, Err(()));
+
+      let subnet_accounts = SubnetAccount::<Test>::get(subnet_id);
+      let block_initialized = subnet_accounts.get(&account(n)).unwrap();
+      assert_eq!(block_initialized, &block_number);
+  
+      let account_subnets = AccountSubnets::<Test>::get(account(n));
+      assert_eq!(account_subnets.len(), 0);
+  
+      let account_subnet_stake = AccountSubnetStake::<Test>::get(account(n), subnet_id);
+      assert_eq!(account_subnet_stake, amount);
+  
+      let total_account_stake = TotalAccountStake::<Test>::get(account(n));
+      assert_eq!(total_account_stake, amount);
+    }
+
+    let total_subnet_stake = TotalSubnetStake::<Test>::get(subnet_id);
+    assert_eq!(total_subnet_stake, amount_staked);
+
+    let total_stake = TotalStake::<Test>::get();
+    assert_eq!(total_subnet_stake, amount_staked);
   });
 }
 
@@ -1571,8 +1591,6 @@ fn test_add_to_stake_err() {
     let amount: u128 = 1000000000000000000000;
     let _ = Balances::deposit_creating(&account(0), deposit_amount);
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     assert_err!(
       Network::add_to_stake(
         RuntimeOrigin::signed(account(0)),
@@ -1592,8 +1610,6 @@ fn test_add_to_stake_err() {
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     assert_ok!(
       Network::add_subnet_node(
         RuntimeOrigin::signed(account(0)),
@@ -1609,8 +1625,6 @@ fn test_add_to_stake_err() {
     assert_eq!(Network::total_account_stake(account(0)), amount);
     assert_eq!(Network::total_stake(), amount);
     assert_eq!(Network::total_subnet_stake(1), amount);
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     assert_err!(
       Network::add_to_stake(
@@ -1637,8 +1651,6 @@ fn test_add_to_stake() {
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     assert_ok!(
       Network::add_subnet_node(
         RuntimeOrigin::signed(account(0)),
@@ -1654,8 +1666,6 @@ fn test_add_to_stake() {
     assert_eq!(Network::total_stake(), amount);
     assert_eq!(Network::total_subnet_stake(1), amount);
     assert_eq!(Network::total_subnet_nodes(1), 1);
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     assert_ok!(
       Network::add_to_stake(
@@ -1681,8 +1691,6 @@ fn test_remove_stake_err() {
     let amount: u128 = 1000000000000000000000;
     let _ = Balances::deposit_creating(&account(0), deposit_amount);
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     // attempt to remove on non-existent subnet_id
     assert_err!(
       Network::remove_stake(
@@ -1699,8 +1707,6 @@ fn test_remove_stake_err() {
     build_subnet(subnet_path.clone());
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     assert_ok!(
       Network::add_subnet_node(
         RuntimeOrigin::signed(account(0)),
@@ -1716,8 +1722,6 @@ fn test_remove_stake_err() {
     assert_eq!(Network::total_stake(), amount);
     assert_eq!(Network::total_subnet_stake(1), amount);
     assert_eq!(Network::total_subnet_nodes(1), 1);
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     assert_err!(
       Network::remove_stake(
@@ -1786,8 +1790,6 @@ fn test_remove_stake() {
     build_subnet(subnet_path.clone());
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     assert_ok!(
       Network::add_subnet_node(
         RuntimeOrigin::signed(account(0)),
@@ -1803,8 +1805,6 @@ fn test_remove_stake() {
     assert_eq!(Network::total_stake(), amount);
     assert_eq!(Network::total_subnet_stake(1), amount);
     assert_eq!(Network::total_subnet_nodes(1), 1);
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     // add double amount to stake
     assert_ok!(
@@ -1823,8 +1823,6 @@ fn test_remove_stake() {
     let epoch_length = EpochLength::get();
     let min_required_unstake_epochs = MinRequiredUnstakeEpochs::<Test>::get();
     System::set_block_number(System::block_number() + epoch_length * min_required_unstake_epochs);
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     // remove amount ontop
     assert_ok!(
@@ -1858,8 +1856,6 @@ fn test_remove_stake_after_remove_subnet() {
     build_subnet(subnet_path.clone());
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     assert_ok!(
       Network::add_subnet_node(
         RuntimeOrigin::signed(account(0)),
@@ -1876,8 +1872,6 @@ fn test_remove_stake_after_remove_subnet() {
     assert_eq!(Network::total_subnet_stake(1), amount);
     assert_eq!(Network::total_subnet_nodes(1), 1);
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     assert_ok!(
       Network::remove_subnet_node(
         RuntimeOrigin::signed(account(0)),
@@ -1888,8 +1882,6 @@ fn test_remove_stake_after_remove_subnet() {
     let epoch_length = EpochLength::get();
     let min_required_unstake_epochs = MinRequiredUnstakeEpochs::<Test>::get();
     System::set_block_number(System::block_number() + epoch_length * min_required_unstake_epochs);
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     // remove amount ontop
     assert_ok!(
@@ -1937,8 +1929,6 @@ fn test_remove_claim_delegate_stake_after_remove_subnet() {
 
     build_subnet(subnet_path.clone());
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
-
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
     assert_ok!(
       Network::add_subnet_node(
@@ -3711,8 +3701,6 @@ fn test_shift_node_classes() {
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    System::set_block_number(System::block_number() + CONSENSUS_STEPS);
-
     amount_staked = build_subnet_nodes(subnet_id, 0, n_peers, deposit_amount, amount);
 
     let node_set = SubnetNodesClasses::<Test>::get(subnet_id, SubnetNodeClass::Idle);
@@ -3757,8 +3745,6 @@ fn test_shift_node_classes() {
 //     let mut amount_staked: u128 = 0;
 
 //     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
-
-//     System::set_block_number(System::block_number() + CONSENSUS_STEPS);
 
 //     let encoded_peer_id = Encode::encode(&peer(0).0.to_vec());
 //     let public = sr25519_generate(0.into(), None);
