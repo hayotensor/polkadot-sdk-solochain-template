@@ -18,10 +18,6 @@ use sp_std::vec::Vec;
 
 impl<T: Config> Pallet<T> {
   pub fn set_min_nodes_slope_parameters(params: MinNodesCurveParametersSet) -> DispatchResult {
-    // let one_hundred = params.one_hundred;
-    // let two_hundred = params.two_hundred;
-    let one_hundred = Self::PERCENTAGE_FACTOR;
-    let two_hundred = Self::TWO_HUNDRED_PERCENT_FACTOR;
     let x_curve_start = params.x_curve_start;
     let y_end = params.y_end;
     let y_start = params.y_start;
@@ -34,16 +30,20 @@ impl<T: Config> Pallet<T> {
 
     // --- Linear Slope check
     let x_start_plus_1 = x_curve_start + x_rise;
-    let x_start_plus_1_adj = (x_start_plus_1 - x_curve_start) * one_hundred / (one_hundred - x_curve_start);
-    let y_start_minus_1 = (y_start - y_end) * (one_hundred - x_start_plus_1_adj) / one_hundred + y_end; 
+    let x_start_plus_1_adj = (x_start_plus_1 - x_curve_start) * Self::PERCENTAGE_FACTOR / 
+      (Self::PERCENTAGE_FACTOR - x_curve_start);
+    let y_start_minus_1 = (y_start - y_end) * (Self::PERCENTAGE_FACTOR - x_start_plus_1_adj) / 
+      Self::PERCENTAGE_FACTOR + y_end; 
     let y_rise = y_start - y_start_minus_1;
-    let slope = y_rise * one_hundred / x_rise;
-    let j = slope * two_hundred / one_hundred;
-    let q = one_hundred * one_hundred / j * y_start / one_hundred;
-    let max_x = one_hundred * one_hundred / j * y_start / one_hundred + (x_curve_start * one_hundred / two_hundred);
+    let slope = y_rise * Self::PERCENTAGE_FACTOR / x_rise;
+    let j = slope * Self::TWO_HUNDRED_PERCENT_FACTOR / Self::PERCENTAGE_FACTOR;
+    let q = Self::PERCENTAGE_FACTOR * Self::PERCENTAGE_FACTOR / j * y_start / Self::PERCENTAGE_FACTOR;
+    let max_x = 
+      Self::PERCENTAGE_FACTOR * Self::PERCENTAGE_FACTOR / j * y_start / Self::PERCENTAGE_FACTOR + 
+      (x_curve_start * Self::PERCENTAGE_FACTOR / Self::TWO_HUNDRED_PERCENT_FACTOR);
     
     ensure!(
-      max_x >= one_hundred,
+      max_x >= Self::PERCENTAGE_FACTOR,
       Error::<T>::SubnetNotExist
     );
 
@@ -96,6 +96,59 @@ impl<T: Config> Pallet<T> {
 
     SubnetsData::<T>::insert(subnet_id, subnet_data);
 
+    Ok(())
+  }
+
+  pub fn set_subnet_node_sequence_epochs(
+    idle: u64,
+    included: u64,
+    submittable: u64,
+    accountant: u64
+  ) -> DispatchResult {
+    ensure!(
+      idle < included && included < submittable && submittable < accountant,
+      Error::<T>::SubnetNotExist
+    );
+    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Idle, idle);
+    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Included, included);
+    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Submittable, submittable);
+    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Accountant, accountant);
+    Ok(())
+  }
+
+  pub fn set_subnet_node_idle_epochs(value: u64) -> DispatchResult {
+    ensure!(
+      value < SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Included) && value > 0,
+      Error::<T>::SubnetNotExist
+    );
+    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Idle, value);
+    Ok(())
+  }
+
+  pub fn set_subnet_node_included_epochs(value: u64) -> DispatchResult {
+    ensure!(
+      value > SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Idle),
+      Error::<T>::SubnetNotExist
+    );
+    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Included, value);
+    Ok(())
+  }
+
+  pub fn set_subnet_node_submittable_epochs(value: u64) -> DispatchResult {
+    ensure!(
+      value > SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Included),
+      Error::<T>::SubnetNotExist
+    );
+    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Submittable, value);
+    Ok(())
+  }
+
+  pub fn set_subnet_node_accountant_epochs(value: u64) -> DispatchResult {
+    ensure!(
+      value > SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Submittable),
+      Error::<T>::SubnetNotExist
+    );
+    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Accountant, value);
     Ok(())
   }
 

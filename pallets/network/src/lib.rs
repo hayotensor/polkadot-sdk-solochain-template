@@ -481,8 +481,6 @@ pub mod pallet {
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
   pub struct MinNodesCurveParametersSet {
-		pub one_hundred: u128,
-		pub two_hundred: u128,
 		pub x_curve_start: u128, // The range of ``max-min`` to start descending the curve
 		pub y_end: u128, // The ``y`` end point on descending curve
 		pub y_start: u128, // The ``y`` start point on descending curve
@@ -659,10 +657,10 @@ pub mod pallet {
 		// 1100
 		110000000
 	}
-	#[pallet::type_value]
-	pub fn DefaultMinRequiredDelegateUnstakeEpochs() -> u64 {
-		21
-	}
+	// #[pallet::type_value]
+	// pub fn DefaultMinRequiredDelegateUnstakeEpochs() -> u64 {
+	// 	21
+	// }
 	#[pallet::type_value]
 	pub fn DefaultDelegateStakeCooldown() -> u64 {
 		0
@@ -701,6 +699,8 @@ pub mod pallet {
 	pub fn DefaultMaxSequentialAbsentSubnetNode() -> u32 {
 		// Must be less than the inclusion stage in the subnet node validation sequence
 		// This ensures a subnet node is inducted via consensus before they can become a validator
+		// 3 is for testing
+		// production will more higher matching inclusion epochs
 		3
 	}
 	#[pallet::type_value]
@@ -742,8 +742,6 @@ pub mod pallet {
 	pub fn DefaultMinNodesCurveParameters() -> MinNodesCurveParametersSet {
 		// math.rs PERCENT_FACTOR format
 		return MinNodesCurveParametersSet {
-			one_hundred: 1000000000, // 1.0
-			two_hundred: 1000000000 * 2, // 2.0
 			x_curve_start: 15 * 1000000000 / 100, // 0.15
 			y_end: 10 * 1000000000 / 100, // 0.10
 			y_start: 75 * 1000000000 / 100, // 0.75
@@ -1147,8 +1145,8 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type DelegateStakeRewardsPercentage<T: Config> = StorageValue<_, u128, ValueQuery, DefaultDelegateStakeRewardsPercentage>;
 
-	#[pallet::storage]
-	pub type MinRequiredDelegateUnstakeEpochs<T> = StorageValue<_, u64, ValueQuery, DefaultMinRequiredDelegateUnstakeEpochs>;
+	// #[pallet::storage]
+	// pub type MinRequiredDelegateUnstakeEpochs<T> = StorageValue<_, u64, ValueQuery, DefaultMinRequiredDelegateUnstakeEpochs>;
 
 	// Total stake sum of all peers in specified subnet
 	#[pallet::storage] // subnet_uid --> peer_data

@@ -71,8 +71,12 @@ impl<T: Config> Pallet<T> {
   // Checks if account penalties do not surpass the max allowed penalties
   pub fn is_account_eligible(account_id: T::AccountId) -> bool {
     let max_account_penalty_count = MaxAccountPenaltyCount::<T>::get();
-    let account_penalty_count = AccountPenaltyCount::<T>::get(account_id);
-    account_penalty_count <= max_account_penalty_count
+    let penalties = AccountPenaltyCount::<T>::get(account_id);
+    // let mut penalties = 0;
+    // for subnet_id in AccountSubnets::<T>::get(account_id.clone()).iter() {
+    //   penalties += SequentialAbsentSubnetNode::<T>::get(subnet_id, account_id.clone());
+    // }
+    penalties <= max_account_penalty_count
   }
 
   pub fn get_tx_rate_limit() -> u64 {
@@ -208,7 +212,6 @@ impl<T: Config> Pallet<T> {
     // --- Parameters
     let params: MinNodesCurveParametersSet = MinNodesCurveParameters::<T>::get();
     let one_hundred = Self::PERCENTAGE_FACTOR;
-    let two_hundred = Self::TWO_HUNDRED_PERCENT_FACTOR;
     let x_curve_start = params.x_curve_start;
     let y_end = params.y_end;
     let y_start = params.y_start;
@@ -216,16 +219,16 @@ impl<T: Config> Pallet<T> {
 
     let max_subnet_memory = MaxSubnetMemoryMB::<T>::get();
 
-    let mut subnet_mem_position = one_hundred;
+    let mut subnet_mem_position = Self::PERCENTAGE_FACTOR;
     
     // Redundant since subnet memory cannot be surpassed beyond the max subnet memory
     // If max subnet memory in curve is surpassed
     if memory_mb < max_subnet_memory {
-      subnet_mem_position = memory_mb * one_hundred / max_subnet_memory;
+      subnet_mem_position = memory_mb * Self::PERCENTAGE_FACTOR / max_subnet_memory;
     }
 
     // The position of the range where ``memory_mb`` is located
-    // let subnet_mem_position = memory_mb * one_hundred / max_subnet_memory;
+    // let subnet_mem_position = memory_mb * Self::PERCENTAGE_FACTOR / max_subnet_memory;
     let mut min_subnet_nodes: u32 = MinSubnetNodes::<T>::get();
 
     if subnet_mem_position <= x_curve_start {
@@ -238,17 +241,17 @@ impl<T: Config> Pallet<T> {
 
     let mut x = 0;
 
-    if subnet_mem_position >= x_curve_start && subnet_mem_position <= one_hundred {
+    if subnet_mem_position >= x_curve_start && subnet_mem_position <= Self::PERCENTAGE_FACTOR {
       // If subnet memory position is in between range
-      x = (subnet_mem_position-x_curve_start) * one_hundred / (one_hundred-x_curve_start);
-    } else if subnet_mem_position > one_hundred {
+      x = (subnet_mem_position-x_curve_start) * Self::PERCENTAGE_FACTOR / (Self::PERCENTAGE_FACTOR-x_curve_start);
+    } else if subnet_mem_position > Self::PERCENTAGE_FACTOR {
       // If subnet memory is greater than 100%
-      x = one_hundred;
+      x = Self::PERCENTAGE_FACTOR;
     }
 
-    let y = (y_start - y_end) * (one_hundred - x) / one_hundred + y_end;
+    let y = (y_start - y_end) * (Self::PERCENTAGE_FACTOR - x) / Self::PERCENTAGE_FACTOR + y_end;
 
-    // let min_subnet_nodes_on_curve = y * simple_min_subnet_nodes / one_hundred;
+    // let min_subnet_nodes_on_curve = y * simple_min_subnet_nodes / Self::PERCENTAGE_FACTOR;
     let min_subnet_nodes_on_curve = Self::percent_mul_round_up(y, simple_min_subnet_nodes);
 
     // Redundant

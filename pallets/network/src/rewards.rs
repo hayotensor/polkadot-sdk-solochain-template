@@ -71,10 +71,12 @@ impl<T: Config> Pallet<T> {
         // --- If validator submitted no data, or less than the minimum required subnet nodes 
         //     we assume the subnet is broken
         // There is no slashing if subnet is broken, only risk of subnet being removed
-        if (data_len as u32) < min_nodes {
-          // --- Increase the penalty count for the subnet
-          // If the subnet is broken, the validator can avoid slashing by submitting consensus with null data
+        // The subnet is deemed broken is there is no consensus or not enough nodes
+        if (data_len as u32) < min_nodes  {
+          // --- Increase the penalty count for the subnet because its deemed in a broken state
           SubnetPenaltyCount::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
+
+          // If the subnet is broken, the validator can avoid slashing by submitting consensus with null data
 
           // --- If subnet nodes aren't in consensus this is true
           // Since we can assume the subnet is in a broken state, we don't slash the validator
@@ -82,14 +84,18 @@ impl<T: Config> Pallet<T> {
 
           // --- If the subnet nodes are not in agreement with the validator that the model is broken, we
           //     increase the penalty score for the validator
+          //     and slash
           if attestation_percentage < min_attestation_percentage {
-            AccountPenaltyCount::<T>::mutate(validator, |n: &mut u32| *n += 1);
+            // --- Slash validator and increase penalty score
+            Self::slash_validator(subnet_id, validator, attestation_percentage);
           }
+
+          // --- If the subnet was deemed in a broken stake by the validator, rewards are bypassed
           continue;
         }
 
-        // --- If the minimum attestation not reached, assume validator is dishonest, slash, and continue
-        if min_attestation_percentage > attestation_percentage {
+        // --- If the minimum required attestation not reached, assume validator is dishonest, slash, and continue
+        if attestation_percentage < min_attestation_percentage {
           // --- Slash validator and increase penalty score
           Self::slash_validator(subnet_id, validator, attestation_percentage);
           
@@ -97,8 +103,8 @@ impl<T: Config> Pallet<T> {
           continue
         }
 
+        // --- Reward validators
         let sum: u128 = submission.sum;
-        // let mut rewarded: BTreeSet<T::AccountId> = BTreeSet::new();
         for subnet_node in SubnetNodesData::<T>::iter_prefix_values(subnet_id) {
           let account_id: T::AccountId = subnet_node.account_id;
           let peer_id: PeerId = subnet_node.peer_id;
@@ -106,6 +112,8 @@ impl<T: Config> Pallet<T> {
           let mut validated: bool = false;
           let mut subnet_node_data: SubnetNodeData = SubnetNodeData::default();
           // test copying submission.data and removing found peers to limit future iterations
+
+          // --- Confirm if ``peer_id`` is present in validator data
           for submission_data in submission.data.iter() {
             if submission_data.peer_id == peer_id {
               validated = true;
@@ -123,13 +131,16 @@ impl<T: Config> Pallet<T> {
             if attestation_percentage > node_attestation_removal_threshold {
               // We don't slash nodes for not being in consensus
               // A node can be removed for any reason and may not be due to dishonesty
+              // If subnet validators want to remove and slash a node, they can use the proposals mechanism
 
-              // --- Mutate nodes absentee count if in consensus
+              // --- Mutate nodes absentee count if not in consensus
               let absent_count = SequentialAbsentSubnetNode::<T>::get(subnet_id, account_id.clone());
               SequentialAbsentSubnetNode::<T>::insert(subnet_id, account_id.clone(), absent_count + 1);
 
               // --- Ensure maximum sequential removal consensus threshold is reached
               if absent_count + 1 > max_absent {
+                // --- Increase account penalty count
+                // AccountPenaltyCount::<T>::mutate(account_id.clone(), |n: &mut u32| *n += 1);
                 Self::perform_remove_subnet_node(block, subnet_id, account_id.clone());
               }
             }
@@ -151,6 +162,7 @@ impl<T: Config> Pallet<T> {
           // --- Calculate score percentage of total subnet rewards
           let mut account_reward: u128 = Self::percent_mul(score_percentage, subnet_reward);
 
+          // --- Increase reward if validator
           if account_id == validator {
             account_reward += Self::get_validator_reward(attestation_percentage);    
           }
@@ -168,7 +180,7 @@ impl<T: Config> Pallet<T> {
           ); 
         }
 
-        // --- Portion of delegate staking
+        // --- Portion of rewards to delegate stakers
         Self::do_increase_delegate_stake(
           subnet_id,
           delegate_stake_reward,
@@ -178,7 +190,7 @@ impl<T: Config> Pallet<T> {
         SubnetPenaltyCount::<T>::mutate(subnet_id, |n: &mut u32| n.saturating_dec());
       } else if let Ok(rewards_validator) = SubnetRewardsValidator::<T>::try_get(subnet_id, epoch) {
         // --- If a validator has been chosen that means they are supposed to be submitting consensus data
-        //     since the subnet is passed its MinRequiredSubnetConsensusSubmitEpochs
+        //     since the subnet is past its MinRequiredSubnetConsensusSubmitEpochs
         // --- If there is no submission but validator chosen, increase penalty on subnet and validator
         // --- Increase the penalty count for the subnet
         // The next validator on the next epoch can increment the penalty score down
@@ -195,9 +207,10 @@ impl<T: Config> Pallet<T> {
 
       // TODO: Automatically remove subnet if greater than max penalties count
       // TODO: Get benchmark for removing max subnets in one epoch to ensure does not surpass max weights
+
+      // --- If subnet is past its max penalty count, remove
       let subnet_penalty_count = SubnetPenaltyCount::<T>::get(subnet_id);
       if subnet_penalty_count > max_subnet_penalty_count {
-        // Self::do_remove_subnet(block, subnet_id);
         Self::deactivate_subnet(
           data.path,
           SubnetRemovalReason::MaxPenalties,

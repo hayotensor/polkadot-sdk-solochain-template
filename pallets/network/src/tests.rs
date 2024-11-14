@@ -33,7 +33,7 @@ use crate::{
   AccountSubnetStake, MinStakeBalance,
   VotingPeriod, Proposals, ProposalsCount, ChallengePeriod, VoteType,
   AccountSubnetDelegateStakeShares, TotalSubnetDelegateStakeShares, TotalSubnetDelegateStakeBalance,
-  MinRequiredDelegateUnstakeEpochs, TotalSubnets, AccountantDataCount,
+  TotalSubnets, AccountantDataCount,
   AccountantDataNodeParams, SubnetRewardsValidator, SubnetRewardsSubmission, BaseSubnetReward, BaseReward,
   DelegateStakeRewardsPercentage, SubnetNodesClasses, SubnetNodeClass, SubnetNodeClassEpochs,
   SubnetPenaltyCount, MaxSequentialAbsentSubnetNode, SequentialAbsentSubnetNode, PreSubnetData,
@@ -3292,14 +3292,8 @@ fn test_reward_subnets_remove_subnet_node() {
   
       let base_reward = BaseReward::<Test>::get();
   
-      // let submission_nodes_count = submission.nodes_count as u128;
-      // log::error!("submission.nodes_count mem1 {:?}", submission_nodes_count);
-
       let submission_attestations: u128 = submission.attests.len() as u128;
-      log::error!("submission_attestations mem1 {:?}", submission_attestations);
-
       let attestation_percentage: u128 = Network::percent_div(submission_attestations, submission_nodes_count);
-      log::error!("attestation_percentage mem1 {:?}", attestation_percentage);
 
       // check each subnet nodes balance increased
       for n in 0..n_peers {
@@ -3311,13 +3305,29 @@ fn test_reward_subnets_remove_subnet_node() {
         } else if n == n_peers - 1 {
           // node removed | should have no rewards
           let stake_balance: u128 = AccountSubnetStake::<Test>::get(&account(n), subnet_id);
-          assert!(stake_balance == amount, "Invalid subnet node staking rewards")  
+          assert!(stake_balance == amount, "Invalid subnet node staking rewards");
         } else {
           // attestors
           let stake_balance: u128 = AccountSubnetStake::<Test>::get(&account(n), subnet_id);
-          assert!(stake_balance == amount + (account_reward * (num+1) as u128), "Invalid subnet node staking rewards")  
+          assert!(stake_balance == amount + (account_reward * (num+1) as u128), "Invalid subnet node staking rewards");
         }
       }
+    }
+
+    // node should be removed
+    let subnet_node_data = SubnetNodesData::<Test>::try_get(subnet_id, account(n_peers - 1));
+    assert_eq!(subnet_node_data, Err(()));
+
+    let subnet_node_account = SubnetNodeAccount::<Test>::try_get(subnet_id, peer(n_peers - 1));
+    assert_eq!(subnet_node_account, Err(()));
+  
+    let subnet_accounts = SubnetAccount::<Test>::get(subnet_id);
+    let subnet_account = subnet_accounts.get(&account(n_peers - 1));
+    assert_eq!(subnet_accounts.get(&account(n_peers - 1)), Some(&System::block_number()));
+  
+    for class_id in SubnetNodeClass::iter() {
+      let node_sets = SubnetNodesClasses::<Test>::get(subnet_id, class_id);
+      assert_eq!(node_sets.get(&account(n_peers - 1)), None);
     }
   });
 }
@@ -3349,12 +3359,15 @@ fn test_reward_subnets_absent_node_increment_decrement() {
     let epoch_length = EpochLength::get();
     let epochs = SubnetNodeClassEpochs::<Test>::get(SubnetNodeClass::Accountant);
 
+    // simulate epochs
     for num in 0..10 {
       System::set_block_number(System::block_number() + epochs * epoch_length + 1);
       Network::shift_node_classes(System::block_number(), epoch_length);
       let epoch = System::block_number() / epoch_length;
 
       if num % 2 == 0 {
+        // increment on even epochs
+
         let subnet_node_data_vec = subnet_node_data(0, n_peers-1);
     
         // --- Insert validator
@@ -3383,6 +3396,8 @@ fn test_reward_subnets_absent_node_increment_decrement() {
         let node_absent_count = SequentialAbsentSubnetNode::<Test>::get(subnet_id, account(n_peers-1));
         assert_eq!(node_absent_count, 1);
       } else {
+        // decrement on odd epochs
+
         let subnet_node_data_vec = subnet_node_data(0, n_peers);
     
         // --- Insert validator
@@ -3555,14 +3570,14 @@ fn test_reward_subnets_validator_slash() {
 
     // No attests to ensure validator is slashed
     
-    let validator_stake_balance: u128 = AccountSubnetStake::<Test>::get(&account(0), subnet_id);
+    let before_slash_validator_stake_balance: u128 = AccountSubnetStake::<Test>::get(&account(0), subnet_id);
 
     Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
 
     let slashed_validator_stake_balance: u128 = AccountSubnetStake::<Test>::get(&account(0), subnet_id);
 
     // Ensure validator was slashed
-    assert!(validator_stake_balance > slashed_validator_stake_balance, "Validator was not slashed")
+    assert!(before_slash_validator_stake_balance > slashed_validator_stake_balance, "Validator was not slashed")
   });
 }
 
