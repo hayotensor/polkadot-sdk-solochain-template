@@ -3280,7 +3280,6 @@ fn test_reward_subnets_remove_subnet_node() {
         assert_eq!(node_absent_count, num+1);  
       }
 
-            
       let base_reward_per_mb: u128 = BaseRewardPerMB::<Test>::get();
       let delegate_stake_rewards_percentage: u128 = DelegateStakeRewardsPercentage::<Test>::get();
       let overall_subnet_reward: u128 = Network::percent_mul(base_reward_per_mb, DEFAULT_MEM_MB);
