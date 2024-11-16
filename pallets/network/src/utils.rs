@@ -72,11 +72,13 @@ impl<T: Config> Pallet<T> {
   pub fn is_account_eligible(account_id: T::AccountId) -> bool {
     let max_account_penalty_count = MaxAccountPenaltyCount::<T>::get();
     let penalties = AccountPenaltyCount::<T>::get(account_id);
-    // let mut penalties = 0;
-    // for subnet_id in AccountSubnets::<T>::get(account_id.clone()).iter() {
-    //   penalties += SequentialAbsentSubnetNode::<T>::get(subnet_id, account_id.clone());
-    // }
     penalties <= max_account_penalty_count
+  }
+
+  pub fn is_subnet_node_eligible(subnet_node: u32, account_id: T::AccountId) -> bool {
+    let max_subnet_node_penalties = MaxSubnetNodePenalties::<T>::get();
+    let penalties = SubnetNodePenalties::<T>::get(subnet_node, account_id);
+    penalties <= max_subnet_node_penalties
   }
 
   pub fn get_tx_rate_limit() -> u64 {
@@ -167,13 +169,21 @@ impl<T: Config> Pallet<T> {
         epoch as u32,
         |params| -> DispatchResult {
           let params = if let Some(params) = params {
+            // --- Remove from consensus
+            let mut data = &mut params.data;
+            data.retain(|x| x.peer_id != peer_id);
+            params.data = data.clone();
+            
+            // --- Remove from attestations
             let mut attests = &mut params.attests;
             if attests.remove(&account_id.clone()) {
               params.attests = attests.clone();
             }
+
+            // --- Remove from submittable nodes count if necessary
             // Mutate down if node was counted towards ``nodes_count``
             // Redundant now 
-            // TODO: Remove for mainnet
+            // TODO: Remove for mainnet, it's not used in new rewards mechanism
             let nodes_count = params.nodes_count;
             if submittable_node_sets.get(&account_id.clone()).is_some() {
               params.nodes_count = nodes_count - 1;
@@ -184,7 +194,7 @@ impl<T: Config> Pallet<T> {
       );
     
       // Reset sequential absent subnet node count
-      SequentialAbsentSubnetNode::<T>::remove(subnet_id, account_id.clone());
+      SubnetNodePenalties::<T>::remove(subnet_id, account_id.clone());
 
       // Remove from classifications
       for class_id in SubnetNodeClass::iter() {
@@ -232,7 +242,6 @@ impl<T: Config> Pallet<T> {
     let mut min_subnet_nodes: u32 = MinSubnetNodes::<T>::get();
 
     if subnet_mem_position <= x_curve_start {
-      log::error!("subnet_mem_position <= x_curve_start");
       if simple_min_subnet_nodes as u32 > min_subnet_nodes {
         min_subnet_nodes = simple_min_subnet_nodes as u32;
       }

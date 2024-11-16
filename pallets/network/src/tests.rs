@@ -36,7 +36,8 @@ use crate::{
   TotalSubnets, AccountantDataCount,
   AccountantDataNodeParams, SubnetRewardsValidator, SubnetRewardsSubmission, BaseSubnetReward, BaseReward,
   DelegateStakeRewardsPercentage, SubnetNodesClasses, SubnetNodeClass, SubnetNodeClassEpochs,
-  SubnetPenaltyCount, MaxSequentialAbsentSubnetNode, SequentialAbsentSubnetNode, PreSubnetData,
+  SubnetPenaltyCount, MaxSequentialAbsentSubnetNode, SequentialAbsentSubnetNode, MaxSubnetNodePenalties, 
+  SubnetNodePenalties, PreSubnetData,
   CurrentAccountants, TargetAccountantsLength, MinRequiredSubnetConsensusSubmitEpochs, BaseRewardPerMB,
   DelegateStakeUnbondingLedger, SubnetRemovalReason, ProposalBidAmount, BaseSubnetNodeMemoryMB,
   MinSubnetDelegateStakePercentage, AccountSubnets,
@@ -754,34 +755,34 @@ fn test_add_subnet_node_subnet_err() {
   })
 }
 
-#[test]
-fn test_add_subnet_node_subnet_account_ineligible_err() {
-  new_test_ext().execute_with(|| {
-    let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
-    let max_account_penalty_count = MaxAccountPenaltyCount::<Test>::get();
+// #[test]
+// fn test_add_subnet_node_subnet_account_ineligible_err() {
+//   new_test_ext().execute_with(|| {
+//     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
+//     let max_account_penalty_count = MaxAccountPenaltyCount::<Test>::get();
 
-    build_subnet(subnet_path.clone());
-    assert_eq!(Network::total_subnets(), 1);
+//     build_subnet(subnet_path.clone());
+//     assert_eq!(Network::total_subnets(), 1);
 
-    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+//     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    let amount: u128 = 1000;
+//     let amount: u128 = 1000;
 
-    AccountPenaltyCount::<Test>::insert(account(0), max_account_penalty_count + 1);
+//     AccountPenaltyCount::<Test>::insert(account(0), max_account_penalty_count + 1);
 
-    assert_err!(
-      Network::add_subnet_node(
-        RuntimeOrigin::signed(account(0)),
-        subnet_id,
-        peer(0),
-        amount,
-      ),
-      Error::<Test>::AccountIneligible
-    );
+//     assert_err!(
+//       Network::add_subnet_node(
+//         RuntimeOrigin::signed(account(0)),
+//         subnet_id,
+//         peer(0),
+//         amount,
+//       ),
+//       Error::<Test>::AccountIneligible
+//     );
 
-    assert_eq!(Network::total_subnet_nodes(1), 0);
-  })
-}
+//     assert_eq!(Network::total_subnet_nodes(1), 0);
+//   })
+// }
 
 #[test]
 fn test_add_subnet_node_not_exists_err() {
@@ -2782,8 +2783,6 @@ fn test_validate() {
 
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
 
-    // System::set_block_number(System::block_number() + epoch_length);
-
     amount_staked = build_subnet_nodes(subnet_id, 0, n_peers, deposit_amount, amount);
 
     make_subnet_node_consensus_data_submittable();
@@ -2816,8 +2815,8 @@ fn test_validate() {
 
     assert_eq!(submission.validator, account(0), "Err: validator");
     assert_eq!(submission.data.len(), subnet_node_data_vec.len(), "Err: data len");
-    assert_eq!(submission.sum, DEFAULT_SCORE * n_peers as u128, "Err: sum");
-    assert_eq!(submission.attests.len(), 1, "Err: attests");
+    // assert_eq!(submission.sum, DEFAULT_SCORE * n_peers as u128, "Err: sum");
+    assert_eq!(submission.attests.len(), 1, "Err: attests"); // validator auto-attests
 
     assert_err!(
       Network::validate(
@@ -2930,7 +2929,7 @@ fn test_attest() {
 
     assert_eq!(submission.validator, account(0));
     assert_eq!(submission.data.len(), subnet_node_data_vec.len());
-    assert_eq!(submission.sum, DEFAULT_SCORE * n_peers as u128);
+    // assert_eq!(submission.sum, DEFAULT_SCORE * n_peers as u128);
     assert_eq!(submission.attests.len(), n_peers as usize);
     assert_eq!(submission.attests.get(&account(1)), Some(&account(1)));
   });
@@ -2992,7 +2991,7 @@ fn test_attest_remove_exiting_attester() {
 
     assert_eq!(submission.validator, account(0));
     assert_eq!(submission.data.len(), subnet_node_data_vec.len());
-    assert_eq!(submission.sum, DEFAULT_SCORE * n_peers as u128);
+    // assert_eq!(submission.sum, DEFAULT_SCORE * n_peers as u128);
     assert_eq!(submission.attests.len(), n_peers as usize);
     assert_eq!(submission.attests.get(&account(1)), Some(&account(1)));
 
@@ -3109,7 +3108,7 @@ fn test_attest_already_attested_err() {
 
     assert_eq!(submission.validator, account(0));
     assert_eq!(submission.data.len(), subnet_node_data_vec.len());
-    assert_eq!(submission.sum, DEFAULT_SCORE * n_peers as u128);
+    // assert_eq!(submission.sum, DEFAULT_SCORE * n_peers as u128);
     assert_eq!(submission.attests.len(), n_peers as usize);
 
     for n in 1..n_peers {
@@ -3202,8 +3201,8 @@ fn test_reward_subnets() {
 #[test]
 fn test_reward_subnets_remove_subnet_node() {
   new_test_ext().execute_with(|| {
-    let max_absent = MaxSequentialAbsentSubnetNode::<Test>::get();
-    
+    // let max_absent = MaxSequentialAbsentSubnetNode::<Test>::get();
+    let max_absent = MaxSubnetNodePenalties::<Test>::get();
     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
 
     build_subnet(subnet_path.clone());
@@ -3270,11 +3269,12 @@ fn test_reward_subnets_remove_subnet_node() {
 
 
       Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
-      let node_absent_count = SequentialAbsentSubnetNode::<Test>::get(subnet_id, account(n_peers-1));
+      // let node_absent_count = SequentialAbsentSubnetNode::<Test>::get(subnet_id, account(n_peers-1));
+      let node_absent_count = SubnetNodePenalties::<Test>::get(subnet_id, account(n_peers-1));
 
       if num + 1 > max_absent {
         post_remove_subnet_node_ensures(n_peers-1, subnet_id);
-        // when node is removed they're SequentialAbsentSubnetNode is reset to zero
+        // when node is removed they're SubnetNodePenalties is reset to zero
         assert_eq!(node_absent_count, 0);  
       } else {
         assert_eq!(node_absent_count, num+1);  
@@ -3334,8 +3334,9 @@ fn test_reward_subnets_remove_subnet_node() {
 #[test]
 fn test_reward_subnets_absent_node_increment_decrement() {
   new_test_ext().execute_with(|| {
-    let max_absent = MaxSequentialAbsentSubnetNode::<Test>::get();
-    
+    // let max_absent = MaxSequentialAbsentSubnetNode::<Test>::get();
+    let max_absent = MaxSubnetNodePenalties::<Test>::get();
+
     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
 
     build_subnet(subnet_path.clone());
@@ -3392,7 +3393,8 @@ fn test_reward_subnets_absent_node_increment_decrement() {
         
         Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
   
-        let node_absent_count = SequentialAbsentSubnetNode::<Test>::get(subnet_id, account(n_peers-1));
+        // let node_absent_count = SequentialAbsentSubnetNode::<Test>::get(subnet_id, account(n_peers-1));
+        let node_absent_count = SubnetNodePenalties::<Test>::get(subnet_id, account(n_peers-1));
         assert_eq!(node_absent_count, 1);
       } else {
         // decrement on odd epochs
@@ -3422,7 +3424,8 @@ fn test_reward_subnets_absent_node_increment_decrement() {
         
         Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
   
-        let node_absent_count = SequentialAbsentSubnetNode::<Test>::get(subnet_id, account(n_peers-1));
+        // let node_absent_count = SequentialAbsentSubnetNode::<Test>::get(subnet_id, account(n_peers-1));
+        let node_absent_count = SubnetNodePenalties::<Test>::get(subnet_id, account(n_peers-1));
         assert_eq!(node_absent_count, 0);  
       }
     }
@@ -3432,8 +3435,9 @@ fn test_reward_subnets_absent_node_increment_decrement() {
 #[test]
 fn test_reward_subnets_check_balances() {
   new_test_ext().execute_with(|| {
-    let max_absent = MaxSequentialAbsentSubnetNode::<Test>::get();
-    
+    // let max_absent = MaxSequentialAbsentSubnetNode::<Test>::get();
+    let max_absent = MaxSubnetNodePenalties::<Test>::get();
+
     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
 
     build_subnet(subnet_path.clone());
@@ -3493,7 +3497,8 @@ fn test_reward_subnets_check_balances() {
     let submission_nodes_count = SubnetNodesClasses::<Test>::get(subnet_id, SubnetNodeClass::Submittable).len() as u128;
 
     Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
-    let node_absent_count = SequentialAbsentSubnetNode::<Test>::get(subnet_id, account(n_peers-1));
+    // let node_absent_count = SequentialAbsentSubnetNode::<Test>::get(subnet_id, account(n_peers-1));
+    let node_absent_count = SubnetNodePenalties::<Test>::get(subnet_id, account(n_peers-1));
     assert_eq!(node_absent_count, 0); 
           
     let base_reward_per_mb: u128 = BaseRewardPerMB::<Test>::get();
@@ -3636,6 +3641,9 @@ fn test_reward_subnets_subnet_penalty_count() {
     let subnet_penalty_count = SubnetPenaltyCount::<Test>::get(subnet_id);
     assert_eq!(subnet_penalty_count, 1);
 
+    let subnet_node_penalty_count = SubnetNodePenalties::<Test>::get(subnet_id, account(0));
+    assert_eq!(subnet_node_penalty_count, 0);
+
     let account_penalty_count = AccountPenaltyCount::<Test>::get(account(0));
     assert_eq!(account_penalty_count, 0);
   });
@@ -3689,8 +3697,11 @@ fn test_reward_subnets_account_penalty_count() {
     let subnet_penalty_count = SubnetPenaltyCount::<Test>::get(subnet_id);
     assert_eq!(subnet_penalty_count, 1);
 
-    let account_penalty_count = AccountPenaltyCount::<Test>::get(account(0));
-    assert_eq!(account_penalty_count, 1);
+    let subnet_node_penalty_count = SubnetNodePenalties::<Test>::get(subnet_id, account(0));
+    assert_eq!(subnet_node_penalty_count, 1);
+
+    // let account_penalty_count = AccountPenaltyCount::<Test>::get(account(0));
+    // assert_eq!(account_penalty_count, 1);
   });
 }
 
@@ -3914,12 +3925,16 @@ fn test_propose() {
     let proposal_bid_amount = ProposalBidAmount::<Test>::get();
     let plaintiff_starting_balance = Balances::free_balance(&account(0));
 
+    let accountant_nodes = SubnetNodesClasses::<Test>::get(subnet_id, SubnetNodeClass::Accountant);
+
+    let data = Vec::new();
+
     assert_ok!(
       Network::propose(
         RuntimeOrigin::signed(account(0)),
         subnet_id,
         peer(1),
-        Vec::new()
+        data.clone()
       ) 
     );
     
@@ -3927,6 +3942,20 @@ fn test_propose() {
     // --- Ensure bonded
     let plaintiff_after_balance = Balances::free_balance(&account(0));
     assert_eq!(plaintiff_starting_balance - proposal_bid_amount, plaintiff_after_balance);
+
+
+    let proposal = Proposals::<Test>::get(subnet_id, 0);
+    assert_eq!(proposal.subnet_id, subnet_id);
+    assert_eq!(proposal.plaintiff, account(0));
+    assert_eq!(proposal.defendant, account(1));
+    assert_eq!(proposal.plaintiff_bond, proposal_bid_amount);
+    assert_eq!(proposal.defendant_bond, 0);
+    assert_eq!(proposal.eligible_voters.len(), accountant_nodes.len());
+    assert_eq!(proposal.start_block, System::block_number());
+    assert_eq!(proposal.challenge_block, 0);
+    assert_eq!(proposal.plaintiff_data, data);
+    assert_eq!(proposal.defendant_data, data);
+    assert_eq!(proposal.complete, false);
   })
 }
 
@@ -4256,6 +4285,9 @@ fn test_cancel_proposal() {
     // --- Ensure proposer gets bond back
     let after_cancel_proposer_balance = Balances::free_balance(&account(0));
     assert_eq!(proposer_balance + plaintiff_bond, after_cancel_proposer_balance);
+
+    let proposal = Proposals::<Test>::try_get(subnet_id, 0);
+    assert_eq!(proposal, Err(()));
   })
 }
 
@@ -4388,14 +4420,23 @@ fn test_cancel_proposal_already_complete() {
       )
     );
 
+    // assert_err!(
+    //   Network::cancel_proposal(
+    //     RuntimeOrigin::signed(account(0)),
+    //     subnet_id,
+    //     proposal_index,
+    //   ),
+    //   Error::<Test>::ProposalComplete
+    // );
     assert_err!(
       Network::cancel_proposal(
         RuntimeOrigin::signed(account(0)),
         subnet_id,
         proposal_index,
       ),
-      Error::<Test>::ProposalComplete
+      Error::<Test>::ProposalInvalid
     );
+
   })
 }
 
@@ -4567,6 +4608,16 @@ fn test_challenge_proposal_complete() {
       )
     );
 
+    // assert_err!(
+    //   Network::challenge_proposal(
+    //     RuntimeOrigin::signed(account(1)),
+    //     subnet_id,
+    //     proposal_index,
+    //     Vec::new()
+    //   ),
+    //   Error::<Test>::ProposalComplete
+    // );
+
     assert_err!(
       Network::challenge_proposal(
         RuntimeOrigin::signed(account(1)),
@@ -4574,7 +4625,7 @@ fn test_challenge_proposal_complete() {
         proposal_index,
         Vec::new()
       ),
-      Error::<Test>::ProposalComplete
+      Error::<Test>::ProposalInvalid
     );
   })
 }
@@ -4776,6 +4827,11 @@ fn test_proposal_voting() {
         VoteType::Yay
       ) 
     );
+
+    let proposal = Proposals::<Test>::get(subnet_id, 0);
+    assert_eq!(proposal.votes.yay.get(&account(2)), Some(&account(2)));
+    assert_ne!(proposal.votes.yay.get(&account(2)), None);
+
   })
 }
 

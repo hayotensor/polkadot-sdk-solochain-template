@@ -78,7 +78,7 @@ impl<T: Config> Pallet<T> {
 
     let submittable_nodes_count = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable).len();
 
-    // If data.len() is 0 then the validator is deeming the epoch as invalid3
+    // If data.len() is 0 then the validator is deeming the epoch as invalid
 
     // --- Validator auto-attests the epoch
     let mut attests: BTreeSet<T::AccountId> = BTreeSet::new();
@@ -234,7 +234,8 @@ impl<T: Config> Pallet<T> {
     );
 
     // --- Increase validator penalty count
-    AccountPenaltyCount::<T>::mutate(validator.clone(), |n: &mut u32| *n += 1);
+    // AccountPenaltyCount::<T>::mutate(validator.clone(), |n: &mut u32| *n += 1);
+    SubnetNodePenalties::<T>::mutate(subnet_id, validator.clone(), |n: &mut u32| *n += 1);
 
     Self::deposit_event(
       Event::Slashing { 

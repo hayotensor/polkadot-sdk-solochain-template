@@ -23,13 +23,13 @@ impl<T: Config> Pallet<T> {
     // --- Get required attestation percentage
     let min_attestation_percentage = MinAttestationPercentage::<T>::get();
     // --- Get max epochs in a row a subnet node can be absent from consensus data
-    let max_absent = MaxSequentialAbsentSubnetNode::<T>::get();
+    let max_subnet_node_penalties = MaxSubnetNodePenalties::<T>::get();
     // --- Get the max penalties a subnet node can have before being removed from the network
     let max_subnet_penalty_count = MaxSubnetPenaltyCount::<T>::get();
     // --- Get the attestation percentage for a subnet node to be removed from the network
     //     if they are not included in the validators consensus data
     // --- If this attestation threshold is exceeded, the subnet node that is absent will have its
-    //     SequentialAbsentSubnetNode incrememented
+    //     SubnetNodePenalties incrememented
     let node_attestation_removal_threshold = NodeAttestationRemovalThreshold::<T>::get();
     // --- Get the percentage of the subnet rewards that go to subnet delegate stakers
     let delegate_stake_rewards_percentage: u128 = DelegateStakeRewardsPercentage::<T>::get();
@@ -104,14 +104,17 @@ impl<T: Config> Pallet<T> {
         }
 
         // --- Reward validators
-        let sum: u128 = submission.sum;
+        let mut sum: u128 = 0;
+        for d in submission.data.iter() {
+          sum += d.score;
+        }
+    
         for subnet_node in SubnetNodesData::<T>::iter_prefix_values(subnet_id) {
           let account_id: T::AccountId = subnet_node.account_id;
           let peer_id: PeerId = subnet_node.peer_id;
 
           let mut validated: bool = false;
           let mut subnet_node_data: SubnetNodeData = SubnetNodeData::default();
-          // test copying submission.data and removing found peers to limit future iterations
 
           // --- Confirm if ``peer_id`` is present in validator data
           for submission_data in submission.data.iter() {
@@ -134,11 +137,11 @@ impl<T: Config> Pallet<T> {
               // If subnet validators want to remove and slash a node, they can use the proposals mechanism
 
               // --- Mutate nodes absentee count if not in consensus
-              let absent_count = SequentialAbsentSubnetNode::<T>::get(subnet_id, account_id.clone());
-              SequentialAbsentSubnetNode::<T>::insert(subnet_id, account_id.clone(), absent_count + 1);
+              let penalties = SubnetNodePenalties::<T>::get(subnet_id, account_id.clone());
+              SubnetNodePenalties::<T>::insert(subnet_id, account_id.clone(), penalties + 1);
 
               // --- Ensure maximum sequential removal consensus threshold is reached
-              if absent_count + 1 > max_absent {
+              if penalties + 1 > max_subnet_node_penalties {
                 // --- Increase account penalty count
                 // AccountPenaltyCount::<T>::mutate(account_id.clone(), |n: &mut u32| *n += 1);
                 Self::perform_remove_subnet_node(block, subnet_id, account_id.clone());
@@ -147,6 +150,13 @@ impl<T: Config> Pallet<T> {
             continue;
           }
 
+          //
+          // TODO: Test removing this to allow those that do not attest to gain rewards
+          //
+
+
+
+          
           // --- If not attested, do not receive rewards
           // We don't penalize accounts for not attesting data in case data is corrupted
           // It is up to subnet nodes to remove them via consensus
@@ -155,7 +165,7 @@ impl<T: Config> Pallet<T> {
           }
 
           // --- Decrease absent count by one if in consensus and attested consensus
-          SequentialAbsentSubnetNode::<T>::mutate(subnet_id, account_id.clone(), |n: &mut u32| n.saturating_dec());
+          SubnetNodePenalties::<T>::mutate(subnet_id, account_id.clone(), |n: &mut u32| n.saturating_dec());
 
           // --- Calculate score percentage of peer versus sum
           let score_percentage: u128 = Self::percent_div(subnet_node_data.score, sum as u128);

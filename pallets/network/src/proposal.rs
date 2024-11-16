@@ -331,13 +331,18 @@ impl<T: Config> Pallet<T> {
       Error::<T>::ProposalComplete
     );
     
-    Proposals::<T>::mutate(
+    // Proposals::<T>::mutate(
+    //   subnet_id,
+    //   proposal_id,
+    //   |params: &mut ProposalParams<T::AccountId>| {
+    //     params.complete = true;
+    //     params.plaintiff_bond = 0;
+    //   }
+    // );
+
+    Proposals::<T>::remove(
       subnet_id,
       proposal_id,
-      |params: &mut ProposalParams<T::AccountId>| {
-        params.complete = true;
-        params.plaintiff_bond = 0;
-      }
     );
 
     let plaintiff_bond_as_balance = Self::u128_to_balance(proposal.plaintiff_bond);

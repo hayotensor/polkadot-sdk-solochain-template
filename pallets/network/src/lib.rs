@@ -1036,6 +1036,24 @@ pub mod pallet {
 		DefaultZeroU32,
 	>;
 
+	// Maximum epochs in a row a subnet node can be absent from validator submitted consensus data
+	#[pallet::storage]
+	pub type MaxSubnetNodePenalties<T> = StorageValue<_, u32, ValueQuery, DefaultMaxSequentialAbsentSubnetNode>;
+	
+	// If subnet node is absent from inclusion in consensus information or attestings, or validator data isn't attested
+	// We don't count penalties per account because a user can bypass this by having multiple accounts
+	#[pallet::storage] // subnet_id -> class_id -> BTreeMap(account_id, block)
+	pub type SubnetNodePenalties<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		u32,
+		Identity,
+		T::AccountId,
+		u32,
+		ValueQuery,
+		DefaultZeroU32,
+	>;
+
 	#[pallet::type_value]
 	pub fn DefaultNodeAttestationRemovalThreshold() -> u128 {
 		// 8500
@@ -1443,11 +1461,11 @@ pub mod pallet {
 				Error::<T>::SubnetNotExist
 			);
 
-			// Ensure account is eligible
-			ensure!(
-				Self::is_account_eligible(account_id.clone()),
-				Error::<T>::AccountIneligible
-			);
+			// // Ensure account is eligible
+			// ensure!(
+			// 	Self::is_account_eligible(account_id.clone()),
+			// 	Error::<T>::AccountIneligible
+			// );
 			
 			// Ensure max peers isn't surpassed
 			let total_subnet_nodes: u32 = TotalSubnetNodes::<T>::get(subnet_id);
@@ -2399,9 +2417,11 @@ pub mod pallet {
 				// --- Update subnet nodes classifications
 				Self::shift_node_classes(block, epoch_length);
 
-				return Weight::from_parts(207_283_478_000, 22166406)
-					.saturating_add(T::DbWeight::get().reads(18250_u64))
-					.saturating_add(T::DbWeight::get().writes(12002_u64));
+				return T::WeightInfo::on_initialize_reward_subnets();
+			
+				// return Weight::from_parts(207_283_478_000, 22166406)
+				// 	.saturating_add(T::DbWeight::get().reads(18250_u64))
+				// 	.saturating_add(T::DbWeight::get().writes(12002_u64));
 			}
 
 			// Run the block succeeding form consensus
@@ -2412,13 +2432,17 @@ pub mod pallet {
 				// Choose validators and accountants for the current epoch
 				Self::do_choose_validator_and_accountants(block, epoch as u32, epoch_length);
 
-				return Weight::from_parts(153_488_564_000, 21699450)
-					.saturating_add(T::DbWeight::get().reads(6118_u64))
-					.saturating_add(T::DbWeight::get().writes(6082_u64));
+				return T::WeightInfo::on_initialize_do_choose_validator_and_accountants();
+
+				// return Weight::from_parts(153_488_564_000, 21699450)
+				// 	.saturating_add(T::DbWeight::get().reads(6118_u64))
+				// 	.saturating_add(T::DbWeight::get().writes(6082_u64));
 			}
 
-			return Weight::from_parts(8_054_000, 1638)
-				.saturating_add(T::DbWeight::get().reads(1_u64))
+			return T::WeightInfo::on_initialize();
+
+			// return Weight::from_parts(8_054_000, 1638)
+			// 	.saturating_add(T::DbWeight::get().reads(1_u64))
 		}
 	}
 
