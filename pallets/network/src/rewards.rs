@@ -38,7 +38,7 @@ impl<T: Config> Pallet<T> {
       // --- We don't check for minimum nodes because nodes cannot validate or attest if they are not met
       //     as they the validator will not be chosen in ``do_choose_validator_and_accountants`` if the 
       //     min nodes are not met on that epoch.
-      if let Ok(submission) = SubnetRewardsSubmission::<T>::try_get(subnet_id, epoch) {
+      if let Ok(mut submission) = SubnetRewardsSubmission::<T>::try_get(subnet_id, epoch) {
         // --- Get memory of the subnet
         let memory_mb = data.memory_mb;
 
@@ -110,25 +110,27 @@ impl<T: Config> Pallet<T> {
         }
     
         for subnet_node in SubnetNodesData::<T>::iter_prefix_values(subnet_id) {
-          let account_id: T::AccountId = subnet_node.account_id;
           let peer_id: PeerId = subnet_node.peer_id;
 
-          let mut validated: bool = false;
           let mut subnet_node_data: SubnetNodeData = SubnetNodeData::default();
 
           // --- Confirm if ``peer_id`` is present in validator data
-          for submission_data in submission.data.iter() {
-            if submission_data.peer_id == peer_id {
-              validated = true;
-              subnet_node_data = SubnetNodeData {
-                peer_id: peer_id,
-                score: submission_data.score,
-              };
-              break
-            }
+
+          let subnet_node_data_find: Option<(usize, &SubnetNodeData)> = submission.data.iter().enumerate().find(|&x| x.1.peer_id == peer_id);
+          
+          // --- If peer_id is present in validator data
+          let validated: bool = subnet_node_data_find.is_some();
+
+          if validated {
+            subnet_node_data = subnet_node_data_find.unwrap().1.clone();
+            submission.data.remove(subnet_node_data_find.unwrap().0);
           }
-    
-          // --- If not validated, then remove them if consensus is reached and sequential absence threshold is reached
+
+          let account_id: T::AccountId = subnet_node.account_id;
+
+          // --- If node not validated and consensus reached:
+          //      otherwise, increment penalty score only
+          //      remove them if max penalties threshold is reached
           if !validated {
             // --- To be removed or increase absent count, the consensus threshold must be reached
             if attestation_percentage > node_attestation_removal_threshold {
@@ -147,11 +149,14 @@ impl<T: Config> Pallet<T> {
                 Self::perform_remove_subnet_node(block, subnet_id, account_id.clone());
               }
             }
+            // Even if there is a n-1 100% consensus on the node being out of consensus, we don't remove them.
+            // In the case where a subnet wants to remove a node, they should initiate a proposal to have them removed
+            // using ``propose``method
             continue;
           }
 
           //
-          // TODO: Test removing this to allow those that do not attest to gain rewards
+          // TODO: Test removing this ``!submission.attests.contains(&account_id)`` to allow those that do not attest to gain rewards
           //
 
 

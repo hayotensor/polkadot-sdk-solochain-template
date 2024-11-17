@@ -235,7 +235,16 @@ impl<T: Config> Pallet<T> {
 
     // --- Increase validator penalty count
     // AccountPenaltyCount::<T>::mutate(validator.clone(), |n: &mut u32| *n += 1);
-    SubnetNodePenalties::<T>::mutate(subnet_id, validator.clone(), |n: &mut u32| *n += 1);
+    // SubnetNodePenalties::<T>::mutate(subnet_id, validator.clone(), |n: &mut u32| *n += 1);
+
+    let penalties = SubnetNodePenalties::<T>::get(subnet_id, validator.clone());
+    SubnetNodePenalties::<T>::insert(subnet_id, validator.clone(), penalties + 1);
+
+    // --- Ensure maximum sequential removal consensus threshold is reached
+    if penalties + 1 > max_subnet_node_penalties {
+      // --- Increase account penalty count
+      Self::perform_remove_subnet_node(block, subnet_id, validator.clone());
+    }
 
     Self::deposit_event(
       Event::Slashing { 
