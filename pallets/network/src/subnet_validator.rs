@@ -207,7 +207,7 @@ impl<T: Config> Pallet<T> {
     Self::percent_mul(BaseReward::<T>::get(), attestation_percentage)
   }
 
-  pub fn slash_validator(subnet_id: u32, validator: T::AccountId, attestation_percentage: u128) {
+  pub fn slash_validator(subnet_id: u32, validator: T::AccountId, attestation_percentage: u128, block: u64) {
     // We never ensure balance is above 0 because any validator chosen must have the target stake
     // balance at a minimum
 
@@ -241,7 +241,7 @@ impl<T: Config> Pallet<T> {
     SubnetNodePenalties::<T>::insert(subnet_id, validator.clone(), penalties + 1);
 
     // --- Ensure maximum sequential removal consensus threshold is reached
-    if penalties + 1 > max_subnet_node_penalties {
+    if penalties + 1 > MaxSubnetNodePenalties::<T>::get() {
       // --- Increase account penalty count
       Self::perform_remove_subnet_node(block, subnet_id, validator.clone());
     }

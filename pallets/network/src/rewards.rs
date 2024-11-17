@@ -87,7 +87,7 @@ impl<T: Config> Pallet<T> {
           //     and slash
           if attestation_percentage < min_attestation_percentage {
             // --- Slash validator and increase penalty score
-            Self::slash_validator(subnet_id, validator, attestation_percentage);
+            Self::slash_validator(subnet_id, validator, attestation_percentage, block);
           }
 
           // --- If the subnet was deemed in a broken stake by the validator, rewards are bypassed
@@ -97,7 +97,7 @@ impl<T: Config> Pallet<T> {
         // --- If the minimum required attestation not reached, assume validator is dishonest, slash, and continue
         if attestation_percentage < min_attestation_percentage {
           // --- Slash validator and increase penalty score
-          Self::slash_validator(subnet_id, validator, attestation_percentage);
+          Self::slash_validator(subnet_id, validator, attestation_percentage, block);
           
           // --- Attestation not successful, move on to next subnet
           continue
@@ -217,7 +217,7 @@ impl<T: Config> Pallet<T> {
 
         // If validator didn't submit anything, then slash
         // Even if a subnet is in a broken state, the chosen validator must submit blank data
-        Self::slash_validator(subnet_id, rewards_validator, 0);
+        Self::slash_validator(subnet_id, rewards_validator, 0, block);
       }
 
       // TODO: Automatically remove subnet if greater than max penalties count
