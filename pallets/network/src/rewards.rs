@@ -15,13 +15,15 @@
 
 use super::*;
 use sp_runtime::Saturating;
+use frame_support::pallet_prelude::DispatchResultWithPostInfo;
 
 impl<T: Config> Pallet<T> {
-  pub fn reward_subnets(block: u64, epoch: u32, epoch_length: u64) {
+  pub fn reward_subnets(block: u64, epoch: u32, epoch_length: u64) -> DispatchResultWithPostInfo {
     // --- Get base rewards based on subnet memory requirements
     let base_reward_per_mb: u128 = BaseRewardPerMB::<T>::get();
     // --- Get required attestation percentage
     let min_attestation_percentage = MinAttestationPercentage::<T>::get();
+    let min_vast_majority_attestation_percentage = MinVastMajorityAttestationPercentage::<T>::get();
     // --- Get max epochs in a row a subnet node can be absent from consensus data
     let max_subnet_node_penalties = MaxSubnetNodePenalties::<T>::get();
     // --- Get the max penalties a subnet node can have before being removed from the network
@@ -62,7 +64,9 @@ impl<T: Config> Pallet<T> {
 
         let submission_attestations: u128 = submission.attests.len() as u128;
         let mut attestation_percentage: u128 = Self::percent_div(submission_attestations, submission_nodes_count);
+
         // Redundant
+        // When subnet nodes exit, the consensus data is updated to remove them from it
         if attestation_percentage > Self::PERCENTAGE_FACTOR {
           attestation_percentage = Self::PERCENTAGE_FACTOR;
         }
@@ -72,6 +76,8 @@ impl<T: Config> Pallet<T> {
         //     we assume the subnet is broken
         // There is no slashing if subnet is broken, only risk of subnet being removed
         // The subnet is deemed broken is there is no consensus or not enough nodes
+        //
+        // The subnet has up to the MaxSubnetPenaltyCount to solve the issue before the subnet and all subnet nodes are removed
         if (data_len as u32) < min_nodes  {
           // --- Increase the penalty count for the subnet because its deemed in a broken state
           SubnetPenaltyCount::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
@@ -85,7 +91,15 @@ impl<T: Config> Pallet<T> {
           // --- If the subnet nodes are not in agreement with the validator that the model is broken, we
           //     increase the penalty score for the validator
           //     and slash
-          if attestation_percentage < min_attestation_percentage {
+          // --- We only do this if the vast majority of nodes are not in agreement with the validator
+          //     Otherwise we assume the issue just started or is being resolved.
+          //     i.e. if a validator sends in no data but by the time some other nodes check, it's resolved,
+          //          the validator only gets slashed if the vast majority of nodes disagree at ~87.5%
+          //     Or vice versa if validator submits data in a healthy state and the subnet breaks
+          //
+          // This is an unlikely scenario because all nodes should be checking the subnets state within a few seconds
+          // of each other.
+          if attestation_percentage < min_vast_majority_attestation_percentage {
             // --- Slash validator and increase penalty score
             Self::slash_validator(subnet_id, validator, attestation_percentage, block);
           }
@@ -95,6 +109,7 @@ impl<T: Config> Pallet<T> {
         }
 
         // --- If the minimum required attestation not reached, assume validator is dishonest, slash, and continue
+        // We don't increase subnet penalty count here because this is likely the validators fault
         if attestation_percentage < min_attestation_percentage {
           // --- Slash validator and increase penalty score
           Self::slash_validator(subnet_id, validator, attestation_percentage, block);
@@ -103,19 +118,16 @@ impl<T: Config> Pallet<T> {
           continue
         }
 
-        // --- Reward validators
-        let mut sum: u128 = 0;
-        for d in submission.data.iter() {
-          sum += d.score;
-        }
+        // --- Get sum of subnet total scores for use of divvying rewards
+        let sum = submission.data.iter().fold(0, |acc, x| acc + x.score);
     
+        // --- Reward validators
         for subnet_node in SubnetNodesData::<T>::iter_prefix_values(subnet_id) {
           let peer_id: PeerId = subnet_node.peer_id;
 
           let mut subnet_node_data: SubnetNodeData = SubnetNodeData::default();
 
           // --- Confirm if ``peer_id`` is present in validator data
-
           let subnet_node_data_find: Option<(usize, &SubnetNodeData)> = submission.data.iter().enumerate().find(|&x| x.1.peer_id == peer_id);
           
           // --- If peer_id is present in validator data
@@ -183,6 +195,7 @@ impl<T: Config> Pallet<T> {
           }
 
           // --- Skip if no rewards to give
+          // This is possible if a user is given a ``0`` as a score, but unlikely to happen
           if account_reward == 0 {
             continue;
           }
@@ -234,5 +247,7 @@ impl<T: Config> Pallet<T> {
 
       // TODO: Check delegate stake amount is above minimum required
     }
+
+    Ok(None.into())
   }
 }

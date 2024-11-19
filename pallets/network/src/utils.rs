@@ -131,7 +131,6 @@ impl<T: Config> Pallet<T> {
 
   /// Remove subnet peer from subnet
   // to-do: Add slashing to subnet peers stake balance
-  // note: We don't reset AccountPenaltyCount
   pub fn perform_remove_subnet_node(block: u64, subnet_id: u32, account_id: T::AccountId) {
     // Take and remove SubnetNodesData account_id as key
     // `take()` returns and removes data

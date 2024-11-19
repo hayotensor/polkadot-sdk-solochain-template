@@ -81,7 +81,7 @@ impl<T: Config> Pallet<T> {
     origin: T::RuntimeOrigin, 
     subnet_id: u32,
     hotkey: T::AccountId,
-    is_peer: bool,
+    is_subnet_node: bool,
     stake_to_be_removed: u128,
   ) -> DispatchResult {
     let account_id: T::AccountId = ensure_signed(origin)?;
@@ -100,8 +100,8 @@ impl<T: Config> Pallet<T> {
       Error::<T>::NotEnoughStakeToWithdraw
     );
     
-    // if user is still a peer in consensus they must keep the required minimum balance
-    if is_peer {
+    // if user is still a subnet node they must keep the required minimum balance
+    if is_subnet_node {
       ensure!(
         account_stake_balance.saturating_sub(stake_to_be_removed) >= MinStakeBalance::<T>::get(),
         Error::<T>::MinStakeNotReached
@@ -134,8 +134,9 @@ impl<T: Config> Pallet<T> {
     }
 
     // --- 9. We add the balancer to the account_id.  If the above fails we will not credit this account_id.
-    Self::add_balance_to_coldkey_account(&account_id, stake_to_be_removed_as_currency.unwrap());
-    
+    // Self::add_balance_to_coldkey_account(&account_id, stake_to_be_removed_as_currency.unwrap());
+    Self::add_balance_to_stake_unbonding_ledger(&account_id, subnet_id, stake_to_be_removed, block).map_err(|e| e)?;
+
     // Set last block for rate limiting
     Self::set_last_tx_block(&account_id, block);
 
@@ -154,7 +155,6 @@ impl<T: Config> Pallet<T> {
     let epoch: u64 = block / epoch_length;
 
     let unbondings = SubnetStakeUnbondingLedger::<T>::get(account_id.clone(), subnet_id);
-
 
     // One unlocking per epoch
     ensure!(

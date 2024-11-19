@@ -41,7 +41,7 @@ const SEED: u32 = 0;
 
 
 const DEFAULT_SCORE: u128 = 5000;
-const DEFAULT_MEM_MB: u128 = 50000;
+const DEFAULT_SUBNET_MEM_MB: u128 = 50000;
 const DEFAULT_SUBNET_PATH: &str = "petals-team/StableBeluga2";
 const DEFAULT_SUBNET_PATH_2: &str = "petals-team/StableBeluga3";
 const DEFAULT_SUBNET_NODE_STAKE: u128 = 1000e+18 as u128;
@@ -74,12 +74,16 @@ fn funded_initializer<T: Config>(name: &'static str, index: u32) -> T::AccountId
 	caller
 }
 
+fn get_min_subnet_nodes<T: Config>() -> u32 {
+	let base_node_memory: u128 = BaseSubnetNodeMemoryMB::<T>::get();
+	Network::<T>::get_min_subnet_nodes(base_node_memory, DEFAULT_SUBNET_MEM_MB)
+}
 fn build_subnet<T: Config>(subnet_path: Vec<u8>) {
 	let funded_initializer = funded_account::<T>("funded_initializer", 0);
 
   let add_subnet_data = PreSubnetData {
     path: subnet_path.clone().into(),
-    memory_mb: DEFAULT_MEM_MB,
+    memory_mb: DEFAULT_SUBNET_MEM_MB,
   };
   assert_ok!(
     Network::<T>::activate_subnet(
@@ -978,6 +982,202 @@ mod benchmarks {
 	fn on_initialize_reward_subnets() {
 		let max_subnets: u32 = Network::<T>::max_subnets();
 		let n_peers: u32 = Network::<T>::max_subnet_nodes();
+    let amount: u128 = 				 1000000000000000000000;
+
+		for s in 0..max_subnets {
+			let subnet_path = format!("subnet-path-{s}");
+			build_subnet::<T>(subnet_path.clone().into());
+
+			let subnet_id = s+1;
+			build_subnet_nodes::<T>(subnet_id, 0, n_peers, amount);
+		}
+
+		let epoch_length = T::EpochLength::get();
+
+		let min_required_subnet_consensus_submit_epochs: u64 = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();	
+		frame_system::Pallet::<T>::set_block_number(
+			frame_system::Pallet::<T>::block_number() + 
+			u64_to_block::<T>(epoch_length * min_required_subnet_consensus_submit_epochs)
+		);
+
+		let class_epochs = SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Submittable);
+		frame_system::Pallet::<T>::set_block_number(
+			frame_system::Pallet::<T>::block_number() + 
+			u64_to_block::<T>(class_epochs * (epoch_length + 1))
+		);
+
+		let block_number = get_current_block_as_u64::<T>();
+    Network::<T>::shift_node_classes(block_number, epoch_length);
+		let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
+
+		// --- get validator
+    Network::<T>::do_choose_validator_and_accountants(
+			get_current_block_as_u64::<T>(), 
+			epoch as u32, 
+			epoch_length
+		);
+
+		for s in 0..max_subnets {
+			let subnet_id = s+1;
+
+			let validator = SubnetRewardsValidator::<T>::get(subnet_id, epoch as u32);
+			assert!(validator != None, "Validator is None");
+	
+			let subnet_node_data_vec = subnet_node_data(0, n_peers);
+	
+			// --- validate
+			assert_ok!(
+				Network::<T>::validate(
+					RawOrigin::Signed(validator.clone().unwrap()).into(), 
+					subnet_id, 
+					subnet_node_data_vec.clone()
+				)
+			);
+	
+			// Attest
+			for n in 1..n_peers {
+				let attester = funded_account::<T>("subnet_node", n);
+				assert_ok!(
+					Network::<T>::attest(
+						RawOrigin::Signed(attester).into(), 
+						subnet_id,
+					)
+				);
+			}	
+		}
+
+		// --- push to next epoch block where ``on_initialize`` is called		
+		let curr_block_number = get_current_block_as_u64::<T>();
+		let next_epoch_block = curr_block_number - (curr_block_number % epoch_length) + epoch_length;
+
+		frame_system::Pallet::<T>::set_block_number(u64_to_block::<T>(next_epoch_block));
+
+		#[block]
+		{
+			let block = get_current_block_as_u64::<T>();
+			let epoch_length = T::EpochLength::get();
+			let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
+			Network::<T>::reward_subnets(block, (epoch - 1) as u32, epoch_length);
+			Network::<T>::shift_node_classes(block_number, epoch_length);
+		}
+
+		// ensure nodes were rewarded
+		for s in 0..max_subnets {
+			let subnet_id = s+1;
+
+			for n in 1..n_peers {
+				let subnet_node = funded_account::<T>("subnet_node", n);
+				let account_subnet_stake = Network::<T>::account_subnet_stake(subnet_node.clone(), subnet_id);
+				assert!(account_subnet_stake > amount);
+			}	
+		}
+	}
+
+	#[benchmark]
+	fn on_initialize_reward_subnets_subnet_nodes_removed_linear(
+		x: Linear<1, { Network::<T>::max_subnets() }>, 
+		y: Linear<{ get_min_subnet_nodes::<T>() }, { Network::<T>::max_subnet_nodes() }>
+	) {
+		let mut max_subnets: u32 = x;
+		let mut n_peers: u32 = y;
+    let amount: u128 = 				 1000000000000000000000;
+
+		for s in 0..max_subnets {
+			let subnet_path = format!("subnet-path-{s}");
+			build_subnet::<T>(subnet_path.clone().into());
+
+			let subnet_id = s+1;
+			build_subnet_nodes::<T>(subnet_id, 0, n_peers, amount);
+		}
+
+		let epoch_length = T::EpochLength::get();
+
+		let min_required_subnet_consensus_submit_epochs: u64 = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();	
+		frame_system::Pallet::<T>::set_block_number(
+			frame_system::Pallet::<T>::block_number() + 
+			u64_to_block::<T>(epoch_length * min_required_subnet_consensus_submit_epochs)
+		);
+
+		let class_epochs = SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Submittable);
+		frame_system::Pallet::<T>::set_block_number(
+			frame_system::Pallet::<T>::block_number() + 
+			u64_to_block::<T>(class_epochs * (epoch_length + 1))
+		);
+
+		let block_number = get_current_block_as_u64::<T>();
+    Network::<T>::shift_node_classes(block_number, epoch_length);
+		let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
+
+		// --- get validator
+    Network::<T>::do_choose_validator_and_accountants(
+			get_current_block_as_u64::<T>(), 
+			epoch as u32, 
+			epoch_length
+		);
+
+		for s in 0..max_subnets {
+			let subnet_id = s+1;
+
+			let validator = SubnetRewardsValidator::<T>::get(subnet_id, epoch as u32);
+			assert!(validator != None, "Validator is None");
+	
+			let subnet_node_data_vec = subnet_node_data(0, n_peers);
+	
+			// --- validate
+			assert_ok!(
+				Network::<T>::validate(
+					RawOrigin::Signed(validator.clone().unwrap()).into(), 
+					subnet_id, 
+					subnet_node_data_vec.clone()
+				)
+			);
+	
+			// Attest
+			for n in 1..n_peers {
+				let attester = funded_account::<T>("subnet_node", n);
+				assert_ok!(
+					Network::<T>::attest(
+						RawOrigin::Signed(attester).into(), 
+						subnet_id,
+					)
+				);
+			}	
+		}
+
+		// --- push to next epoch block where ``on_initialize`` is called		
+		let curr_block_number = get_current_block_as_u64::<T>();
+		let next_epoch_block = curr_block_number - (curr_block_number % epoch_length) + epoch_length;
+
+		frame_system::Pallet::<T>::set_block_number(u64_to_block::<T>(next_epoch_block));
+
+		#[block]
+		{
+			let block = get_current_block_as_u64::<T>();
+			let epoch_length = T::EpochLength::get();
+			let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
+			Network::<T>::reward_subnets(block, (epoch - 1) as u32, epoch_length);
+			Network::<T>::shift_node_classes(block_number, epoch_length);
+		}
+
+		// ensure nodes were rewarded
+		for s in 0..max_subnets {
+			let subnet_id = s+1;
+
+			for n in 1..n_peers {
+				let subnet_node = funded_account::<T>("subnet_node", n);
+				let account_subnet_stake = Network::<T>::account_subnet_stake(subnet_node.clone(), subnet_id);
+				assert!(account_subnet_stake > amount);
+			}	
+		}
+	}
+
+	#[benchmark]
+	fn on_initialize_reward_subnets_linear(
+		x: Linear<1, { Network::<T>::max_subnets() }>, 
+		y: Linear<{ get_min_subnet_nodes::<T>() }, { Network::<T>::max_subnet_nodes() }>
+	) {
+		let mut max_subnets: u32 = x;
+		let mut n_peers: u32 = y;
     let amount: u128 = 				 1000000000000000000000;
 
 		for s in 0..max_subnets {

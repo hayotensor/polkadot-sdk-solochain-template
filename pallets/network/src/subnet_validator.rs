@@ -71,10 +71,7 @@ impl<T: Config> Pallet<T> {
     // --- Sum of all entries scores
     // Each score is then used against the sum(scores) for emissions
     // We don't check data accuracy here because that's the job of attesters
-    let mut scores_sum = 0;
-    for d in data.iter() {
-      scores_sum += d.score;
-    }
+    let scores_sum = data.iter().fold(0, |acc, x| acc + x.score);
 
     let submittable_nodes_count = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable).len();
 
