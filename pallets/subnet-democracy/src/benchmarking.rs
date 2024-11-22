@@ -30,7 +30,7 @@ use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use crate::Pallet as SubnetVoting;
 use crate::{
   SubnetNode, PropsType, SubnetVote, VotesBalance, ReservableCurrency, PropCount, VoteType,
-  ActiveProposalsCount, Proposals, PropsStatus, PreSubnetData
+  ActiveProposalsCount, Proposals, PropsStatus, PreliminarySubnetData
 };
 // use frame_support::dispatch::Vec;
 use sp_runtime::Vec;
@@ -59,8 +59,8 @@ fn default_ip() -> Vec<u8> {
   DEFAULT_IP.into()
 }
 
-fn default_add_subnet_data() -> PreSubnetData {
-  let subnet_data = PreSubnetData {
+fn default_add_subnet_data() -> PreliminarySubnetData {
+  let subnet_data = PreliminarySubnetData {
     path: DEFAULT_MODEL_PATH.into(),
 		memory_mb: 50000,
   };

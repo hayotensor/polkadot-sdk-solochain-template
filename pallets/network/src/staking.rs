@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::*;
+use sp_runtime::Saturating;
 
 impl<T: Config> Pallet<T> {
   pub fn do_add_stake(
@@ -222,20 +223,16 @@ impl<T: Config> Pallet<T> {
     amount: u128,
   ) {
     // -- increase account subnet staking balance
-    AccountSubnetStake::<T>::insert(
-      account_id,
-      subnet_id,
-      AccountSubnetStake::<T>::get(account_id, subnet_id).saturating_add(amount),
-    );
+    AccountSubnetStake::<T>::mutate(account_id, subnet_id, |mut n| n.saturating_accrue(amount));
 
     // -- increase account_id total stake
-    TotalAccountStake::<T>::mutate(account_id, |mut n| *n += amount);
+    TotalAccountStake::<T>::mutate(account_id, |mut n| n.saturating_accrue(amount));
 
     // -- increase total subnet stake
-    TotalSubnetStake::<T>::mutate(subnet_id, |mut n| *n += amount);
+    TotalSubnetStake::<T>::mutate(subnet_id, |mut n| n.saturating_accrue(amount));
 
     // -- increase total stake overall
-    TotalStake::<T>::mutate(|mut n| *n += amount);
+    TotalStake::<T>::mutate(|mut n| n.saturating_accrue(amount));
   }
   
   pub fn decrease_account_stake(
@@ -244,20 +241,16 @@ impl<T: Config> Pallet<T> {
     amount: u128,
   ) {
     // -- decrease account subnet staking balance
-    AccountSubnetStake::<T>::insert(
-      account_id,
-      subnet_id,
-      AccountSubnetStake::<T>::get(account_id, subnet_id).saturating_sub(amount),
-    );
+    AccountSubnetStake::<T>::mutate(account_id, subnet_id, |mut n| n.saturating_reduce(amount));
 
     // -- decrease account_id total stake
-    TotalAccountStake::<T>::mutate(account_id, |mut n| *n -= amount);
-
-    // -- decrease total stake overall
-    TotalStake::<T>::mutate(|mut n| *n -= amount);
+    TotalAccountStake::<T>::mutate(account_id, |mut n| n.saturating_reduce(amount));
 
     // -- decrease total subnet stake
-    TotalSubnetStake::<T>::mutate(subnet_id, |mut n| *n -= amount);
+    TotalSubnetStake::<T>::mutate(subnet_id, |mut n| n.saturating_reduce(amount));
+
+    // -- decrease total stake overall
+    TotalStake::<T>::mutate(|mut n| n.saturating_reduce(amount));
   }
 
   pub fn can_remove_balance_from_coldkey_account(

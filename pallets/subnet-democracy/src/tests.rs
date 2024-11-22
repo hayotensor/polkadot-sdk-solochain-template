@@ -27,7 +27,7 @@ use frame_support::traits::Currency;
 use sp_core::OpaquePeerId as PeerId;
 use crate::{
   Error, SubnetNode, PropsType, SubnetVote, VotesBalance, ReservableCurrency, PropCount, VoteType,
-  Votes, ActiveProposalsCount, Proposals, PropsStatus, PropsPathStatus, BalanceOf, PreSubnetData,
+  Votes, ActiveProposalsCount, Proposals, PropsStatus, PropsPathStatus, BalanceOf, PreliminarySubnetData,
   ActivateProposalsCount, ActiveActivateProposals, DeactivateProposalsCount
 };
 use strum::IntoEnumIterator;
@@ -55,16 +55,16 @@ fn default_subnet_path() -> Vec<u8> {
   DEFAULT_MODEL_PATH.into()
 }
 
-fn default_add_subnet_data() -> PreSubnetData {
-  let subnet_data = PreSubnetData {
+fn default_add_subnet_data() -> PreliminarySubnetData {
+  let subnet_data = PreliminarySubnetData {
     path: DEFAULT_MODEL_PATH.into(),
 		memory_mb: 50000,
   };
   subnet_data
 }
 
-fn default_existing_add_subnet_data() -> PreSubnetData {
-  let subnet_data = PreSubnetData {
+fn default_existing_add_subnet_data() -> PreliminarySubnetData {
+  let subnet_data = PreliminarySubnetData {
     path: DEFAULT_EXISTING_MODEL_PATH.into(),
 		memory_mb: 50000,
   };
@@ -104,7 +104,7 @@ fn build_existing_subnet(start: u32, end: u32) {
   let subnet_initialization_cost = get_subnet_initialization_cost();
   let _ = Balances::deposit_creating(&account(0), subnet_initialization_cost+1000);
 
-  let add_subnet_data = PreSubnetData {
+  let add_subnet_data = PreliminarySubnetData {
     path: subnet_path.clone(),
     memory_mb: 50000,
   };
@@ -123,7 +123,7 @@ fn build_existing_subnet(start: u32, end: u32) {
   //   )
   // );
 
-  // let add_subnet_data = PreSubnetData {
+  // let add_subnet_data = PreliminarySubnetData {
   //   path: subnet_path.clone(),
   //   memory_mb: 50000,
   // };
@@ -134,7 +134,7 @@ fn build_existing_subnet(start: u32, end: u32) {
   //     add_subnet_data.clone(),
   //   ) 
   // );
-  // let add_subnet_data = PreSubnetData {
+  // let add_subnet_data = PreliminarySubnetData {
   //   path: subnet_path.clone(),
   //   memory_mb: 50000,
   // };
@@ -545,7 +545,7 @@ fn test_propose_activate() {
     );
 
     let activate_proposals = ActivateProposalsCount::<Test>::get();
-    log::error!("activate_proposals {:?}", activate_proposals);
+
     assert_eq!(activate_proposals, 1);
     post_success_proposal_activate_ensures(default_add_subnet_data().path, prop_count, 0, System::block_number(), subnet_nodes.clone().len() as u32);
   })

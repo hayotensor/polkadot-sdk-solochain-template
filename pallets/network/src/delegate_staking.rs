@@ -16,6 +16,7 @@
 // Enables accounts to delegate stake to subnets for a portion of emissions
 
 use super::*;
+use sp_runtime::Saturating;
 
 impl<T: Config> Pallet<T> {
   pub fn do_add_delegate_stake(
@@ -82,6 +83,7 @@ impl<T: Config> Pallet<T> {
 
     // --- Mitigate inflation attack
     if total_subnet_delegated_stake_shares == 0 {
+      // no need for saturation here
       TotalSubnetDelegateStakeShares::<T>::mutate(subnet_id, |mut n| *n += 1000);
       delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
     }
@@ -251,6 +253,7 @@ impl<T: Config> Pallet<T> {
 
     // --- Mitigate inflation attack
     if total_to_subnet_delegated_stake_shares == 0 {
+      // no need for saturation here
       TotalSubnetDelegateStakeShares::<T>::mutate(to_subnet_id, |mut n| *n += 1000);
       delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
     }
@@ -404,23 +407,13 @@ impl<T: Config> Pallet<T> {
     shares: u128,
   ) {
     // -- increase account subnet staking shares balance
-    AccountSubnetDelegateStakeShares::<T>::insert(
-      account_id,
-      subnet_id,
-      AccountSubnetDelegateStakeShares::<T>::get(account_id, subnet_id).saturating_add(shares),
-    );
+    AccountSubnetDelegateStakeShares::<T>::mutate(account_id, subnet_id, |mut n| n.saturating_accrue(shares));
 
     // -- increase total subnet delegate stake balance
-    TotalSubnetDelegateStakeBalance::<T>::insert(
-      subnet_id, 
-      TotalSubnetDelegateStakeBalance::<T>::get(subnet_id).saturating_add(amount),
-    );
+    TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| n.saturating_accrue(amount));
 
     // -- increase total subnet delegate stake shares
-    TotalSubnetDelegateStakeShares::<T>::insert(
-      subnet_id, 
-      TotalSubnetDelegateStakeShares::<T>::get(subnet_id).saturating_add(shares),
-    );
+    TotalSubnetDelegateStakeShares::<T>::mutate(subnet_id, |mut n| n.saturating_accrue(shares));
   }
   
   pub fn decrease_account_delegate_stake_shares(
@@ -430,26 +423,13 @@ impl<T: Config> Pallet<T> {
     shares: u128,
   ) {
     // -- decrease account subnet staking shares balance
-    AccountSubnetDelegateStakeShares::<T>::insert(
-      account_id,
-      subnet_id,
-      AccountSubnetDelegateStakeShares::<T>::get(account_id, subnet_id).saturating_sub(shares),
-    );
+    AccountSubnetDelegateStakeShares::<T>::mutate(account_id, subnet_id, |mut n| n.saturating_reduce(shares));
 
-    // -- increase total subnet delegate stake balance
-    TotalSubnetDelegateStakeBalance::<T>::insert(
-      subnet_id, 
-      TotalSubnetDelegateStakeBalance::<T>::get(subnet_id).saturating_sub(amount),
-    );
+    // -- decrease total subnet delegate stake balance
+    TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| n.saturating_reduce(amount));
 
     // -- decrease total subnet delegate stake shares
-    TotalSubnetDelegateStakeShares::<T>::insert(
-      subnet_id, 
-      TotalSubnetDelegateStakeShares::<T>::get(subnet_id).saturating_sub(shares),
-    );
-
-    // -- decrease total stake overall
-    // TotalDelegateStake::<T>::mutate(|mut n| *n -= amount);
+    TotalSubnetDelegateStakeShares::<T>::mutate(subnet_id, |mut n| n.saturating_reduce(shares));
   }
 
   /// Rewards are deposited here from the ``rewards.rs`` or by donations
@@ -458,12 +438,7 @@ impl<T: Config> Pallet<T> {
     amount: u128,
   ) {
     // -- increase total subnet delegate stake 
-    // TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| *n += amount);
-    TotalSubnetDelegateStakeBalance::<T>::insert(
-      subnet_id, 
-      TotalSubnetDelegateStakeBalance::<T>::get(subnet_id).saturating_add(amount),
-    );
-
+    TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| n.saturating_accrue(amount));
   }
 
   // pub fn get_delegate_stake_balance(

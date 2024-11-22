@@ -14,6 +14,8 @@
 // limitations under the License.
 
 use super::*;
+use frame_support::pallet_prelude::DispatchResultWithPostInfo;
+use frame_support::pallet_prelude::Pays;
 
 impl<T: Config> Pallet<T> {
   /// Submit subnet scores per subnet node
@@ -25,7 +27,7 @@ impl<T: Config> Pallet<T> {
     epoch_length: u64,
     epoch: u32,
     mut data: Vec<SubnetNodeData>,
-  ) -> DispatchResult {
+  ) -> DispatchResultWithPostInfo {
     // TODO: Track how many nodes leave AFTER the validator submits their consensus data
     // This allows us to measure the delta between attestation percentage versus validator data
     // e.g. If there are 1000 validators and 100 leave on the block following, we know the max
@@ -86,7 +88,8 @@ impl<T: Config> Pallet<T> {
       nodes_count: submittable_nodes_count as u32, // how many submittable nodes on epoch that can attest TODO:
       sum: scores_sum,
       attests: attests,
-      data: data
+      data: data,
+      complete: false,
     };
 
     SubnetRewardsSubmission::<T>::insert(subnet_id, epoch, rewards_data);
@@ -99,7 +102,7 @@ impl<T: Config> Pallet<T> {
       }
     );
 
-    Ok(())
+    Ok(Pays::No.into())
   }
 
     /// Attest validator subnet rewards data
@@ -110,7 +113,7 @@ impl<T: Config> Pallet<T> {
     block: u64, 
     epoch_length: u64,
     epoch: u32,
-  ) -> DispatchResult {
+  ) -> DispatchResultWithPostInfo {
     let submittable_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
     // --- Ensure epoch eligible for attesting - must be submittable
     ensure!(
@@ -139,7 +142,7 @@ impl<T: Config> Pallet<T> {
       }
     );
 
-    Ok(())
+    Ok(Pays::No.into())
   }
 
   pub fn choose_validator(

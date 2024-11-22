@@ -47,6 +47,7 @@ use frame_support::{
 	traits::{tokens::WithdrawReasons, Get, Currency, ReservableCurrency, ExistenceRequirement, Randomness},
 	PalletId,
 	ensure,
+	fail,
 	storage::bounded_vec::BoundedVec,
 };
 use frame_system::{self as system, ensure_signed};
@@ -285,6 +286,9 @@ pub mod pallet {
 		InvalidPeerId,
 		/// The provided signature is incorrect.
 		WrongSignature,
+		InvalidEpoch,
+		SubnetRewardsSubmissionComplete,
+		InvalidSubnetId,
 
 		// Admin
 		/// Consensus block epoch_length invalid, must reach minimum
@@ -470,6 +474,7 @@ pub mod pallet {
 		pub sum: u128, // Sum of the data scores
 		pub attests: BTreeSet<AccountId>, // Count of attestations of the submitted data
 		pub data: Vec<SubnetNodeData>, // Data submitted by chosen validator
+		pub complete: bool, // Data submitted by chosen validator
 	}
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
@@ -486,8 +491,9 @@ pub mod pallet {
     Nay,
   }
 
+	/// Subnet data used before activation
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
-	pub struct PreSubnetData {
+	pub struct PreliminarySubnetData {
 		pub path: Vec<u8>,
 		pub memory_mb: u128,
 	}
@@ -495,8 +501,8 @@ pub mod pallet {
 	/// Data for subnet held to be compared when adding a subnet to the network
 	// This is the data from the democracy voting pallet
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
-	pub struct VoteSubnetData {
-		pub data: PreSubnetData,
+	pub struct SubnetDemocracySubnetData {
+		pub data: PreliminarySubnetData,
 		pub active: bool,
 	}
 
@@ -565,12 +571,12 @@ pub mod pallet {
 		0
 	}
 	#[pallet::type_value]
-	pub fn DefaultVoteSubnetData() -> VoteSubnetData {
-		let pre_subnet_data = PreSubnetData {
+	pub fn DefaultSubnetDemocracySubnetData() -> SubnetDemocracySubnetData {
+		let pre_subnet_data = PreliminarySubnetData {
 			path: Vec::new(),
 			memory_mb: 0,
 		};
-		return VoteSubnetData {
+		return SubnetDemocracySubnetData {
 			data: pre_subnet_data,
 			active: false,
 		}
@@ -598,7 +604,9 @@ pub mod pallet {
 	}
 	#[pallet::type_value]
 	pub fn DefaultMaxSubnetNodes() -> u32 {
-		96
+		// 94
+		// 1024
+		254
 	}
 	#[pallet::type_value]
 	pub fn DefaultMaxAccountPenaltyCount() -> u32 {
@@ -790,9 +798,9 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		Vec<u8>,
-		VoteSubnetData,
+		SubnetDemocracySubnetData,
 		ValueQuery,
-		DefaultVoteSubnetData,
+		DefaultSubnetDemocracySubnetData,
 	>;
 
 	// Minimum amount of peers required per subnet
@@ -2006,7 +2014,7 @@ pub mod pallet {
 			origin: OriginFor<T>, 
 			subnet_id: u32,
 			data: Vec<SubnetNodeData>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let account_id: T::AccountId = ensure_signed(origin)?;
 
 			let block: u64 = Self::get_current_block_as_u64();
@@ -2028,7 +2036,7 @@ pub mod pallet {
 		pub fn attest(
 			origin: OriginFor<T>, 
 			subnet_id: u32,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let account_id: T::AccountId = ensure_signed(origin)?;
 
 			let block: u64 = Self::get_current_block_as_u64();
@@ -2129,6 +2137,21 @@ pub mod pallet {
 				proposal_id,
 			)
 		}
+
+		#[pallet::call_index(20)]
+		#[pallet::weight({0})]
+		pub fn reward_subnet(
+			origin: OriginFor<T>, 
+			subnet_id: u32,
+			epoch: u32,
+	) -> DispatchResultWithPostInfo {
+			let account_id: T::AccountId = ensure_signed(origin)?;
+	
+			Self::do_reward_subnet(
+				subnet_id,
+				epoch,
+			)
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -2136,7 +2159,7 @@ pub mod pallet {
 		pub fn activate_subnet(
 			activator: T::AccountId,
 			proposer: T::AccountId,
-			subnet_data: PreSubnetData,
+			subnet_data: PreliminarySubnetData,
 		) -> DispatchResult {
 			// let activator: T::AccountId = ensure_signed(activator)?;
 
@@ -2448,23 +2471,23 @@ pub mod pallet {
 			let epoch_length: u64 = T::EpochLength::get();
 
 			// Reward validators and attestors... Shift node classes
-			if block >= epoch_length && block % epoch_length == 0 {
-				log::info!("Rewarding epoch");
-				let epoch: u64 = block / epoch_length;
+			// if block >= epoch_length && block % epoch_length == 0 {
+			// 	log::info!("Rewarding epoch");
+			// 	let epoch: u64 = block / epoch_length;
 
-				// Reward subnets for the previous epoch
-				// Reward before shifting
-				Self::reward_subnets(block, (epoch - 1) as u32, epoch_length);
+			// 	// Reward subnets for the previous epoch
+			// 	// Reward before shifting
+			// 	Self::reward_subnets(block, (epoch - 1) as u32, epoch_length);
 
-				// --- Update subnet nodes classifications
-				Self::shift_node_classes(block, epoch_length);
+			// 	// --- Update subnet nodes classifications
+			// 	Self::shift_node_classes(block, epoch_length);
 
-				return T::WeightInfo::on_initialize_reward_subnets();
+			// 	return T::WeightInfo::on_initialize_reward_subnets();
 			
-				// return Weight::from_parts(207_283_478_000, 22166406)
-				// 	.saturating_add(T::DbWeight::get().reads(18250_u64))
-				// 	.saturating_add(T::DbWeight::get().writes(12002_u64));
-			}
+			// 	// return Weight::from_parts(207_283_478_000, 22166406)
+			// 	// 	.saturating_add(T::DbWeight::get().reads(18250_u64))
+			// 	// 	.saturating_add(T::DbWeight::get().writes(12002_u64));
+			// }
 
 			// Run the block succeeding form consensus
 			if (block - 1) >= epoch_length && (block - 1) % epoch_length == 0 {
@@ -2527,12 +2550,12 @@ pub mod pallet {
 			// };
 
 			// // Activate subnet
-			// let pre_subnet_data = PreSubnetData {
+			// let pre_subnet_data = PreliminarySubnetData {
 			// 	path: self.subnet_path.clone(),
 			// 	memory_mb: self.memory_mb.clone(),
 			// };
 		
-			// let vote_subnet_data = VoteSubnetData {
+			// let vote_subnet_data = SubnetDemocracySubnetData {
 			// 	data: pre_subnet_data,
 			// 	active: true,
 			// };
@@ -2658,15 +2681,15 @@ pub trait IncreaseStakeVault {
 }
 
 impl<T: Config> SubnetVote<OriginFor<T>, T::AccountId> for Pallet<T> {
-	fn vote_subnet_in(vote_subnet_data: VoteSubnetData) -> DispatchResult {
+	fn vote_subnet_in(vote_subnet_data: SubnetDemocracySubnetData) -> DispatchResult {
 		SubnetActivated::<T>::insert(vote_subnet_data.clone().data.path, vote_subnet_data.clone());
 		Ok(())
 	}
-	fn vote_subnet_out(vote_subnet_data: VoteSubnetData) -> DispatchResult {
+	fn vote_subnet_out(vote_subnet_data: SubnetDemocracySubnetData) -> DispatchResult {
 		SubnetActivated::<T>::insert(vote_subnet_data.clone().data.path, vote_subnet_data.clone());
 		Ok(())
 	}
-	fn vote_activated(activator: T::AccountId, path: Vec<u8>, proposer: T::AccountId, vote_subnet_data: VoteSubnetData) -> DispatchResult {
+	fn vote_activated(activator: T::AccountId, path: Vec<u8>, proposer: T::AccountId, vote_subnet_data: SubnetDemocracySubnetData) -> DispatchResult {
 		SubnetActivated::<T>::insert(path, vote_subnet_data.clone());
 
 		Self::activate_subnet(
@@ -2675,7 +2698,7 @@ impl<T: Config> SubnetVote<OriginFor<T>, T::AccountId> for Pallet<T> {
 			vote_subnet_data.clone().data,
 		)
 	}
-	fn vote_deactivated(deactivator: T::AccountId, path: Vec<u8>, proposer: T::AccountId, vote_subnet_data: VoteSubnetData) -> DispatchResult {
+	fn vote_deactivated(deactivator: T::AccountId, path: Vec<u8>, proposer: T::AccountId, vote_subnet_data: SubnetDemocracySubnetData) -> DispatchResult {
 		SubnetActivated::<T>::insert(path, vote_subnet_data.clone());
 
 		Self::deactivate_subnet(
@@ -2779,10 +2802,10 @@ impl<T: Config> SubnetVote<OriginFor<T>, T::AccountId> for Pallet<T> {
 }
 
 pub trait SubnetVote<OriginFor, AccountId> {
-	fn vote_subnet_in(vote_subnet_data: VoteSubnetData) -> DispatchResult;
-	fn vote_subnet_out(vote_subnet_data: VoteSubnetData) -> DispatchResult;
-	fn vote_activated(activator: AccountId, path: Vec<u8>, proposer: AccountId, vote_subnet_data: VoteSubnetData) -> DispatchResult;
-	fn vote_deactivated(deactivator: AccountId, path: Vec<u8>, proposer: AccountId, vote_subnet_data: VoteSubnetData) -> DispatchResult;
+	fn vote_subnet_in(vote_subnet_data: SubnetDemocracySubnetData) -> DispatchResult;
+	fn vote_subnet_out(vote_subnet_data: SubnetDemocracySubnetData) -> DispatchResult;
+	fn vote_activated(activator: AccountId, path: Vec<u8>, proposer: AccountId, vote_subnet_data: SubnetDemocracySubnetData) -> DispatchResult;
+	fn vote_deactivated(deactivator: AccountId, path: Vec<u8>, proposer: AccountId, vote_subnet_data: SubnetDemocracySubnetData) -> DispatchResult;
 	fn vote_add_subnet_node(
 		origin: OriginFor, 
 		subnet_id: u32, 

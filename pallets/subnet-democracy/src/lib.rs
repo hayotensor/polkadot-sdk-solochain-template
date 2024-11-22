@@ -69,7 +69,7 @@ use sp_runtime::{
 };
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
-use pallet_network::{SubnetVote, PreSubnetData, VoteSubnetData};
+use pallet_network::{SubnetVote, PreliminarySubnetData, SubnetDemocracySubnetData};
 
 #[cfg(test)]
 mod mock;
@@ -127,15 +127,20 @@ pub mod pallet {
     #[pallet::constant]
 		type QuorumVotingPowerPercentage: Get<u8>;
 
+    /// The length of the voting period
+    // Must be less than the unstaking period
     #[pallet::constant]
 		type VotingPeriod: Get<BlockNumberFor<Self>>;
 
+    /// The period after proposals completion to enact its goal
     #[pallet::constant]
 		type EnactmentPeriod: Get<BlockNumberFor<Self>>;
 
+    /// Verification period for to-be subnet nodes to verify their commitment for subnet activation proposals only
     #[pallet::constant]
 		type VerifyPeriod: Get<BlockNumberFor<Self>>;
 
+    /// slash percentage for proposer if they cancel before voting begins
     #[pallet::constant]
 		type CancelSlashPercent: Get<u8>;
 
@@ -252,7 +257,7 @@ pub mod pallet {
     pub proposal_status: PropsStatus,
     pub proposal_type: PropsType, // Activation or Deactivation
     pub path: Vec<u8>, // path for downloading subnet used in subnet, can be anything (HuggingFace, IPFS, etc.)
-    pub subnet_data: PreSubnetData,
+    pub subnet_data: PreliminarySubnetData,
 		pub subnet_nodes: Vec<SubnetNode<AccountId>>,
     pub subnet_nodes_verified: BTreeSet<AccountId>,
     pub subnet_nodes_bonded: BTreeMap<AccountId, u128>,
@@ -307,7 +312,7 @@ pub mod pallet {
       proposal_status: PropsStatus::None,
       proposal_type: PropsType::None,
 			path: Vec::new(),
-      subnet_data: PreSubnetData::default(),
+      subnet_data: PreliminarySubnetData::default(),
       subnet_nodes_verified: BTreeSet::new(),
       subnet_nodes_bonded: BTreeMap::new(),
 			subnet_nodes: Vec::new(),
@@ -520,7 +525,7 @@ pub mod pallet {
     ///  - The subnet already does exist within the network pallet
     ///  - The subnet isn't already proposed to be deactivated via PropsStatus::Active
     ///
-    /// The PreSubnetData is used to dictate the subnets rewards and node requirements.
+    /// The PreliminarySubnetData is used to dictate the subnets rewards and node requirements.
     /// Memory must be accurate to usage of the subnet for servers/
     /// Higher memory requirements will garner higher rewards but also require increased node requirements.
     /// Lower memory requirements will garner lower rewards but require lesser noes to operate the subnet.
@@ -529,7 +534,7 @@ pub mod pallet {
     // #[pallet::weight(0)]
     pub fn propose(
       origin: OriginFor<T>, 
-      subnet_data: PreSubnetData,
+      subnet_data: PreliminarySubnetData,
       mut subnet_nodes: Vec<SubnetNode<T::AccountId>>,
       proposal_type: PropsType
     ) -> DispatchResult {
@@ -746,7 +751,6 @@ pub mod pallet {
         DeactivateProposalsCount::<T>::mutate(|n: &mut u32| n.saturating_dec());
       }
       
-
       // --- If enactment period has passed, expire the proposal
       // Don't revert here to allow expired paths to be reproposed
       if block > end_vote_block + Self::convert_block_as_u64(T::EnactmentPeriod::get())  {
@@ -1190,7 +1194,7 @@ pub mod pallet {
 
 // impl<T: Config + pallet::Config> Pallet<T> {
 impl<T: Config> Pallet<T> {
-  fn try_propose_activate(account_id: T::AccountId, subnet_data: PreSubnetData, mut subnet_nodes: Vec<SubnetNode<T::AccountId>>) -> DispatchResult {
+  fn try_propose_activate(account_id: T::AccountId, subnet_data: PreliminarySubnetData, mut subnet_nodes: Vec<SubnetNode<T::AccountId>>) -> DispatchResult {
     // --- Ensure path doesn't already exist in Network or SubnetVoting
     // If it doesn't already exist, then it has either been not proposed or deactivated
     ensure!(
@@ -1527,8 +1531,8 @@ impl<T: Config> Pallet<T> {
   }
 
   /// Activate subnet - Someone must add_subnet once activated
-  fn try_activate_subnet(activator: T::AccountId, proposer: T::AccountId, subnet_data: PreSubnetData) -> DispatchResult {
-    let vote_subnet_data = VoteSubnetData {
+  fn try_activate_subnet(activator: T::AccountId, proposer: T::AccountId, subnet_data: PreliminarySubnetData) -> DispatchResult {
+    let vote_subnet_data = SubnetDemocracySubnetData {
       data: subnet_data.clone(),
       active: true,
     };
@@ -1541,8 +1545,8 @@ impl<T: Config> Pallet<T> {
     )
   }
 
-  fn try_deactivate_subnet(activator: T::AccountId, proposer: T::AccountId, subnet_data: PreSubnetData) -> DispatchResult {
-    let vote_subnet_data = VoteSubnetData {
+  fn try_deactivate_subnet(activator: T::AccountId, proposer: T::AccountId, subnet_data: PreliminarySubnetData) -> DispatchResult {
+    let vote_subnet_data = SubnetDemocracySubnetData {
       data: subnet_data.clone(),
       active: false,
     };
@@ -1585,11 +1589,13 @@ impl<T: Config> Pallet<T> {
       .saturating_add(blockchain_delegate_stake_balance)
   }
 
+  /// Get current vote balance for proposal ID
   fn get_vote_balance(proposal_index: PropIndex, account_id: T::AccountId) -> u128 {
     let votes_balance = VotesBalance::<T>::get(proposal_index, account_id);
     Self::balance_to_u128(votes_balance)
   }
 
+  /// Get total available vote balance for a given proposal
   fn get_available_vote_balance(proposal_index: PropIndex, account_id: T::AccountId) -> u128 {
     let vote_balance = Self::get_vote_balance(proposal_index, account_id.clone());
     let stake_balance = Self::get_stake_balance(account_id.clone());
