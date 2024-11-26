@@ -43,7 +43,6 @@ frame_support::construct_runtime!(
 		Democracy: mock_democracy,
 		InsecureRandomnessCollectiveFlip: pallet_insecure_randomness_collective_flip,
 		Network: pallet_network,
-		SubnetDemocracy: pallet_subnet_democracy,
 		Admin: pallet_admin,
 	}
 );
@@ -141,28 +140,10 @@ parameter_types! {
   pub const QuorumVotingPowerPercentage: u8 = 40;
 }
 
-impl pallet_subnet_democracy::Config for Test {
-	type WeightInfo = ();
-	type RuntimeEvent = RuntimeEvent;
-	type SubnetVote = Network;
-	type Currency = Balances;
-	type MaxActivateProposals = ConstU32<32>;
-	type MaxDeactivateProposals = ConstU32<32>;
-	type MaxProposals = ConstU32<32>;
-	type VotingPeriod = VotingPeriod;
-	type EnactmentPeriod = EnactmentPeriod;
-  type VerifyPeriod = VerifyPeriod;
-  type MinProposerStake = MinProposerStake;
-  type Quorum = Quorum;
-  type CancelSlashPercent = CancelSlashPercent;
-  type QuorumVotingPowerPercentage = QuorumVotingPowerPercentage;
-}
-
 impl pallet_admin::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type CollectiveOrigin = pallet_collective::EnsureProportionAtLeast<AccountId, Instance1, 2, 3>;
 	type NetworkAdminInterface = Network;
-	type SubnetDemocracyAdminInterface = SubnetDemocracy;
 }
 
 parameter_types! {

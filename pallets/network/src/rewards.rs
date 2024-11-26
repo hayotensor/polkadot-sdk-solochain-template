@@ -338,7 +338,12 @@ impl<T: Config> Pallet<T> {
       // --- Get subnet nodes count to check against attestation count
       // ``reward_subnuts`` is called before ``shift_node_classes`` so we can know how many nodes are submittable
       // while in this function that should have in the epoch the rewards are destined for
-      let submission_nodes_count = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable).len() as u128;
+      // let submission_nodes_count = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable).len() as u128;
+
+      let mut nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
+      nodes.append(&mut SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant));
+
+      let mut submission_nodes_count = nodes.len() as u128;
 
       let submission_attestations: u128 = submission.attests.len() as u128;
       let mut attestation_percentage: u128 = Self::percent_div(submission_attestations, submission_nodes_count);
@@ -404,11 +409,15 @@ impl<T: Config> Pallet<T> {
         return Ok(Pays::Yes.into())
       }
 
+      let mut inclusion_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Included);
+
+
       // --- Get sum of subnet total scores for use of divvying rewards
       let sum = submission.data.iter().fold(0, |acc, x| acc + x.score);
   
       // --- Reward validators
       for subnet_node in SubnetNodesData::<T>::iter_prefix_values(subnet_id) {
+        // We don't check if the node is supposed to be included in
         let peer_id: PeerId = subnet_node.peer_id;
 
         let mut subnet_node_data: SubnetNodeData = SubnetNodeData::default();
@@ -456,11 +465,13 @@ impl<T: Config> Pallet<T> {
         //
         // TODO: Test removing this ``!submission.attests.contains(&account_id)`` to allow those that do not attest to gain rewards
         //
+        // If removed, we must check if a node is in the `included` classification
 
 
 
         
         // --- If not attested, do not receive rewards
+        // --- Attestors must be submittable
         // We don't penalize accounts for not attesting data in case data is corrupted
         // It is up to subnet nodes to remove them via consensus
         if !submission.attests.contains(&account_id) {

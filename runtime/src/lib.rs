@@ -56,7 +56,7 @@ pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
 pub use pallet_network;
-pub use pallet_subnet_democracy;
+// pub use pallet_subnet_democracy;
 pub use pallet_admin;
 pub use pallet_rewards;
 
@@ -523,22 +523,22 @@ parameter_types! {
 
 }
 
-impl pallet_subnet_democracy::Config for Runtime {
-	type WeightInfo = ();
-	type RuntimeEvent = RuntimeEvent;
-	type SubnetVote = Network;
-	type Currency = Balances;
-	type MaxActivateProposals = ConstU32<1>;
-	type MaxDeactivateProposals = ConstU32<32>;
-	type MaxProposals = ConstU32<32>;
-	type VotingPeriod = VotingPeriod;
-	type EnactmentPeriod = EnactmentPeriod;
-	type VerifyPeriod = VerifyPeriod;
-	type MinProposerStake = MinProposerStake;
-	type Quorum = Quorum;
-	type CancelSlashPercent = CancelSlashPercent;
-	type QuorumVotingPowerPercentage = QuorumVotingPowerPercentage;
-}
+// impl pallet_subnet_democracy::Config for Runtime {
+// 	type WeightInfo = ();
+// 	type RuntimeEvent = RuntimeEvent;
+// 	type SubnetVote = Network;
+// 	type Currency = Balances;
+// 	type MaxActivateProposals = ConstU32<1>;
+// 	type MaxDeactivateProposals = ConstU32<32>;
+// 	type MaxProposals = ConstU32<32>;
+// 	type VotingPeriod = VotingPeriod;
+// 	type EnactmentPeriod = EnactmentPeriod;
+// 	type VerifyPeriod = VerifyPeriod;
+// 	type MinProposerStake = MinProposerStake;
+// 	type Quorum = Quorum;
+// 	type CancelSlashPercent = CancelSlashPercent;
+// 	type QuorumVotingPowerPercentage = QuorumVotingPowerPercentage;
+// }
 
 pub struct AuraAccountAdapter;
 impl frame_support::traits::FindAuthor<AccountId> for AuraAccountAdapter {
@@ -574,7 +574,7 @@ impl pallet_admin::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type CollectiveOrigin = pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 2, 3>;
 	type NetworkAdminInterface = Network;
-	type SubnetDemocracyAdminInterface = SubnetDemocracy;
+	// type SubnetDemocracyAdminInterface = SubnetDemocracy;
 }
 
 impl pallet_atomic_swap::Config for Runtime {
@@ -633,31 +633,31 @@ mod runtime {
 	#[runtime::pallet_index(10)]
 	pub type Network = pallet_network;
 
-	#[runtime::pallet_index(11)]
-	pub type SubnetDemocracy = pallet_subnet_democracy;
+	// #[runtime::pallet_index(11)]
+	// pub type SubnetDemocracy = pallet_subnet_democracy;
 
-	#[runtime::pallet_index(12)]
+	#[runtime::pallet_index(11)]
 	pub type Rewards = pallet_rewards;
 
-	#[runtime::pallet_index(13)]
+	#[runtime::pallet_index(12)]
 	pub type Admin = pallet_admin;
 
-	#[runtime::pallet_index(14)]
+	#[runtime::pallet_index(13)]
 	pub type Utility = pallet_utility;
 
-	#[runtime::pallet_index(15)]
+	#[runtime::pallet_index(14)]
 	pub type Proxy = pallet_proxy;
 
-	#[runtime::pallet_index(16)]
+	#[runtime::pallet_index(15)]
 	pub type Preimage = pallet_preimage;
 
-	#[runtime::pallet_index(17)]
+	#[runtime::pallet_index(16)]
 	pub type Scheduler = pallet_scheduler;
 
-	#[runtime::pallet_index(18)]
+	#[runtime::pallet_index(17)]
 	pub type Collective = pallet_collective::Pallet<Runtime, Instance1>;
 
-	#[runtime::pallet_index(19)]
+	#[runtime::pallet_index(18)]
 	pub type AtomicSwap = pallet_atomic_swap;
 }
 

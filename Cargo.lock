@@ -5150,7 +5150,6 @@ dependencies = [
  "pallet-collective",
  "pallet-insecure-randomness-collective-flip",
  "pallet-network",
- "pallet-subnet-democracy",
  "pallet-sudo",
  "parity-scale-codec",
  "scale-info",
@@ -5234,7 +5233,6 @@ dependencies = [
  "pallet-balances",
  "pallet-insecure-randomness-collective-flip",
  "pallet-network",
- "pallet-subnet-democracy",
  "parity-scale-codec",
  "scale-info",
  "sp-core 34.0.0",
@@ -5406,27 +5404,6 @@ dependencies = [
  "sp-staking",
  "sp-state-machine 0.43.0",
  "sp-trie 37.0.0",
-]
-
-[[package]]
-name = "pallet-subnet-democracy"
-version = "4.0.0-dev"
-dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "log",
- "pallet-balances",
- "pallet-insecure-randomness-collective-flip",
- "pallet-network",
- "parity-scale-codec",
- "scale-info",
- "sp-core 34.0.0",
- "sp-io 38.0.0",
- "sp-runtime 39.0.2",
- "sp-std 14.0.0",
- "strum 0.26.3",
- "strum_macros 0.26.4",
 ]
 
 [[package]]
@@ -8570,7 +8547,6 @@ dependencies = [
  "pallet-proxy",
  "pallet-rewards",
  "pallet-scheduler",
- "pallet-subnet-democracy",
  "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",

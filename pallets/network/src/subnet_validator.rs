@@ -58,8 +58,8 @@ impl<T: Config> Pallet<T> {
 
     // --- Get count of eligible nodes that can be submitted for consensus rewards
     // This is the maximum amount of nodes that can be entered
-    let included_nodes_count = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Included).len();
-    // let accountant_nodes_count = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant).len();
+    let included_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Included);
+    let included_nodes_count = included_nodes.len();
 
     // --- Ensure data isn't greater than current registered subnet peers
     ensure!(
@@ -69,6 +69,9 @@ impl<T: Config> Pallet<T> {
 
     // Remove duplicates based on peer_id
     data.dedup_by(|a, b| a.peer_id == b.peer_id);
+
+    // Remove idle classified entries
+    data.retain(|x| included_nodes.contains_key(&SubnetNodeAccount::<T>::get(subnet_id, x.peer_id.clone())));
 
     // --- Sum of all entries scores
     // Each score is then used against the sum(scores) for emissions
@@ -115,7 +118,7 @@ impl<T: Config> Pallet<T> {
     epoch: u32,
   ) -> DispatchResultWithPostInfo {
     let submittable_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
-    // --- Ensure epoch eligible for attesting - must be submittable
+    // --- Ensure epoch eligible for attesting - /must be submittable/
     ensure!(
       submittable_nodes.get(&account_id) != None,
       Error::<T>::NodeConsensusSubmitEpochNotReached

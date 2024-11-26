@@ -9,7 +9,6 @@ edition = "2021"
 members = [
     "node",
     "pallets/network",
-    "pallets/subnet-democracy",
     "runtime",
 ]
 resolver = "2"

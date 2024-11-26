@@ -92,6 +92,7 @@ impl<T: Config> Pallet<T> {
       target_nodes: target_subnet_nodes,
       memory_mb: memory_mb,  
       initialized: subnet.initialized,
+      activated: 0,
     };
 
     SubnetsData::<T>::insert(subnet_id, subnet_data);
