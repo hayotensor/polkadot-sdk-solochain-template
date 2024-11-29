@@ -56,9 +56,28 @@ impl<T: Config> Pallet<T> {
       Error::<T>::SubnetRewardsAlreadySubmitted
     );
 
+    // Remove duplicates based on peer_id
+    data.dedup_by(|a, b| a.peer_id == b.peer_id);
+
+    // Remove idle classified entries
+    // Each peer must have an inclusion classification at minimum
+    data.retain(|x| {
+      match SubnetNodesData::<T>::try_get(
+        subnet_id, 
+        SubnetNodeAccount::<T>::get(subnet_id, x.peer_id.clone())
+      ) {
+        Ok(subnet_node) => subnet_node.has_classification(&ClassTest::Included, epoch as u64),
+        Err(()) => false,
+      }
+    });
+
+    //
+    // --- Qualify the data
+    //
+
     // --- Get count of eligible nodes that can be submitted for consensus rewards
     // This is the maximum amount of nodes that can be entered
-    let included_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Included);
+    let included_nodes = Self::get_classified_subnet_nodes(subnet_id, &ClassTest::Included, epoch as u64);
     let included_nodes_count = included_nodes.len();
 
     // --- Ensure data isn't greater than current registered subnet peers
@@ -66,19 +85,14 @@ impl<T: Config> Pallet<T> {
       data.len() as u32 <= included_nodes_count as u32,
       Error::<T>::InvalidRewardsDataLength
     );
-
-    // Remove duplicates based on peer_id
-    data.dedup_by(|a, b| a.peer_id == b.peer_id);
-
-    // Remove idle classified entries
-    data.retain(|x| included_nodes.contains_key(&SubnetNodeAccount::<T>::get(subnet_id, x.peer_id.clone())));
-
+    
     // --- Sum of all entries scores
     // Each score is then used against the sum(scores) for emissions
     // We don't check data accuracy here because that's the job of attesters
     let scores_sum = data.iter().fold(0, |acc, x| acc + x.score);
 
-    let submittable_nodes_count = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable).len();
+    let submittable_nodes = Self::get_classified_subnet_nodes(subnet_id, &ClassTest::Submittable, epoch as u64);
+    let submittable_nodes_count = submittable_nodes.len();
 
     // If data.len() is 0 then the validator is deeming the epoch as invalid
 
@@ -117,12 +131,13 @@ impl<T: Config> Pallet<T> {
     epoch_length: u64,
     epoch: u32,
   ) -> DispatchResultWithPostInfo {
-    let submittable_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
-    // --- Ensure epoch eligible for attesting - /must be submittable/
-    ensure!(
-      submittable_nodes.get(&account_id) != None,
-      Error::<T>::NodeConsensusSubmitEpochNotReached
-    );
+    match SubnetNodesData::<T>::try_get(
+      subnet_id, 
+      account_id.clone()
+    ) {
+      Ok(subnet_node) => subnet_node.has_classification(&ClassTest::Submittable, epoch as u64),
+      Err(()) => return Err(Error::<T>::SubnetNotExist.into()),
+    };
 
     SubnetRewardsSubmission::<T>::try_mutate_exists(
       subnet_id,
@@ -154,29 +169,37 @@ impl<T: Config> Pallet<T> {
     min_subnet_nodes: u32,
     epoch: u32,
   ) {
-    let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
-
-    // --- Ensure min subnet peers that are submittable are at least the minimum required
-    // --- Consensus cannot begin until this minimum is reached
-    // --- If not min subnet peers count then accountant isn't needed
-    if (node_sets.len() as u32) < min_subnet_nodes {
+    // TODO: Make sure this is only called if subnet is activated and on the following epoch
+    
+    // Redundant
+    // If validator already chosen, then return
+    if let Ok(rewards_validator) = SubnetRewardsValidator::<T>::try_get(subnet_id, epoch) {
+      log::error!("choose_validator Ok(rewards_validator) {:?}", rewards_validator);
       return
     }
 
-    let account_ids: Vec<T::AccountId> = node_sets.iter()
-      .map(|x| x.0.clone())
-      .collect();
+    let subnet_nodes = Self::get_classified_subnet_nodes(subnet_id, &ClassTest::Submittable, epoch as u64);
+    let subnet_nodes_len = subnet_nodes.len();
 
-    // --- Get eligible validator
-    let validator: Option<T::AccountId> = Self::get_random_account(
-      block,
-      account_ids,
-    );
+    log::error!("choose_validator subnet_nodes_len {:?}", subnet_nodes_len);
     
-    // --- Insert validator for next epoch
-    if let Some(validator) = validator {
-      SubnetRewardsValidator::<T>::insert(subnet_id, epoch, validator);
+    // --- Ensure min subnet peers that are submittable are at least the minimum required
+    // --- Consensus cannot begin until this minimum is reached
+    // --- If not min subnet peers count then accountant isn't needed
+    if (subnet_nodes_len as u32) < min_subnet_nodes {
+      log::error!("choose_validator min_subnet_nodes");
+      return
     }
+
+    let rand_index = Self::get_random_number((subnet_nodes_len - 1) as u32, block as u32);
+    log::error!("choose_validator rand_index {:?}", rand_index);
+
+    // --- Choose random accountant from eligible accounts
+    let validator: &T::AccountId = &subnet_nodes[rand_index as usize].account_id;
+    log::error!("choose_validator validator {:?}", validator);
+
+    // --- Insert validator for next epoch
+    SubnetRewardsValidator::<T>::insert(subnet_id, epoch, validator);
   }
 
   // Get random account within subnet
@@ -257,5 +280,26 @@ impl<T: Config> Pallet<T> {
       }
     );
 
+  }
+
+  /// Increase a subnet nodes classification
+  // Nodes that enter before the activation of a subnet are automatically Submittable, otherwise
+  // on entry they are classified as `Idle`
+  // After `x` epochs, they can increase their classification to `Inclusion`
+  //    - This is used as a way for subnets nodes to do preliminary events before they are ready to be included in
+  pub fn increase_classification(subnet_id: u32, account_id: T::AccountId) -> DispatchResult {
+    let subnet_node = match SubnetNodesData::<T>::try_get(subnet_id, account_id) {
+      Ok(subnet_node) => subnet_node,
+      Err(()) => return Err(Error::<T>::SubnetNotExist.into()),
+    };
+
+    // --- Get classification
+
+    // --- Get `x` required epochs to increase classification
+
+    // --- Check the most recent `x` count of epochs
+
+    // -- Must be in included `x` epochs
+    Ok(())
   }
 }

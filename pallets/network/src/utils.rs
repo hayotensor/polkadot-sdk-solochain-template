@@ -161,7 +161,7 @@ impl<T: Config> Pallet<T> {
       let epoch_length: u64 = T::EpochLength::get();
 			let epoch: u64 = block / epoch_length;
 
-      let submittable_node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
+      let submittable_nodes: BTreeSet<T::AccountId> = Self::get_classified_accounts(subnet_id, &ClassTest::Submittable, epoch);
 
       SubnetRewardsSubmission::<T>::try_mutate_exists(
         subnet_id,
@@ -184,7 +184,7 @@ impl<T: Config> Pallet<T> {
             // Redundant now 
             // TODO: Remove for mainnet, it's not used in new rewards mechanism
             let nodes_count = params.nodes_count;
-            if submittable_node_sets.get(&account_id.clone()).is_some() {
+            if submittable_nodes.get(&account_id.clone()).is_some() {
               params.nodes_count = nodes_count - 1;
             }
           };
@@ -512,5 +512,26 @@ impl<T: Config> Pallet<T> {
       return min_subnet_delegate_stake
     }
     min_subnet_delegate_stake_balance
+  }
+
+  fn test_filter(subnet_id: u32, classification: SubnetNodeClass) -> Vec<SubnetNode<T::AccountId>> {
+    SubnetNodesData::<T>::iter_prefix_values(subnet_id)
+      .filter(|subnet_node| subnet_node.initialized <= 0)
+      .collect()
+  }
+
+  /// Get subnet nodes by classification
+  pub fn get_classified_subnet_nodes(subnet_id: u32, classification: &ClassTest, epoch: u64) -> Vec<SubnetNode<T::AccountId>> {
+    SubnetNodesData::<T>::iter_prefix_values(subnet_id)
+      .filter(|subnet_node| subnet_node.has_classification(classification, epoch))
+      .collect()
+  }
+
+  /// Get subnet node ``account_ids`` by classification
+  pub fn get_classified_accounts(subnet_id: u32, classification: &ClassTest, epoch: u64) -> BTreeSet<T::AccountId> {
+    SubnetNodesData::<T>::iter_prefix_values(subnet_id)
+      .filter(|subnet_node| subnet_node.has_classification(classification, epoch))
+      .map(|subnet_node| subnet_node.account_id)
+      .collect()
   }
 }

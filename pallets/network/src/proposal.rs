@@ -58,10 +58,14 @@ impl<T: Config> Pallet<T> {
       Error::<T>::PeerIdNotExist
     );
 
+    
+    let block: u64 = Self::get_current_block_as_u64();
+    let epoch: u64 = block / T::EpochLength::get();
+
     // --- Ensure the minimum required subnet peers exist
     // --- Only accountants can vote on proposals
     // --- Get all eligible voters from this block
-    let accountant_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
+    let accountant_nodes: BTreeSet<T::AccountId> = Self::get_classified_accounts(subnet_id, &ClassTest::Accountant, epoch);
     let accountant_nodes_count = accountant_nodes.len();
 
     // There must always be the required minimum subnet peers for each vote
@@ -73,8 +77,6 @@ impl<T: Config> Pallet<T> {
       accountant_nodes_count as u32 >= subnet_data.min_nodes,
       Error::<T>::SubnetNodesMin
     );
-
-    let block: u64 = Self::get_current_block_as_u64();
 
     ensure!(
       !Self::account_has_active_proposal(

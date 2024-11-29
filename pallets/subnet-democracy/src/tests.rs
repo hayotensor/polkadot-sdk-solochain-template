@@ -169,7 +169,7 @@ fn build_existing_subnet(start: u32, end: u32) {
 
   System::set_block_number(starting_block + submit_epochs * epoch_length + 1);
 
-  let node_set = pallet_network::SubnetNodesClasses::<Test>::get(subnet_id.clone(), pallet_network::SubnetNodeClass::Idle);
+  let node_set = pallet_network::SubnetNodesClasses::<Test>::get(subnet_id, pallet_network::SubnetNodeClass::Idle);
   assert_eq!(node_set.len(), end as usize - start as usize);
 
 
@@ -181,7 +181,7 @@ fn build_existing_subnet(start: u32, end: u32) {
       continue;
     }
 
-    let node_set = pallet_network::SubnetNodesClasses::<Test>::get(subnet_id.clone(), class_id);
+    let node_set = pallet_network::SubnetNodesClasses::<Test>::get(subnet_id, class_id);
     assert_eq!(node_set.len(), end as usize - start as usize);
 
     let epochs = pallet_network::SubnetNodeClassEpochs::<Test>::get(class_id.clone());

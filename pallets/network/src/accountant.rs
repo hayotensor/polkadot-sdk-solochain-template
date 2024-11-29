@@ -88,30 +88,26 @@ impl<T: Config> Pallet<T> {
     min_subnet_nodes: u32,
     target_accountants_len: u32,
   ) {
-    let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
-    let node_sets_len: u32 = node_sets.len() as u32;
+    let subnet_nodes = Self::get_classified_subnet_nodes(subnet_id, &ClassTest::Accountant, epoch as u64);
+    let subnet_nodes_len: u32 = subnet_nodes.len() as u32;
+
     // --- Ensure min subnet peers that are submittable are at least the minimum required
     // --- Consensus cannot begin until this minimum is reached
     // --- If not min subnet peers count then accountant isn't needed
-    if node_sets_len < min_subnet_nodes {
+    if subnet_nodes_len < min_subnet_nodes {
       return
     }
 
-    let account_ids: Vec<T::AccountId> = node_sets.iter()
-      .map(|x| x.0.clone())
-      .collect();
-
     // --- Ensure we don't attempt to choose more accountants than are available
     let mut max_accountants: u32 = target_accountants_len;
-    if node_sets_len < max_accountants {
-      max_accountants = node_sets_len;
+    if subnet_nodes_len < max_accountants {
+      max_accountants = subnet_nodes_len;
     }
 
     // `-1` for overflow
-    let account_ids_len = account_ids.len() - 1;
+    let subnet_nodes_len_for_overflow = subnet_nodes_len - 1;
 
     // --- Ensure no duplicates
-    // let mut unique_accountants: Vec<T::AccountId> = Vec::new();
     let mut chosen_accountants_complete: bool = false;
 
     let mut current_accountants: BTreeMap<T::AccountId, bool> = BTreeMap::new();
@@ -121,15 +117,67 @@ impl<T: Config> Pallet<T> {
     // and choose the other accountants as `n+1 % MAX` to limit computation
     // We use block + 1 in order to differentiate between validators to prevent the chosen
     // validator being one of the accountants. 
-    let rand_index = Self::get_random_number(account_ids_len as u32, (block + 1) as u32);
+    let rand_index = Self::get_random_number(subnet_nodes_len_for_overflow as u32, (block + 1) as u32);
 
     for n in 0..max_accountants {
-      let rand = rand_index + n % account_ids_len as u32;
-      let random_accountant: &T::AccountId = &account_ids[rand as usize];
+      let rand = rand_index + n % subnet_nodes_len_for_overflow as u32;
+      let random_accountant: &T::AccountId = &subnet_nodes[rand as usize].account_id;
 
       current_accountants.insert(random_accountant.clone(), false);
     }
 
     CurrentAccountants::<T>::insert(subnet_id, epoch, current_accountants);
   }
+
+  // pub fn choose_accountants(
+  //   block: u64,
+  //   epoch: u32,
+  //   subnet_id: u32,
+  //   min_subnet_nodes: u32,
+  //   target_accountants_len: u32,
+  // ) {
+  //   let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
+  //   let node_sets_len: u32 = node_sets.len() as u32;
+  //   // --- Ensure min subnet peers that are submittable are at least the minimum required
+  //   // --- Consensus cannot begin until this minimum is reached
+  //   // --- If not min subnet peers count then accountant isn't needed
+  //   if node_sets_len < min_subnet_nodes {
+  //     return
+  //   }
+
+  //   let account_ids: Vec<T::AccountId> = node_sets.iter()
+  //     .map(|x| x.0.clone())
+  //     .collect();
+
+  //   // --- Ensure we don't attempt to choose more accountants than are available
+  //   let mut max_accountants: u32 = target_accountants_len;
+  //   if node_sets_len < max_accountants {
+  //     max_accountants = node_sets_len;
+  //   }
+
+  //   // `-1` for overflow
+  //   let account_ids_len = account_ids.len() - 1;
+
+  //   // --- Ensure no duplicates
+  //   // let mut unique_accountants: Vec<T::AccountId> = Vec::new();
+  //   let mut chosen_accountants_complete: bool = false;
+
+  //   let mut current_accountants: BTreeMap<T::AccountId, bool> = BTreeMap::new();
+
+  //   // --- Get random number 0 - MAX
+  //   // Because true randomization isn't as important here, we only get one random number
+  //   // and choose the other accountants as `n+1 % MAX` to limit computation
+  //   // We use block + 1 in order to differentiate between validators to prevent the chosen
+  //   // validator being one of the accountants. 
+  //   let rand_index = Self::get_random_number(account_ids_len as u32, (block + 1) as u32);
+
+  //   for n in 0..max_accountants {
+  //     let rand = rand_index + n % account_ids_len as u32;
+  //     let random_accountant: &T::AccountId = &account_ids[rand as usize];
+
+  //     current_accountants.insert(random_accountant.clone(), false);
+  //   }
+
+  //   CurrentAccountants::<T>::insert(subnet_id, epoch, current_accountants);
+  // }
 }
