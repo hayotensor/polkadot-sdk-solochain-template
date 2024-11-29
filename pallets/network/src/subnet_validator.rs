@@ -145,7 +145,9 @@ impl<T: Config> Pallet<T> {
       |maybe_params| -> DispatchResult {
         let params = maybe_params.as_mut().ok_or(Error::<T>::InvalidSubnetRewardsSubmission)?;
         let mut attests = &mut params.attests;
-        attests.insert(account_id.clone());
+        // attests.insert(account_id.clone());
+
+        ensure!(attests.insert(account_id.clone()), Error::<T>::AlreadyAttested);
 
         params.attests = attests.clone();
         Ok(())
