@@ -169,26 +169,14 @@ fn build_existing_subnet(start: u32, end: u32) {
 
   System::set_block_number(starting_block + submit_epochs * epoch_length + 1);
 
-  let node_set = pallet_network::SubnetNodesClasses::<Test>::get(subnet_id, pallet_network::SubnetNodeClass::Idle);
+  let epoch = System::block_number() / epoch_length;
+  let node_set = pallet_network::get_classified_accounts(subnet_id, &ClassTest::Submittable, epoch);
+
   assert_eq!(node_set.len(), end as usize - start as usize);
 
 
   let last_class_id = pallet_network::SubnetNodeClass::iter().last().unwrap();
   let starting_block = System::block_number();
-
-  for class_id in pallet_network::SubnetNodeClass::iter() {
-    if class_id == last_class_id {
-      continue;
-    }
-
-    let node_set = pallet_network::SubnetNodesClasses::<Test>::get(subnet_id, class_id);
-    assert_eq!(node_set.len(), end as usize - start as usize);
-
-    let epochs = pallet_network::SubnetNodeClassEpochs::<Test>::get(class_id.clone());
-    System::set_block_number(starting_block + epochs * epoch_length + 1);
-
-    Network::shift_node_classes(System::block_number(), epoch_length);
-  }
 
 }
 

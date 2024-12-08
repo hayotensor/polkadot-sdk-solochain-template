@@ -37,10 +37,7 @@ impl<T: Config> Pallet<T> {
 
   // Loosely validates Node ID
   pub fn validate_peer_id(peer_id: PeerId) -> bool {
-    let mut valid = false;
-
     let peer_id_0 = peer_id.0;
-
     let len = peer_id_0.len();
 
     // PeerId must be equal to or greater than 32 chars
@@ -50,21 +47,19 @@ impl<T: Config> Pallet<T> {
     };
 
     let first_char = peer_id_0[0];
-
     let second_char = peer_id_0[1];
-
     if first_char == 49 {
       // Node ID (ed25519, using the "identity" multihash) encoded as a raw base58btc multihash
-      valid = len <= 128;
+      return len <= 128
     } else if first_char == 81 && second_char == 109 {
       // Node ID (sha256) encoded as a raw base58btc multihash
-      valid = len <= 128;
+      return len <= 128;
     } else if first_char == 102 || first_char == 98 || first_char == 122 || first_char == 109 {
       // Node ID (sha256) encoded as a CID
-      valid = len <= 128;
+      return len <= 128;
     }
     
-    valid
+    false
   }
   
   // Get subnet peer is eligible to be a subnet peer
@@ -121,14 +116,6 @@ impl<T: Config> Pallet<T> {
     )
   }
 
-  // Remove all account's subnet peers across all of their subnets
-  pub fn do_remove_account_subnet_nodes(block: u64, account_id: T::AccountId) {
-    let subnet_ids: Vec<u32> = AccountSubnets::<T>::get(account_id.clone());
-    for subnet_id in subnet_ids.iter() {
-      Self::perform_remove_subnet_node(block, *subnet_id, account_id.clone());
-    }
-  }
-
   /// Remove subnet peer from subnet
   // to-do: Add slashing to subnet peers stake balance
   pub fn perform_remove_subnet_node(block: u64, subnet_id: u32, account_id: T::AccountId) {
@@ -141,21 +128,9 @@ impl<T: Config> Pallet<T> {
 
       // Remove SubnetNodeAccount peer_id as key
       SubnetNodeAccount::<T>::remove(subnet_id, peer_id.clone());
-
-      // Update SubnetAccount to reflect removal block instead of initialized block
-      // Node will be able to unstake after required epochs have passed
-      let mut subnet_accounts: BTreeMap<T::AccountId, u64> = SubnetAccount::<T>::get(subnet_id);
-      subnet_accounts.insert(account_id.clone(), block);
-      SubnetAccount::<T>::insert(subnet_id, subnet_accounts);
-
       // Update total subnet peers by substracting 1
       TotalSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| *n -= 1);
-
-      // Remove subnet_id from AccountSubnets
-      let mut account_subnet_ids: Vec<u32> = AccountSubnets::<T>::get(account_id.clone());
-      account_subnet_ids.retain(|&x| x != subnet_id);
-      // Insert retained subnet_id's
-      AccountSubnets::<T>::insert(account_id.clone(), account_subnet_ids);
+      TotalActiveSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| n.saturating_dec());
 
       // Remove from attestations
       let epoch_length: u64 = T::EpochLength::get();
@@ -196,11 +171,11 @@ impl<T: Config> Pallet<T> {
       SubnetNodePenalties::<T>::remove(subnet_id, account_id.clone());
 
       // Remove from classifications
-      for class_id in SubnetNodeClass::iter() {
-        let mut node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, class_id);
-        node_sets.retain(|k, _| *k != account_id.clone());
-        SubnetNodesClasses::<T>::insert(subnet_id, class_id, node_sets);
-      }
+      // for class_id in SubnetNodeClass::iter() {
+      //   let mut node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, class_id);
+      //   node_sets.retain(|k, _| *k != account_id.clone());
+      //   SubnetNodesClasses::<T>::insert(subnet_id, class_id, node_sets);
+      // }
 
       Self::deposit_event(
         Event::SubnetNodeRemoved { 
@@ -371,12 +346,11 @@ impl<T: Config> Pallet<T> {
 
       // TODO: Get delegate total supply and ensure is above minimum required balance
       //       Otherwise, remove subnet
-
-      let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
+      let subnet_nodes_count = Self::get_classified_accounts(subnet_id, &ClassTest::Submittable, epoch as u64).len();
 
       // Only choose validator if min nodes are present
       // The ``SubnetPenaltyCount`` when surpassed doesn't penalize anyone, only removes the subnet from the chain
-      if (node_sets.len() as u32) < min_subnet_nodes {
+      if (subnet_nodes_count as u32) < min_subnet_nodes {
         SubnetPenaltyCount::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
       } else {
         Self::choose_validator(
@@ -424,6 +398,7 @@ impl<T: Config> Pallet<T> {
     let min_required_subnet_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
     let epoch_length: u64 = T::EpochLength::get();
     let block: u64 = Self::get_current_block_as_u64();
+    let epoch: u64 = block / epoch_length;
 
 		let mut total_stake_balance = 0;
     for (subnet_id, data) in SubnetsData::<T>::iter() {
@@ -438,14 +413,15 @@ impl<T: Config> Pallet<T> {
         continue
       }
 
-      let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
+      // let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
+      let subnet_nodes = Self::get_classified_accounts(subnet_id, &ClassTest::Submittable, epoch);
 
       // --- Ensure min subnet nodes that are submittable are at least the minimum required to include in subnet democracy
-      if (node_sets.len() as u32) < min_subnet_nodes {
+      if (subnet_nodes.len() as u32) < min_subnet_nodes {
         continue
       }
 
-      let is_submittable = node_sets.get(&account_id);
+      let is_submittable = subnet_nodes.get(&account_id);
 
       // --- Ensure account is submittable to include in subnet democracy
       if let Some(is_submittable) = is_submittable {

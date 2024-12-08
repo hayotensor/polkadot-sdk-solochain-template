@@ -131,6 +131,7 @@ impl<T: Config> Pallet<T> {
     epoch_length: u64,
     epoch: u32,
   ) -> DispatchResultWithPostInfo {
+    // --- Ensure subnet node exists and is submittable
     match SubnetNodesData::<T>::try_get(
       subnet_id, 
       account_id.clone()
@@ -145,7 +146,6 @@ impl<T: Config> Pallet<T> {
       |maybe_params| -> DispatchResult {
         let params = maybe_params.as_mut().ok_or(Error::<T>::InvalidSubnetRewardsSubmission)?;
         let mut attests = &mut params.attests;
-        // attests.insert(account_id.clone());
 
         ensure!(attests.insert(account_id.clone()), Error::<T>::AlreadyAttested);
 
@@ -176,29 +176,24 @@ impl<T: Config> Pallet<T> {
     // Redundant
     // If validator already chosen, then return
     if let Ok(rewards_validator) = SubnetRewardsValidator::<T>::try_get(subnet_id, epoch) {
-      log::error!("choose_validator Ok(rewards_validator) {:?}", rewards_validator);
       return
     }
 
     let subnet_nodes = Self::get_classified_subnet_nodes(subnet_id, &ClassTest::Submittable, epoch as u64);
     let subnet_nodes_len = subnet_nodes.len();
 
-    log::error!("choose_validator subnet_nodes_len {:?}", subnet_nodes_len);
     
     // --- Ensure min subnet peers that are submittable are at least the minimum required
     // --- Consensus cannot begin until this minimum is reached
     // --- If not min subnet peers count then accountant isn't needed
     if (subnet_nodes_len as u32) < min_subnet_nodes {
-      log::error!("choose_validator min_subnet_nodes");
       return
     }
 
     let rand_index = Self::get_random_number((subnet_nodes_len - 1) as u32, block as u32);
-    log::error!("choose_validator rand_index {:?}", rand_index);
 
     // --- Choose random accountant from eligible accounts
     let validator: &T::AccountId = &subnet_nodes[rand_index as usize].account_id;
-    log::error!("choose_validator validator {:?}", validator);
 
     // --- Insert validator for next epoch
     SubnetRewardsValidator::<T>::insert(subnet_id, epoch, validator);
@@ -272,6 +267,8 @@ impl<T: Config> Pallet<T> {
     if penalties + 1 > MaxSubnetNodePenalties::<T>::get() {
       // --- Increase account penalty count
       Self::perform_remove_subnet_node(block, subnet_id, validator.clone());
+    } else {
+      
     }
 
     Self::deposit_event(

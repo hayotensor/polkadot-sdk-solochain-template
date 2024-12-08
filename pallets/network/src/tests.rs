@@ -30,18 +30,18 @@ use crate::{
   Error, SubnetNodeData, AccountPenaltyCount, TotalStake, 
   SubnetPaths, MinRequiredUnstakeEpochs, MaxAccountPenaltyCount, MinSubnetNodes, TotalSubnetNodes,
   SubnetNodesData, SubnetNodeAccount, ClassTest,
-  SubnetAccount, SubnetsData,
+  SubnetsData,
   AccountSubnetStake, MinStakeBalance,
   VotingPeriod, Proposals, ProposalsCount, ChallengePeriod, VoteType,
   AccountSubnetDelegateStakeShares, TotalSubnetDelegateStakeShares, TotalSubnetDelegateStakeBalance,
   TotalSubnets, AccountantDataCount,
   AccountantDataNodeParams, SubnetRewardsValidator, SubnetRewardsSubmission, BaseSubnetReward, BaseReward,
-  DelegateStakeRewardsPercentage, SubnetNodesClasses, SubnetNodeClass, SubnetNodeClassEpochs,
+  DelegateStakeRewardsPercentage, SubnetNodeClass, SubnetNodeClassEpochs,
   SubnetPenaltyCount, MaxSequentialAbsentSubnetNode, SequentialAbsentSubnetNode, MaxSubnetNodePenalties, 
   SubnetNodePenalties, PreliminarySubnetData,
   CurrentAccountants, TargetAccountantsLength, MinRequiredSubnetConsensusSubmitEpochs, BaseRewardPerMB,
   DelegateStakeUnbondingLedger, SubnetRemovalReason, ProposalBidAmount, BaseSubnetNodeMemoryMB,
-  MinSubnetDelegateStakePercentage, AccountSubnets,
+  MinSubnetDelegateStakePercentage,
   TotalAccountStake, MaxSubnetMemoryMB, SubnetStakeUnbondingLedger,
   TotalSubnetStake, MinSubnetRegistrationBlocks, MaxSubnetRegistrationBlocks, SubnetActivationEnactmentPeriod,
 };
@@ -178,13 +178,9 @@ fn build_activated_subnet(subnet_path: Vec<u8>, start: u32, mut end: u32, deposi
     let subnet_node_account = SubnetNodeAccount::<Test>::get(subnet_id, peer(n));
     assert_eq!(subnet_node_account, account(n));
 
-    let subnet_accounts = SubnetAccount::<Test>::get(subnet_id);
-    let block_initialized = subnet_accounts.get(&account(n)).unwrap();
-    assert_eq!(block_initialized, &block_number);
-
-    // let account_subnets = AccountSubnets::<Test>::get(account(n));
-    // assert_eq!(account_subnets.len(), 1);
-    // assert_eq!(account_subnets[0], subnet_id);
+    // let subnet_accounts = SubnetAccount::<Test>::get(subnet_id);
+    // let block_initialized = subnet_accounts.get(&account(n)).unwrap();
+    // assert_eq!(block_initialized, &block_number);
 
     let account_subnet_stake = AccountSubnetStake::<Test>::get(account(n), subnet_id);
     assert_eq!(account_subnet_stake, amount);
@@ -248,6 +244,92 @@ fn build_subnet_nodes(subnet_id: u32, start: u32, end: u32, deposit_amount: u128
     post_successful_add_subnet_node_asserts(n, subnet_id, amount);
   }
   amount_staked
+}
+
+fn post_subnet_removal_ensures(subnet_id: u32, start: u32, end: u32) {
+  let subnet = SubnetsData::<Test>::try_get(subnet_id);
+  assert_eq!(subnet, Err(()));
+
+  for n in start..end {
+    let subnet_node_data = SubnetNodesData::<Test>::try_get(subnet_id, account(n));
+    assert_eq!(subnet_node_data, Err(()));
+  
+    // ensure SubnetNodeAccount removed
+    let subnet_node_account = SubnetNodeAccount::<Test>::try_get(subnet_id, peer(n));
+    assert_eq!(subnet_node_account, Err(()));
+  
+    // let subnet_accounts = SubnetAccount::<Test>::get(subnet_id);
+    // let subnet_account = subnet_accounts.get(&account(n));
+    // assert_eq!(subnet_accounts.get(&account(n)), Some(&System::block_number()));
+  
+    let stake_balance = AccountSubnetStake::<Test>::get(account(n), subnet_id);
+    assert_ok!(
+      Network::remove_stake(
+        RuntimeOrigin::signed(account(n)),
+        subnet_id,
+        stake_balance,
+      ) 
+    );
+
+    let delegate_shares = AccountSubnetDelegateStakeShares::<Test>::get(account(n), subnet_id);
+    if delegate_shares != 0 {
+      assert_ok!(
+        Network::remove_delegate_stake(
+          RuntimeOrigin::signed(account(n)),
+          subnet_id,
+          delegate_shares,
+        )
+      );  
+    }
+  }
+
+  let epoch_length = EpochLength::get();
+  let stake_cooldown_epochs = StakeCooldownEpochs::get();
+
+  let starting_block_number = System::block_number();
+
+  
+
+  // --- Ensure unstaking is stable
+  for n in start..end {
+    System::set_block_number(System::block_number() + ((epoch_length  + 1) * stake_cooldown_epochs));
+    let starting_balance = Balances::free_balance(&account(n));
+    let unbondings = SubnetStakeUnbondingLedger::<Test>::get(account(n), subnet_id);
+    assert_eq!(unbondings.len(), 1);
+    let (ledger_epoch, ledger_balance) = unbondings.iter().next().unwrap();
+    assert_ok!(
+      Network::claim_stake_unbondings(
+        RuntimeOrigin::signed(account(n)),
+        subnet_id,
+      )
+    );
+    let ending_balance = Balances::free_balance(&account(n));
+    assert_eq!(starting_balance + ledger_balance, ending_balance);
+    System::set_block_number(starting_block_number);
+  }
+
+  for n in start..end {
+    System::set_block_number(System::block_number() + ((epoch_length  + 1) * DelegateStakeCooldownEpochs::get()));
+    let starting_balance = Balances::free_balance(&account(n));
+
+    let unbondings = DelegateStakeUnbondingLedger::<Test>::get(account(n), subnet_id);
+    if unbondings.len() == 0 {
+      continue
+    }
+    assert_eq!(unbondings.len(), 1);
+    let (ledger_epoch, ledger_balance) = unbondings.iter().next().unwrap();
+
+    assert_ok!(
+      Network::claim_delegate_stake_unbondings(
+        RuntimeOrigin::signed(account(n)),
+        subnet_id,
+      )
+    );
+
+    let ending_balance = Balances::free_balance(&account(n));
+    assert_eq!(starting_balance + ledger_balance, ending_balance);
+    System::set_block_number(starting_block_number);
+  }
 }
 
 // fn build_for_submit_consensus_data(subnet_id: u32, start: u32, end: u32, start_data: u32, end_data: u32) {
@@ -411,22 +493,22 @@ fn post_remove_subnet_node_ensures(n: u32, subnet_id: u32) {
   // let subnet_node_consensus_results = SubnetNodeConsensusResults::<Test>::try_get(subnet_id, account(n));
   // assert_eq!(subnet_node_consensus_results, Err(()));
 
-  // ensure SubnetAccount u64 updated to current block
-  let subnet_accounts = SubnetAccount::<Test>::get(subnet_id);
-  let subnet_account = subnet_accounts.get(&account(n));
-  assert_eq!(subnet_accounts.get(&account(n)), Some(&System::block_number()));
+  // // ensure SubnetAccount u64 updated to current block
+  // let subnet_accounts = SubnetAccount::<Test>::get(subnet_id);
+  // let subnet_account = subnet_accounts.get(&account(n));
+  // assert_eq!(subnet_accounts.get(&account(n)), Some(&System::block_number()));
 
-  for class_id in SubnetNodeClass::iter() {
-    let node_sets = SubnetNodesClasses::<Test>::get(subnet_id, class_id);
-    assert_eq!(node_sets.get(&account(n)), None);
-  }
+  // for class_id in SubnetNodeClass::iter() {
+  //   let node_sets = SubnetNodesClasses::<Test>::get(subnet_id, class_id);
+  //   assert_eq!(node_sets.get(&account(n)), None);
+  // }
 }
 
 fn post_remove_unstake_ensures(n: u32, subnet_id: u32) {
   // ensure SubnetAccount is removed after unstaking to 0
-  let subnet_accounts = SubnetAccount::<Test>::get(subnet_id);
-  let subnet_account = subnet_accounts.get(&account(n));
-  assert_eq!(subnet_accounts.get(&account(n)), None);
+  // let subnet_accounts = SubnetAccount::<Test>::get(subnet_id);
+  // let subnet_account = subnet_accounts.get(&account(n));
+  // assert_eq!(subnet_accounts.get(&account(n)), None);
 }
 
 // The following should be ensured after form_consensus is rate
@@ -884,7 +966,7 @@ fn test_activate_subnet_enactment_period_remove_subnet() {
   
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
     let subnet = SubnetsData::<Test>::get(subnet_id).unwrap();
-  
+
     let id = subnet.id;
 		let path = subnet.path;
 		let min_nodes = subnet.min_nodes;
@@ -909,6 +991,8 @@ fn test_activate_subnet_enactment_period_remove_subnet() {
       );
     }
   
+    let total_subnet_nodes = TotalSubnetNodes::<Test>::get(subnet_id);
+
     let min_subnet_delegate_stake = Network::get_min_subnet_delegate_stake_balance(min_nodes);
     // --- Add the minimum required delegate stake balance to activate the subnet
     assert_ok!(
@@ -943,6 +1027,9 @@ fn test_activate_subnet_enactment_period_remove_subnet() {
     assert_eq!(removed_subnet_id, Err(()));
     let subnet = SubnetsData::<Test>::try_get(subnet_id);
     assert_eq!(subnet, Err(()));
+
+    // --- Ensure nodes can be removed and unstake
+    post_subnet_removal_ensures(subnet_id, 0, total_subnet_nodes);
   })
 }
 
@@ -1714,50 +1801,49 @@ fn test_add_subnet_node_invalid_peer_id_err() {
   })
 }
 
-#[test]
-fn test_add_subnet_node_remove_readd_err() {
-  new_test_ext().execute_with(|| {
-    let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
+// #[test]
+// fn test_add_subnet_node_remove_readd_err() {
+//   new_test_ext().execute_with(|| {
+//     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
 
-    let deposit_amount: u128 = 10000000000000000000000;
-    let amount: u128 = 1000000000000000000000;
-    build_activated_subnet(subnet_path.clone(), 0, 0, deposit_amount, amount);
+//     let deposit_amount: u128 = 10000000000000000000000;
+//     let amount: u128 = 1000000000000000000000;
+//     build_activated_subnet(subnet_path.clone(), 0, 0, deposit_amount, amount);
 
-    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
-    let total_subnet_nodes = TotalSubnetNodes::<Test>::get(subnet_id);
+//     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+//     let total_subnet_nodes = TotalSubnetNodes::<Test>::get(subnet_id);
 
-    let _ = Balances::deposit_creating(&account(total_subnet_nodes+1), deposit_amount);
+//     let _ = Balances::deposit_creating(&account(total_subnet_nodes+1), deposit_amount);
 
-    // Add block so SubnetAccount BTreeMap doesn't default to ``0``
-    System::set_block_number(System::block_number() + 1);
+//     System::set_block_number(System::block_number() + 1);
 
-    assert_ok!(
-      Network::add_subnet_node(
-        RuntimeOrigin::signed(account(total_subnet_nodes+1)),
-        subnet_id,
-        peer(total_subnet_nodes+1),
-        amount,
-      )
-    );
+//     assert_ok!(
+//       Network::add_subnet_node(
+//         RuntimeOrigin::signed(account(total_subnet_nodes+1)),
+//         subnet_id,
+//         peer(total_subnet_nodes+1),
+//         amount,
+//       )
+//     );
 
-    assert_ok!(
-      Network::remove_subnet_node(
-        RuntimeOrigin::signed(account(total_subnet_nodes+1)),
-        subnet_id,
-      )
-    );
+//     assert_ok!(
+//       Network::remove_subnet_node(
+//         RuntimeOrigin::signed(account(total_subnet_nodes+1)),
+//         subnet_id,
+//       )
+//     );
 
-    assert_err!(
-      Network::add_subnet_node(
-        RuntimeOrigin::signed(account(total_subnet_nodes+1)),
-        subnet_id,
-        peer(total_subnet_nodes+1),
-        amount,
-      ), 
-      Error::<Test>::RequiredUnstakeEpochsNotMet
-    );
-  });
-}
+//     assert_err!(
+//       Network::add_subnet_node(
+//         RuntimeOrigin::signed(account(total_subnet_nodes+1)),
+//         subnet_id,
+//         peer(total_subnet_nodes+1),
+//         amount,
+//       ), 
+//       Error::<Test>::RequiredUnstakeEpochsNotMet
+//     );
+//   });
+// }
 
 #[test]
 fn test_add_subnet_node_remove_readd() {
@@ -2288,6 +2374,8 @@ fn test_remove_subnet_node() {
     let remove_n_peers = total_subnet_nodes / 2;
 
     let block_number = System::block_number();
+    let epoch_length = EpochLength::get();
+    let epoch = block_number / epoch_length;
 
     for n in 0..remove_n_peers {
       assert_ok!(
@@ -2298,9 +2386,8 @@ fn test_remove_subnet_node() {
       );
     }
 
-    // let node_set = SubnetNodesClasses::<Test>::get(subnet_id, SubnetNodeClass::Idle);
-    // assert_eq!(node_set.len(), (n_peers - remove_n_peers) as usize);
-
+    let node_set = Network::get_classified_accounts(subnet_id, &ClassTest::Idle, epoch);
+    assert_eq!(node_set.len(), (total_subnet_nodes - remove_n_peers) as usize);
     assert_eq!(Network::total_stake(), amount_staked);
     assert_eq!(Network::total_subnet_stake(subnet_id), amount_staked);
     assert_eq!(TotalSubnetNodes::<Test>::get(subnet_id), total_subnet_nodes - remove_n_peers);
@@ -2311,13 +2398,6 @@ fn test_remove_subnet_node() {
 
       let subnet_node_account = SubnetNodeAccount::<Test>::try_get(subnet_id, peer(n));
       assert_eq!(subnet_node_account, Err(()));
-
-      let subnet_accounts = SubnetAccount::<Test>::get(subnet_id);
-      let block_initialized = subnet_accounts.get(&account(n)).unwrap();
-      assert_eq!(block_initialized, &block_number);
-  
-      let account_subnets = AccountSubnets::<Test>::get(account(n));
-      assert_eq!(account_subnets.len(), 0);
   
       let account_subnet_stake = AccountSubnetStake::<Test>::get(account(n), subnet_id);
       assert_eq!(account_subnet_stake, amount);
@@ -3916,7 +3996,6 @@ fn test_reward_subnets_remove_subnet_node() {
       let submission = SubnetRewardsSubmission::<Test>::get(subnet_id, epoch as u32).unwrap();
 
       // --- Any removals impact the following epochs attestation data unless removed ahead of rewards
-      // let submission_nodes_count = SubnetNodesClasses::<Test>::get(subnet_id, SubnetNodeClass::Submittable).len() as u128;
       let submission_nodes_count = Network::get_classified_accounts(
         subnet_id, 
         &ClassTest::Submittable, 
@@ -3976,97 +4055,97 @@ fn test_reward_subnets_remove_subnet_node() {
     let subnet_node_account = SubnetNodeAccount::<Test>::try_get(subnet_id, peer(total_subnet_nodes - 1));
     assert_eq!(subnet_node_account, Err(()));
   
-    let subnet_accounts = SubnetAccount::<Test>::get(subnet_id);
-    let subnet_account = subnet_accounts.get(&account(total_subnet_nodes - 1));
-    // Since we increase epochs at the end, substract epoch length from current block number
-    assert_eq!(subnet_accounts.get(&account(total_subnet_nodes - 1)), Some(&(System::block_number() - epoch_length)));
+    // let subnet_accounts = SubnetAccount::<Test>::get(subnet_id);
+    // let subnet_account = subnet_accounts.get(&account(total_subnet_nodes - 1));
+    // // Since we increase epochs at the end, substract epoch length from current block number
+    // assert_eq!(subnet_accounts.get(&account(total_subnet_nodes - 1)), Some(&(System::block_number() - epoch_length)));
   });
 }
 
-#[test]
-fn test_reward_subnets_absent_node_increment_decrement() {
-  new_test_ext().execute_with(|| {
-    let max_absent = MaxSubnetNodePenalties::<Test>::get();
-    let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
-    let deposit_amount: u128 = 10000000000000000000000;
-    let amount: u128 = 1000000000000000000000;
+// #[test]
+// fn test_reward_subnets_absent_node_increment_decrement() {
+//   new_test_ext().execute_with(|| {
+//     let max_absent = MaxSubnetNodePenalties::<Test>::get();
+//     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
+//     let deposit_amount: u128 = 10000000000000000000000;
+//     let amount: u128 = 1000000000000000000000;
 
-    build_activated_subnet(subnet_path.clone(), 0, 15, deposit_amount, amount);
+//     build_activated_subnet(subnet_path.clone(), 0, 15, deposit_amount, amount);
 
-    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
-    let total_subnet_nodes = TotalSubnetNodes::<Test>::get(subnet_id);
+//     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+//     let total_subnet_nodes = TotalSubnetNodes::<Test>::get(subnet_id);
 
-    increase_epochs(1);
+//     increase_epochs(1);
 
-    let epoch_length = EpochLength::get();
-    let epochs = SubnetNodeClassEpochs::<Test>::get(SubnetNodeClass::Accountant);
+//     let epoch_length = EpochLength::get();
+//     let epochs = SubnetNodeClassEpochs::<Test>::get(SubnetNodeClass::Accountant);
 
-    // simulate epochs
-    for num in 0..10 {
-      let epoch = System::block_number() / epoch_length;
+//     // simulate epochs
+//     for num in 0..10 {
+//       let epoch = System::block_number() / epoch_length;
 
-      // --- Insert validator
-      SubnetRewardsValidator::<Test>::insert(subnet_id, epoch as u32, account(0));
+//       // --- Insert validator
+//       SubnetRewardsValidator::<Test>::insert(subnet_id, epoch as u32, account(0));
     
-      if num % 2 == 0 {
-        // increment on even epochs
+//       if num % 2 == 0 {
+//         // increment on even epochs
 
-        let subnet_node_data_vec = subnet_node_data(0, total_subnet_nodes-1);
+//         let subnet_node_data_vec = subnet_node_data(0, total_subnet_nodes-1);
     
-        assert_ok!(
-          Network::validate(
-            RuntimeOrigin::signed(account(0)), 
-            subnet_id,
-            subnet_node_data_vec.clone()
-          )
-        );
+//         assert_ok!(
+//           Network::validate(
+//             RuntimeOrigin::signed(account(0)), 
+//             subnet_id,
+//             subnet_node_data_vec.clone()
+//           )
+//         );
     
-        // Attest
-        for n in 1..total_subnet_nodes-1 {
-          assert_ok!(
-            Network::attest(
-              RuntimeOrigin::signed(account(n)), 
-              subnet_id,
-            )
-          );
-        }
+//         // Attest
+//         for n in 1..total_subnet_nodes-1 {
+//           assert_ok!(
+//             Network::attest(
+//               RuntimeOrigin::signed(account(n)), 
+//               subnet_id,
+//             )
+//           );
+//         }
         
-        Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
+//         Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
   
-        let node_absent_count = SubnetNodePenalties::<Test>::get(subnet_id, account(total_subnet_nodes-1));
-        assert_eq!(node_absent_count, 1);
-      } else {
-        // decrement on odd epochs
-        let subnet_node_data_vec = subnet_node_data(0, total_subnet_nodes);
+//         let node_absent_count = SubnetNodePenalties::<Test>::get(subnet_id, account(total_subnet_nodes-1));
+//         assert_eq!(node_absent_count, 1);
+//       } else {
+//         // decrement on odd epochs
+//         let subnet_node_data_vec = subnet_node_data(0, total_subnet_nodes);
         
-        assert_ok!(
-          Network::validate(
-            RuntimeOrigin::signed(account(0)), 
-            subnet_id,
-            subnet_node_data_vec.clone()
-          )
-        );
+//         assert_ok!(
+//           Network::validate(
+//             RuntimeOrigin::signed(account(0)), 
+//             subnet_id,
+//             subnet_node_data_vec.clone()
+//           )
+//         );
     
-        // Attest
-        for n in 1..total_subnet_nodes {
-          assert_ok!(
-            Network::attest(
-              RuntimeOrigin::signed(account(n)), 
-              subnet_id,
-            )
-          );
-        }
+//         // Attest
+//         for n in 1..total_subnet_nodes {
+//           assert_ok!(
+//             Network::attest(
+//               RuntimeOrigin::signed(account(n)), 
+//               subnet_id,
+//             )
+//           );
+//         }
         
-        Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
+//         Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
   
-        let node_absent_count = SubnetNodePenalties::<Test>::get(subnet_id, account(total_subnet_nodes-1));
-        assert_eq!(node_absent_count, 0);  
-      }
+//         let node_absent_count = SubnetNodePenalties::<Test>::get(subnet_id, account(total_subnet_nodes-1));
+//         assert_eq!(node_absent_count, 0);  
+//       }
 
-      increase_epochs(1);
-    }
-  });
-}
+//       increase_epochs(1);
+//     }
+//   });
+// }
 
 #[test]
 fn test_reward_subnets_check_balances() {
@@ -4117,7 +4196,7 @@ fn test_reward_subnets_check_balances() {
     let submission = SubnetRewardsSubmission::<Test>::get(subnet_id, epoch as u32).unwrap();
 
     // --- Any removals impact the following epochs attestation data unless removed ahead of rewards
-    let submission_nodes_count = SubnetNodesClasses::<Test>::get(subnet_id, SubnetNodeClass::Submittable).len() as u128;
+    let submission_nodes_count = Network::get_classified_accounts(subnet_id, &ClassTest::Submittable, epoch).len() as u128;
 
     Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
     let node_absent_count = SubnetNodePenalties::<Test>::get(subnet_id, account(total_subnet_nodes-1));

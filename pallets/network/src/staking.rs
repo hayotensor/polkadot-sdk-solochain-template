@@ -125,14 +125,7 @@ impl<T: Config> Pallet<T> {
     // --- 7. We remove the balance from the hotkey.
     Self::decrease_account_stake(&account_id, subnet_id, stake_to_be_removed);
 
-    let remaining_account_stake_balance: u128 = AccountSubnetStake::<T>::get(&account_id, subnet_id);
-    
-    // --- 8. If subnet stake balance is zero, remove from SubnetAccount
-    if remaining_account_stake_balance == 0 {
-      let mut subnet_accounts = SubnetAccount::<T>::get(subnet_id);
-      subnet_accounts.remove(&account_id);
-      SubnetAccount::<T>::insert(subnet_id, subnet_accounts);
-    }
+    // let remaining_account_stake_balance: u128 = AccountSubnetStake::<T>::get(&account_id, subnet_id);
 
     // --- 9. We add the balancer to the account_id.  If the above fails we will not credit this account_id.
     // Self::add_balance_to_coldkey_account(&account_id, stake_to_be_removed_as_currency.unwrap());
@@ -165,7 +158,7 @@ impl<T: Config> Pallet<T> {
 
     // --- Ensure we don't surpass max unlockings by attempting to unlock unbondings
     if unbondings.len() as u32 == T::MaxStakeUnlockings::get() {
-      Self::do_claim_stake_unbondings(&account_id,subnet_id);
+      Self::do_claim_stake_unbondings(&account_id, subnet_id);
     }
 
     // --- Get updated unbondings after claiming unbondings

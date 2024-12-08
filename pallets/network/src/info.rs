@@ -28,13 +28,13 @@ impl<T: Config> Pallet<T> {
   // pub fn get_subnet_nodes_submittable(
   //   subnet_id: u32,
   // ) -> Vec<SubnetNode<T::AccountId>> {
-  //   if !SubnetsData::<T>::contains_key(subnet_id.clone()) {
+  //   if !SubnetsData::<T>::contains_key(subnet_id) {
   //     return Vec::new();
   //   }
 
-  //   // let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id.clone(), SubnetNodeClass::Submittable);
+  //   // let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
 
-  //   let subnet_nodes: Vec<T::AccountId> = SubnetNodesClasses::<T>::get(subnet_id.clone(), SubnetNodeClass::Submittable).iter()
+  //   let subnet_nodes: Vec<T::AccountId> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable).iter()
   //     .map(|x| { 
   //       *x.0
   //      } )
@@ -58,7 +58,7 @@ impl<T: Config> Pallet<T> {
   pub fn get_subnet_nodes_subnet_unconfirmed_count(
     subnet_id: u32,
   ) -> u32 {
-    if !SubnetsData::<T>::contains_key(subnet_id.clone()) {
+    if !SubnetsData::<T>::contains_key(subnet_id) {
       return 0;
     }
 

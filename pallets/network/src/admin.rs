@@ -68,17 +68,15 @@ impl<T: Config> Pallet<T> {
   }
 
   pub fn set_subnet_memory(subnet_id: u32, memory_mb: u128) -> DispatchResult {
-    ensure!(
-      SubnetsData::<T>::contains_key(subnet_id),
-      Error::<T>::SubnetNotExist
-    );
+    let subnet = match SubnetsData::<T>::try_get(subnet_id) {
+      Ok(subnet) => subnet,
+      Err(()) => return Err(Error::<T>::SubnetNotExist.into()),
+    };
 
     ensure!(
       memory_mb <= MaxSubnetMemoryMB::<T>::get(),
       Error::<T>::InvalidMaxSubnetMemoryMB
     );
-
-    let subnet = SubnetsData::<T>::get(subnet_id).unwrap();
 
     let base_node_memory: u128 = BaseSubnetNodeMemoryMB::<T>::get();
 

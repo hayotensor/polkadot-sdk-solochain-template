@@ -25,42 +25,28 @@ impl<T: Config> Pallet<T> {
     data: Vec<u8>,
   ) -> DispatchResult {
     // --- Ensure subnet exists
-    ensure!(
-      SubnetsData::<T>::contains_key(subnet_id),
-      Error::<T>::SubnetNotExist
-    );
+    let subnet = match SubnetsData::<T>::try_get(subnet_id) {
+      Ok(subnet) => subnet,
+      Err(()) => return Err(Error::<T>::SubnetNotExist.into()),
+    };
 
-    // --- Ensure account has peer
-    ensure!(
-      SubnetNodesData::<T>::contains_key(subnet_id, account_id.clone()),
-      Error::<T>::SubnetNodeNotExist
-    );
-  
-    // --- Ensure proposer is accountant - Only this category of nodes can propose and vote on proposals
-    let accountant_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
-    ensure!(
-      accountant_nodes.get(&account_id) != None,
-      Error::<T>::NodeAccountantEpochNotReached
-    );
+    let block: u64 = Self::get_current_block_as_u64();
+    let epoch: u64 = block / T::EpochLength::get();
+    // --- Ensure account has peer and is accountant
+    match SubnetNodesData::<T>::try_get(
+      subnet_id, 
+      account_id.clone()
+    ) {
+      Ok(subnet_node) => subnet_node.has_classification(&ClassTest::Accountant, epoch as u64),
+      Err(()) => return Err(Error::<T>::SubnetNotExist.into()),
+    };
 
     // Unique subnet_id -> PeerId
     // Ensure peer ID exists within subnet
-    let default_account_id: T::AccountId = T::AccountId::decode(&mut TrailingZeroInput::zeroes()).unwrap();
-    let defendant_account_id: (bool, T::AccountId) = match SubnetNodeAccount::<T>::try_get(subnet_id, peer_id.clone()) {
-      Ok(_result) => (true, _result),
-      Err(()) => (false, default_account_id.clone()),
+    let defendant_account_id = match SubnetNodeAccount::<T>::try_get(subnet_id, peer_id.clone()) {
+      Ok(defendant_account_id) => defendant_account_id,
+      Err(()) => return Err(Error::<T>::PeerIdNotExist.into()),
     };
-
-    // Redundant
-    // SubnetNodeAccount is removed while subnet nodes are removed
-    ensure!(
-      defendant_account_id.0 && defendant_account_id.1 != default_account_id.clone(),
-      Error::<T>::PeerIdNotExist
-    );
-
-    
-    let block: u64 = Self::get_current_block_as_u64();
-    let epoch: u64 = block / T::EpochLength::get();
 
     // --- Ensure the minimum required subnet peers exist
     // --- Only accountants can vote on proposals
@@ -72,16 +58,15 @@ impl<T: Config> Pallet<T> {
     // This ensure decentralization in order for proposals to be accepted 
 
     // safe unwrap after `contains_key`
-    let subnet_data = SubnetsData::<T>::get(subnet_id).unwrap();
     ensure!(
-      accountant_nodes_count as u32 >= subnet_data.min_nodes,
+      accountant_nodes_count as u32 >= subnet.min_nodes,
       Error::<T>::SubnetNodesMin
     );
 
     ensure!(
       !Self::account_has_active_proposal(
         subnet_id, 
-        defendant_account_id.clone().1, 
+        defendant_account_id.clone(), 
         block,
       ),
       Error::<T>::NodeHasActiveProposal
@@ -91,7 +76,7 @@ impl<T: Config> Pallet<T> {
     let proposal_bid_amount_as_balance = Self::u128_to_balance(proposal_bid_amount);
 
     let can_withdraw: bool = Self::can_remove_balance_from_coldkey_account(
-      &account_id,
+      &account_id.clone(),
       proposal_bid_amount_as_balance.unwrap(),
     );
 
@@ -102,7 +87,7 @@ impl<T: Config> Pallet<T> {
 
     // --- Withdraw bid amount from proposer accounts
     let _ = T::Currency::withdraw(
-      &account_id,
+      &account_id.clone(),
       proposal_bid_amount_as_balance.unwrap(),
       WithdrawReasons::except(WithdrawReasons::TRANSFER),
       ExistenceRequirement::KeepAlive,
@@ -119,7 +104,7 @@ impl<T: Config> Pallet<T> {
       ProposalParams {
         subnet_id: subnet_id,
         plaintiff: account_id.clone(),
-        defendant: defendant_account_id.clone().1,
+        defendant: defendant_account_id.clone(),
         plaintiff_bond: proposal_bid_amount,
         defendant_bond: 0,
         eligible_voters: accountant_nodes,
@@ -144,6 +129,21 @@ impl<T: Config> Pallet<T> {
         block: block
       }
     );
+
+    Ok(())
+  }
+
+  pub fn do_attest_proposal(
+    account_id: T::AccountId, 
+    subnet_id: u32,
+    proposal_id: u32,
+    data: Vec<u8>,
+  ) -> DispatchResult {
+    let proposal = match Proposals::<T>::try_get(subnet_id, proposal_id) {
+      Ok(proposal) => proposal,
+      Err(()) =>
+        return Err(Error::<T>::ProposalInvalid.into()),
+    };
 
     Ok(())
   }
@@ -332,15 +332,6 @@ impl<T: Config> Pallet<T> {
       !proposal.complete,
       Error::<T>::ProposalComplete
     );
-    
-    // Proposals::<T>::mutate(
-    //   subnet_id,
-    //   proposal_id,
-    //   |params: &mut ProposalParams<T::AccountId>| {
-    //     params.complete = true;
-    //     params.plaintiff_bond = 0;
-    //   }
-    // );
 
     Proposals::<T>::remove(
       subnet_id,
