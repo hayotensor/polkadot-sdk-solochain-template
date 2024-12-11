@@ -37,6 +37,8 @@ impl<T: Config> Pallet<T> {
     // --- Get the percentage of the subnet rewards that go to subnet delegate stakers
     let delegate_stake_rewards_percentage: u128 = DelegateStakeRewardsPercentage::<T>::get();
 
+    let subnet_node_registration_epochs = SubnetNodeRegistrationEpochs::<T>::get();
+
     for (subnet_id, data) in SubnetsData::<T>::iter() {
       // --- We don't check for minimum nodes because nodes cannot validate or attest if they are not met
       //     as they the validator will not be chosen in ``do_choose_validator_and_accountants`` if the 
@@ -140,9 +142,15 @@ impl<T: Config> Pallet<T> {
         for subnet_node in SubnetNodesData::<T>::iter_prefix_values(subnet_id) {
           let account_id: T::AccountId = subnet_node.account_id;
 
-          // --- Check if can be included in validation data
-          // If not, upgrade classification and continue
-          if subnet_node.classification.class == ClassTest::Idle {
+          // --- Check if subnet node is past the max registration epochs
+          if subnet_node.classification.class == ClassTest::Registered {
+            if subnet_node.classification.start_epoch + subnet_node_registration_epochs > epoch as u64 {
+              Self::perform_remove_subnet_node(block, subnet_id, account_id);
+            }
+            continue
+          } else if subnet_node.classification.class == ClassTest::Idle {
+            // --- Check if can be included in validation data
+            // If not, upgrade classification and continue
             // --- Upgrade to included
             SubnetNodesData::<T>::mutate(
               subnet_id,
@@ -150,7 +158,7 @@ impl<T: Config> Pallet<T> {
               |params: &mut SubnetNode<T::AccountId>| {
                 params.classification = SubnetNodeV2Class {
                   class: ClassTest::Included,
-                  start_epoch: (epoch + 1) as u64, // in case rewards are called late, we add them to the next epoch, 2 from the consensus data
+                  start_epoch: (epoch + 1) as u64,
                 };
               },
             );
@@ -162,7 +170,9 @@ impl<T: Config> Pallet<T> {
           let mut subnet_node_data: SubnetNodeData = SubnetNodeData::default();
 
           // --- Confirm if ``peer_id`` is present in validator data
-          let subnet_node_data_find: Option<(usize, &SubnetNodeData)> = submission.data.iter().enumerate().find(|&x| x.1.peer_id == peer_id);
+          let subnet_node_data_find: Option<(usize, &SubnetNodeData)> = submission.data.iter().enumerate().find(
+            |&x| x.1.peer_id == peer_id
+          );
           
           // --- If peer_id is present in validator data
           let validated: bool = subnet_node_data_find.is_some();
@@ -197,7 +207,7 @@ impl<T: Config> Pallet<T> {
             // Even if there is a n-1 100% consensus on the node being out of consensus, we don't remove them.
             // In the case where a subnet wants to remove a node, they should initiate a proposal to have them removed
             // using ``propose``method
-            continue;
+            continue
           }
 
           //
@@ -255,7 +265,7 @@ impl<T: Config> Pallet<T> {
           }
 
           // --- Skip if no rewards to give
-          // This is possible if a user is given a ``0`` as a score, but unlikely to happen
+          // This is possible if a user is given a ``0`` as a score and is not validator, but unlikely to happen
           if account_reward == 0 {
             continue
           }

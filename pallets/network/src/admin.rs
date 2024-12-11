@@ -67,6 +67,11 @@ impl<T: Config> Pallet<T> {
     Ok(())
   }
 
+  pub fn set_subnet_node_registration_epochs(value: u64) -> DispatchResult {
+    SubnetNodeRegistrationEpochs::<T>::put(value);
+    Ok(())
+  }
+
   pub fn set_subnet_memory(subnet_id: u32, memory_mb: u128) -> DispatchResult {
     let subnet = match SubnetsData::<T>::try_get(subnet_id) {
       Ok(subnet) => subnet,

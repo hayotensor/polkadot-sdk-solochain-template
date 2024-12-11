@@ -267,6 +267,8 @@ pub mod pallet {
 		MaxSubnetMemory,
 		/// Invalid registration block
 		InvalidSubnetRegistrationBlocks,
+		/// Subnet node must be unstaked to re-register to use the same balance
+		InvalidSubnetRegistrationCooldown,
 		/// Subnet minimum delegate stake balance is met
 		SubnetMinDelegateStakeBalanceMet,
 		/// Subnet doesn't exist
@@ -471,6 +473,7 @@ pub mod pallet {
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 	pub struct SubnetNode<AccountId> {
 		pub account_id: AccountId,
+		pub hotkey: AccountId,
 		pub peer_id: PeerId,
 		pub initialized: u64,
 		pub classification: SubnetNodeV2Class,
@@ -663,6 +666,10 @@ pub mod pallet {
 		16
 	}
 	#[pallet::type_value]
+	pub fn DefaultSubnetNodeRegistrationEpochs() -> u64 {
+		16
+	}
+	#[pallet::type_value]
 	pub fn DefaultSubnetNodesClasses<T: Config>() -> BTreeMap<T::AccountId, u64> {
 		BTreeMap::new()
 	}
@@ -675,11 +682,12 @@ pub mod pallet {
 	pub fn DefaultSubnetNode<T: Config>() -> SubnetNode<T::AccountId> {
 		return SubnetNode {
 			account_id: T::AccountId::decode(&mut TrailingZeroInput::zeroes()).unwrap(),
+			hotkey: T::AccountId::decode(&mut TrailingZeroInput::zeroes()).unwrap(),
 			peer_id: PeerId(Vec::new()),
 			initialized: 0,
 			classification: SubnetNodeV2Class {
 				class: ClassTest::Registered,
-				start_epoch: u64::MAX,
+				start_epoch: 0,
 			},
 		};
 	}
@@ -952,6 +960,11 @@ pub mod pallet {
 	#[pallet::getter(fn total_active_subnet_nodes)]
 	pub type TotalActiveSubnetNodes<T: Config> =
 		StorageMap<_, Blake2_128Concat, u32, u32, ValueQuery>;
+	
+	/// Total epochs a subnet node can stay in registration phase. If surpassed, they are removed on the first successful
+	/// consensus epoch
+	#[pallet::storage]
+	pub type SubnetNodeRegistrationEpochs<T: Config> = StorageValue<_, u64, ValueQuery, DefaultSubnetNodeRegistrationEpochs>;
 	
 	// Epochs required from subnet initialization block to accept consensus submissions and choose validators and accountants
 	// Epochs required based on EpochLength
@@ -1611,23 +1624,51 @@ pub mod pallet {
 			)
 		}
 
-		/// Update a subnet peer
 		#[pallet::call_index(2)]
 		#[pallet::weight({0})]
-		pub fn update_subnet_node(
+		pub fn register_subnet_node(
 			origin: OriginFor<T>, 
 			subnet_id: u32, 
-			peer_id: PeerId,
+			peer_id: PeerId, 
+			stake_to_be_added: u128,
 		) -> DispatchResult {
-			let account_id: T::AccountId = ensure_signed(origin)?;
+			Self::do_register_subnet_node(
+				origin,
+				subnet_id,
+				peer_id,
+				stake_to_be_added,
+			)
+		}
+		
+		#[pallet::call_index(3)]
+		#[pallet::weight({0})]
+		pub fn activate_subnet_node(
+			origin: OriginFor<T>, 
+			subnet_id: u32, 
+		) -> DispatchResult {
+			Self::do_activate_subnet_node(
+				origin,
+				subnet_id,
+			)
+		}	
 
-			Ok(())
+		/// Update a subnet peer
+		#[pallet::call_index(4)]
+		#[pallet::weight({0})]
+		pub fn deactivate_subnet_node(
+			origin: OriginFor<T>, 
+			subnet_id: u32, 
+		) -> DispatchResult {
+			Self::do_deactivate_subnet_node(
+				origin,
+				subnet_id,
+			)
 		}
 		
 		/// Remove your subnet peer
 		/// Unstaking must be done seperately
 		/// Infallible
-		#[pallet::call_index(3)]
+		#[pallet::call_index(5)]
 		// #[pallet::weight(T::WeightInfo::remove_subnet_node())]
 		#[pallet::weight({0})]
 		pub fn remove_subnet_node(
@@ -1641,7 +1682,7 @@ pub mod pallet {
 
 		/// Remove a subnet peer that has surpassed the max penalties allowed
 		// This is redundant 
-		#[pallet::call_index(4)]
+		#[pallet::call_index(6)]
 		#[pallet::weight({0})]
 		pub fn remove_account_subnet_nodes(
 			origin: OriginFor<T>, 
@@ -1667,7 +1708,7 @@ pub mod pallet {
 
 		
 		/// Increase stake towards the specified subnet ID
-		#[pallet::call_index(5)]
+		#[pallet::call_index(7)]
 		// #[pallet::weight(T::WeightInfo::add_to_stake())]
 		#[pallet::weight({0})]
 		pub fn add_to_stake(
@@ -1705,7 +1746,7 @@ pub mod pallet {
 		// Decrease stake on accounts peer if minimum required isn't surpassed
 		// to-do: if removed through consensus, add removed_block to storage and require time 
 		//				to pass until they can remove their stake
-		#[pallet::call_index(6)]
+		#[pallet::call_index(8)]
 		#[pallet::weight({0})]
 		pub fn remove_stake(
 			origin: OriginFor<T>, 
@@ -1734,13 +1775,13 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(7)]
+		#[pallet::call_index(9)]
 		#[pallet::weight({0})]
 		pub fn claim_stake_unbondings(
 			origin: OriginFor<T>, 
 			subnet_id: u32, 
 		) -> DispatchResult {
-			let account_id: T::AccountId = ensure_signed(origin.clone())?;
+			let account_id: T::AccountId = ensure_signed(origin)?;
 			let successful_unbondings: u32 = Self::do_claim_stake_unbondings(&account_id, subnet_id);
 			ensure!(
 				successful_unbondings > 0,
@@ -1750,7 +1791,7 @@ pub mod pallet {
 		}
 
 		/// Increase stake towards subnet ID
-		#[pallet::call_index(8)]
+		#[pallet::call_index(10)]
 		// #[pallet::weight(T::WeightInfo::add_to_delegate_stake())]
 		#[pallet::weight({0})]
 		pub fn add_to_delegate_stake(
@@ -1774,7 +1815,7 @@ pub mod pallet {
 		}
 		
 		/// Swaps the balance of the ``from_subnet_id`` shares to ``to_subnet_id``
-		#[pallet::call_index(9)]
+		#[pallet::call_index(11)]
 		#[pallet::weight({0})]
 		pub fn transfer_delegate_stake(
 			origin: OriginFor<T>, 
@@ -1803,7 +1844,7 @@ pub mod pallet {
 
 		/// Remove delegate stake and add to delegate stake unboding ledger
 		/// Enter shares and will convert to balance automatically
-		#[pallet::call_index(10)]
+		#[pallet::call_index(12)]
 		// #[pallet::weight(T::WeightInfo::remove_delegate_stake())]
 		#[pallet::weight({0})]
 		pub fn remove_delegate_stake(
@@ -1818,14 +1859,14 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(11)]
+		#[pallet::call_index(13)]
 		// #[pallet::weight(T::WeightInfo::claim_delegate_stake_unbondings())]
 		#[pallet::weight({0})]
 		pub fn claim_delegate_stake_unbondings(
 			origin: OriginFor<T>, 
 			subnet_id: u32, 
 		) -> DispatchResult {
-			let account_id: T::AccountId = ensure_signed(origin.clone())?;
+			let account_id: T::AccountId = ensure_signed(origin)?;
 			let successful_unbondings: u32 = Self::do_claim_delegate_stake_unbondings(&account_id, subnet_id);
 			ensure!(
 				successful_unbondings > 0,
@@ -1835,7 +1876,7 @@ pub mod pallet {
 		}
 		
 		/// Allows anyone to increase a subnets delegate stake pool
-		#[pallet::call_index(12)]
+		#[pallet::call_index(14)]
 		#[pallet::weight({0})]
 		pub fn increase_delegate_stake(
 			origin: OriginFor<T>, 
@@ -1878,7 +1919,7 @@ pub mod pallet {
 		}
 
 		/// Delete proposals that are no longer live
-		#[pallet::call_index(13)]
+		#[pallet::call_index(15)]
 		#[pallet::weight({0})]
 		pub fn validate(
 			origin: OriginFor<T>, 
@@ -1901,7 +1942,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(14)]
+		#[pallet::call_index(16)]
 		#[pallet::weight({0})]
 		pub fn attest(
 			origin: OriginFor<T>, 
@@ -1922,7 +1963,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(15)]
+		#[pallet::call_index(17)]
 		#[pallet::weight({0})]
 		pub fn propose(
 			origin: OriginFor<T>, 
@@ -1940,7 +1981,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(16)]
+		#[pallet::call_index(18)]
 		#[pallet::weight({0})]
 		pub fn attest_proposal(
 			origin: OriginFor<T>, 
@@ -1958,7 +1999,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(17)]
+		#[pallet::call_index(19)]
 		#[pallet::weight({0})]
 		pub fn cancel_proposal(
 			origin: OriginFor<T>, 
@@ -1974,7 +2015,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(18)]
+		#[pallet::call_index(20)]
 		#[pallet::weight({0})]
 		pub fn challenge_proposal(
 			origin: OriginFor<T>, 
@@ -1992,7 +2033,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(19)]
+		#[pallet::call_index(21)]
 		#[pallet::weight({0})]
 		pub fn vote(
 			origin: OriginFor<T>, 
@@ -2010,7 +2051,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(20)]
+		#[pallet::call_index(22)]
 		#[pallet::weight({0})]
 		pub fn finalize_proposal(
 			origin: OriginFor<T>, 
@@ -2026,7 +2067,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(21)]
+		#[pallet::call_index(23)]
 		#[pallet::weight({0})]
 		pub fn reward_subnet(
 			origin: OriginFor<T>, 
@@ -2042,7 +2083,7 @@ pub mod pallet {
 			Ok(None.into())
 		}
 
-		#[pallet::call_index(22)]
+		#[pallet::call_index(24)]
 		#[pallet::weight({0})]
 		pub fn register_subnet(
 			origin: OriginFor<T>, 
@@ -2056,7 +2097,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(23)]
+		#[pallet::call_index(25)]
 		#[pallet::weight({0})]
 		pub fn activate_subnet(
 			origin: OriginFor<T>, 
@@ -2338,6 +2379,13 @@ pub mod pallet {
 				Error::<T>::InvalidPeerId
 			);
 
+			// --- Ensure they have no stake on registration
+			// If a subnet node deregisters, then they must fully unstake its stake balance to register again using that same balance
+			ensure!(
+				AccountSubnetStake::<T>::get(account_id.clone(), subnet_id) == 0,
+				Error::<T>::InvalidSubnetRegistrationCooldown
+			);
+
 			// ====================
 			// Initiate stake logic
 			// ====================
@@ -2360,7 +2408,7 @@ pub mod pallet {
 			// ========================
 			let mut classification: SubnetNodeV2Class = SubnetNodeV2Class {
 				class: ClassTest::Registered,
-				start_epoch: u64::MAX,
+				start_epoch: epoch,
 			};
 			// --- Initial nodes before activation are entered as ``submittable`` nodes
 			// They initiate the first consensus epoch and are responsible for increasing classifications
@@ -2374,6 +2422,7 @@ pub mod pallet {
 
 			let subnet_node: SubnetNode<T::AccountId> = SubnetNode {
 				account_id: account_id.clone(),
+				hotkey: account_id.clone(),
 				peer_id: peer_id.clone(),
 				initialized: 0,
 				classification: classification,
@@ -2409,7 +2458,7 @@ pub mod pallet {
 			origin: OriginFor<T>, 
 			subnet_id: u32, 
 		) -> DispatchResult {
-			let account_id: T::AccountId = ensure_signed(origin.clone())?;
+			let account_id: T::AccountId = ensure_signed(origin)?;
 
 			let epoch_length: u64 = T::EpochLength::get();
 			let block: u64 = Self::get_current_block_as_u64();
@@ -2430,13 +2479,16 @@ pub mod pallet {
             Error::<T>::SubnetNodeAlreadyActivated
 					);
 					let mut class = ClassTest::Idle;
+					let mut epoch_increase = 0;
 					if subnet.activated == 0 {
 						class = ClassTest::Submittable
-					};
+					} else {
+						epoch_increase += 1;
+					}
 					params.initialized = block;
 					params.classification = SubnetNodeV2Class {
 						class: class,
-						start_epoch: epoch,
+						start_epoch: epoch + epoch_increase,
 					};
 					Ok(())
 				}
@@ -2447,10 +2499,17 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// This should be called by a user facing extrinsic
 		pub fn do_deactivate_subnet_node(
-			account_id: T::AccountId, 
+			origin: OriginFor<T>, 
 			subnet_id: u32, 
 		) -> DispatchResult {
+			let account_id: T::AccountId = ensure_signed(origin)?;
+
+			let epoch_length: u64 = T::EpochLength::get();
+			let block: u64 = Self::get_current_block_as_u64();
+			let epoch: u64 = block / epoch_length;
+
 			SubnetNodesData::<T>::try_mutate_exists(
 				subnet_id,
 				account_id.clone(),
@@ -2463,7 +2522,7 @@ pub mod pallet {
 					params.initialized = 0;
 					params.classification = SubnetNodeV2Class {
 						class: ClassTest::Registered,
-						start_epoch: u64::MAX,
+						start_epoch: epoch,
 					};
 					Ok(())
 				}
@@ -2513,6 +2572,27 @@ pub mod pallet {
 			return Weight::from_parts(207_283_478_000, 22166406)
 				.saturating_add(T::DbWeight::get().reads(18250_u64))
 				.saturating_add(T::DbWeight::get().writes(12002_u64))
+		}
+
+		fn on_idle(block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			let block: u64 = Self::convert_block_as_u64(block_number);
+
+			if remaining_weight.any_lt(T::DbWeight::get().reads(2)) {
+				return Weight::from_parts(0, 0)
+			}
+
+			return Weight::from_parts(0, 0)
+
+			// Self::do_on_idle(remaining_weight)
+		}
+	}
+
+	impl<T: Config> Pallet<T> {
+		pub(crate) fn do_on_idle(remaining_weight: Weight) -> Weight {
+			// any weight that is unaccounted for
+			let mut unaccounted_weight = Weight::from_parts(0, 0);
+
+			unaccounted_weight
 		}
 	}
 
@@ -2625,6 +2705,7 @@ pub mod pallet {
 			// 	// ========================
 			// 	let subnet_node: SubnetNode<T::AccountId> = SubnetNode {
 			// 		account_id: account_id.clone(),
+			// 		hotkey: account_id.clone(),
 			// 		peer_id: peer_id.clone(),
 			// 		initialized: 0,
 			// 	};
