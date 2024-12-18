@@ -81,7 +81,7 @@ fn get_min_subnet_nodes<T: Config>() -> u32 {
 fn build_subnet<T: Config>(subnet_path: Vec<u8>) {
 	let funded_initializer = funded_account::<T>("funded_initializer", 0);
 
-  let add_subnet_data = PreliminarySubnetData {
+  let add_subnet_data = RegistrationSubnetData {
     path: subnet_path.clone().into(),
     memory_mb: DEFAULT_SUBNET_MEM_MB,
   };

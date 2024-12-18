@@ -27,7 +27,7 @@ use frame_support::traits::Currency;
 use sp_core::OpaquePeerId as PeerId;
 use crate::{
   Error, SubnetNode, PropsType, SubnetVote, VotesBalance, ReservableCurrency, PropCount, VoteType,
-  Votes, ActiveProposalsCount, Proposals, PropsStatus, PropsPathStatus, BalanceOf, PreliminarySubnetData,
+  Votes, ActiveProposalsCount, Proposals, PropsStatus, PropsPathStatus, BalanceOf, RegistrationSubnetData,
   ActivateProposalsCount, ActiveActivateProposals, DeactivateProposalsCount
 };
 use strum::IntoEnumIterator;
@@ -55,16 +55,16 @@ fn default_subnet_path() -> Vec<u8> {
   DEFAULT_MODEL_PATH.into()
 }
 
-fn default_add_subnet_data() -> PreliminarySubnetData {
-  let subnet_data = PreliminarySubnetData {
+fn default_add_subnet_data() -> RegistrationSubnetData {
+  let subnet_data = RegistrationSubnetData {
     path: DEFAULT_MODEL_PATH.into(),
 		memory_mb: 50000,
   };
   subnet_data
 }
 
-fn default_existing_add_subnet_data() -> PreliminarySubnetData {
-  let subnet_data = PreliminarySubnetData {
+fn default_existing_add_subnet_data() -> RegistrationSubnetData {
+  let subnet_data = RegistrationSubnetData {
     path: DEFAULT_EXISTING_MODEL_PATH.into(),
 		memory_mb: 50000,
   };
@@ -104,7 +104,7 @@ fn build_existing_subnet(start: u32, end: u32) {
   let subnet_initialization_cost = get_subnet_initialization_cost();
   let _ = Balances::deposit_creating(&account(0), subnet_initialization_cost+1000);
 
-  let add_subnet_data = PreliminarySubnetData {
+  let add_subnet_data = RegistrationSubnetData {
     path: subnet_path.clone(),
     memory_mb: 50000,
   };
@@ -123,7 +123,7 @@ fn build_existing_subnet(start: u32, end: u32) {
   //   )
   // );
 
-  // let add_subnet_data = PreliminarySubnetData {
+  // let add_subnet_data = RegistrationSubnetData {
   //   path: subnet_path.clone(),
   //   memory_mb: 50000,
   // };
@@ -134,7 +134,7 @@ fn build_existing_subnet(start: u32, end: u32) {
   //     add_subnet_data.clone(),
   //   ) 
   // );
-  // let add_subnet_data = PreliminarySubnetData {
+  // let add_subnet_data = RegistrationSubnetData {
   //   path: subnet_path.clone(),
   //   memory_mb: 50000,
   // };
@@ -169,26 +169,14 @@ fn build_existing_subnet(start: u32, end: u32) {
 
   System::set_block_number(starting_block + submit_epochs * epoch_length + 1);
 
-  let node_set = pallet_network::SubnetNodesClasses::<Test>::get(subnet_id.clone(), pallet_network::SubnetNodeClass::Idle);
+  let epoch = System::block_number() / epoch_length;
+  let node_set = pallet_network::get_classified_accounts(subnet_id, &ClassTest::Submittable, epoch);
+
   assert_eq!(node_set.len(), end as usize - start as usize);
 
 
   let last_class_id = pallet_network::SubnetNodeClass::iter().last().unwrap();
   let starting_block = System::block_number();
-
-  for class_id in pallet_network::SubnetNodeClass::iter() {
-    if class_id == last_class_id {
-      continue;
-    }
-
-    let node_set = pallet_network::SubnetNodesClasses::<Test>::get(subnet_id.clone(), class_id);
-    assert_eq!(node_set.len(), end as usize - start as usize);
-
-    let epochs = pallet_network::SubnetNodeClassEpochs::<Test>::get(class_id.clone());
-    System::set_block_number(starting_block + epochs * epoch_length + 1);
-
-    Network::shift_node_classes(System::block_number(), epoch_length);
-  }
 
 }
 

@@ -224,3 +224,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		.unwrap()
 		.into()
 }
+
+pub(crate) fn network_events() -> Vec<crate::Event<Test>> {
+	System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let RuntimeEvent::Network(inner) = e { Some(inner) } else { None })
+		.collect()
+}

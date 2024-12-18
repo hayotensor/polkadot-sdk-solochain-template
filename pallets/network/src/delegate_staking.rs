@@ -178,6 +178,14 @@ impl<T: Config> Pallet<T> {
   ) -> DispatchResult {
     let account_id: T::AccountId = ensure_signed(origin)?;
 
+    let block: u64 = Self::get_current_block_as_u64();
+    ensure!(
+      block - LastDelegateStakeTransfer::<T>::get(account_id.clone()) > DelegateStakeTransferPeriod::<T>::get(),
+      Error::<T>::DelegateStakeTransferPeriodExceeded
+    );
+
+    LastDelegateStakeTransfer::<T>::insert(account_id.clone(), block);
+
     // --- Remove
 
     // --- Ensure that the delegate_stake amount to be removed is above zero.
@@ -238,7 +246,6 @@ impl<T: Config> Pallet<T> {
   
     // to-do: add AddStakeRateLimit instead of universal rate limiter
     //        this allows peers to come in freely
-    let block: u64 = Self::get_current_block_as_u64();
     ensure!(
       !Self::exceeds_tx_rate_limit(Self::get_last_tx_block(&account_id), block),
       Error::<T>::TxRateLimitExceeded
@@ -482,7 +489,7 @@ impl<T: Config> Pallet<T> {
     if total_shares == 0 {
       return shares;
     }
-    shares.saturating_mul(total_balance.saturating_div(total_shares))
+    shares * (total_balance * Self::PERCENTAGE_FACTOR / (total_shares + 1)) / Self::PERCENTAGE_FACTOR
   }
 
   pub fn convert_to_shares(
@@ -493,6 +500,6 @@ impl<T: Config> Pallet<T> {
     if total_shares == 0 {
       return balance;
     }
-    balance.saturating_mul(total_shares.saturating_div(total_balance))
+    balance * (total_shares * Self::PERCENTAGE_FACTOR / (total_balance + 1)) / Self::PERCENTAGE_FACTOR
   }
 }

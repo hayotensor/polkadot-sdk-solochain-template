@@ -69,7 +69,7 @@ use sp_runtime::{
 };
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 
-use pallet_network::{SubnetVote, PreliminarySubnetData, SubnetDemocracySubnetData};
+use pallet_network::{SubnetVote, RegistrationSubnetData, SubnetDemocracySubnetData};
 
 #[cfg(test)]
 mod mock;
@@ -257,7 +257,7 @@ pub mod pallet {
     pub proposal_status: PropsStatus,
     pub proposal_type: PropsType, // Activation or Deactivation
     pub path: Vec<u8>, // path for downloading subnet used in subnet, can be anything (HuggingFace, IPFS, etc.)
-    pub subnet_data: PreliminarySubnetData,
+    pub subnet_data: RegistrationSubnetData,
 		pub subnet_nodes: Vec<SubnetNode<AccountId>>,
     pub subnet_nodes_verified: BTreeSet<AccountId>,
     pub subnet_nodes_bonded: BTreeMap<AccountId, u128>,
@@ -312,7 +312,7 @@ pub mod pallet {
       proposal_status: PropsStatus::None,
       proposal_type: PropsType::None,
 			path: Vec::new(),
-      subnet_data: PreliminarySubnetData::default(),
+      subnet_data: RegistrationSubnetData::default(),
       subnet_nodes_verified: BTreeSet::new(),
       subnet_nodes_bonded: BTreeMap::new(),
 			subnet_nodes: Vec::new(),
@@ -525,7 +525,7 @@ pub mod pallet {
     ///  - The subnet already does exist within the network pallet
     ///  - The subnet isn't already proposed to be deactivated via PropsStatus::Active
     ///
-    /// The PreliminarySubnetData is used to dictate the subnets rewards and node requirements.
+    /// The RegistrationSubnetData is used to dictate the subnets rewards and node requirements.
     /// Memory must be accurate to usage of the subnet for servers/
     /// Higher memory requirements will garner higher rewards but also require increased node requirements.
     /// Lower memory requirements will garner lower rewards but require lesser noes to operate the subnet.
@@ -534,7 +534,7 @@ pub mod pallet {
     // #[pallet::weight(0)]
     pub fn propose(
       origin: OriginFor<T>, 
-      subnet_data: PreliminarySubnetData,
+      subnet_data: RegistrationSubnetData,
       mut subnet_nodes: Vec<SubnetNode<T::AccountId>>,
       proposal_type: PropsType
     ) -> DispatchResult {
@@ -1194,7 +1194,7 @@ pub mod pallet {
 
 // impl<T: Config + pallet::Config> Pallet<T> {
 impl<T: Config> Pallet<T> {
-  fn try_propose_activate(account_id: T::AccountId, subnet_data: PreliminarySubnetData, mut subnet_nodes: Vec<SubnetNode<T::AccountId>>) -> DispatchResult {
+  fn try_propose_activate(account_id: T::AccountId, subnet_data: RegistrationSubnetData, mut subnet_nodes: Vec<SubnetNode<T::AccountId>>) -> DispatchResult {
     // --- Ensure path doesn't already exist in Network or SubnetVoting
     // If it doesn't already exist, then it has either been not proposed or deactivated
     ensure!(
@@ -1531,7 +1531,7 @@ impl<T: Config> Pallet<T> {
   }
 
   /// Activate subnet - Someone must add_subnet once activated
-  fn try_activate_subnet(activator: T::AccountId, proposer: T::AccountId, subnet_data: PreliminarySubnetData) -> DispatchResult {
+  fn try_activate_subnet(activator: T::AccountId, proposer: T::AccountId, subnet_data: RegistrationSubnetData) -> DispatchResult {
     let vote_subnet_data = SubnetDemocracySubnetData {
       data: subnet_data.clone(),
       active: true,
@@ -1545,7 +1545,7 @@ impl<T: Config> Pallet<T> {
     )
   }
 
-  fn try_deactivate_subnet(activator: T::AccountId, proposer: T::AccountId, subnet_data: PreliminarySubnetData) -> DispatchResult {
+  fn try_deactivate_subnet(activator: T::AccountId, proposer: T::AccountId, subnet_data: RegistrationSubnetData) -> DispatchResult {
     let vote_subnet_data = SubnetDemocracySubnetData {
       data: subnet_data.clone(),
       active: false,

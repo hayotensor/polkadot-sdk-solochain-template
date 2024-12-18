@@ -59,7 +59,6 @@ pallet-network = { version = "4.0.0-dev", default-features = false, path = "../p
 pallet-insecure-randomness-collective-flip.workspace = true
 pallet-multisig.workspace = true
 network-custom-rpc-runtime-api = { version = "0.0.1", default-features = false, path = "../pallets/network/runtime-api" }
-pallet-subnet-democracy = { version = "4.0.0-dev", default-features = false, path = "../pallets/subnet-democracy" }
 pallet-admin = { version = "4.0.0-dev", default-features = false, path = "../pallets/admin" }
 pallet-rewards = { version = "4.0.0-dev", default-features = false, path = "../pallets/rewards" }
 pallet-collective = { version = "37.0.0", default-features = false, path = "../pallets/collective" }
@@ -96,7 +95,6 @@ std = [
 	"pallet-multisig/std",
 	"network-custom-rpc-runtime-api/std",
 	"pallet-network/std",
-	"pallet-subnet-democracy/std",
 	"pallet-authorship/std",
 	"pallet-rewards/std",
 	"pallet-admin/std",
@@ -137,7 +135,6 @@ runtime-benchmarks = [
 	"pallet-sudo/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"pallet-network/runtime-benchmarks",
-	"pallet-subnet-democracy/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-collective/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",

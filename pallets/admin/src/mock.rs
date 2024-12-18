@@ -44,7 +44,6 @@ frame_support::construct_runtime!(
     InsecureRandomnessCollectiveFlip: pallet_insecure_randomness_collective_flip,
     Balances: pallet_balances,
     Network: pallet_network,
-    SubnetDemocracy: pallet_subnet_democracy,
     Admin: pallet_admin,
     Collective: pallet_collective::<Instance1>
 	}
@@ -177,23 +176,6 @@ parameter_types! {
   pub const QuorumVotingPowerPercentage: u8 = 40;
 }
 
-impl pallet_subnet_democracy::Config for Test {
-	type WeightInfo = ();
-	type RuntimeEvent = RuntimeEvent;
-	type SubnetVote = Network;
-	type Currency = Balances;
-	type MaxActivateProposals = ConstU32<32>;
-	type MaxDeactivateProposals = ConstU32<32>;
-	type MaxProposals = ConstU32<32>;
-	type VotingPeriod = VotingPeriod;
-	type EnactmentPeriod = EnactmentPeriod;
-  type VerifyPeriod = VerifyPeriod;
-  type MinProposerStake = MinProposerStake;
-  type Quorum = Quorum;
-  type CancelSlashPercent = CancelSlashPercent;
-  type QuorumVotingPowerPercentage = QuorumVotingPowerPercentage;
-}
-
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 
 parameter_types! {
@@ -224,13 +206,8 @@ impl pallet_collective::Config<CouncilCollective> for Test {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	// type CollectiveOrigin = EitherOfDiverse<
-	// 	EnsureRoot<AccountId>,
-	// 	pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 2, 3>,
-	// >;
   type CollectiveOrigin = pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 2, 3>;
   type NetworkAdminInterface = Network;
-  type SubnetDemocracyAdminInterface = SubnetDemocracy;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

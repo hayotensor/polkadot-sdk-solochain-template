@@ -22,7 +22,6 @@ use log::info;
 use sp_core::{H256, U256};
 use frame_support::traits::Currency;
 use pallet_network::MinSubnetNodes;
-use pallet_subnet_democracy::NodeVotePremium;
 
 
 type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;

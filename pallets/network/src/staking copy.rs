@@ -92,7 +92,7 @@ impl<T: Config> Pallet<T> {
       Error::<T>::NotEnoughStakeToWithdraw
     );
 
-    let account_stake_balance: u128 = AccountSubnetStake::<T>::get(&account_id, subnet_id.clone());
+    let account_stake_balance: u128 = AccountSubnetStake::<T>::get(&account_id, subnet_id);
 
     // --- Ensure that the account has enough stake to withdraw.
     ensure!(
@@ -130,7 +130,7 @@ impl<T: Config> Pallet<T> {
     if remaining_account_stake_balance == 0 {
       let mut subnet_accounts = SubnetAccount::<T>::get(subnet_id);
       subnet_accounts.remove(&account_id);
-      SubnetAccount::<T>::insert(subnet_id.clone(), subnet_accounts);
+      SubnetAccount::<T>::insert(subnet_id, subnet_accounts);
     }
 
     // --- 9. We add the balancer to the account_id.  If the above fails we will not credit this account_id.
@@ -152,7 +152,7 @@ impl<T: Config> Pallet<T> {
     // -- increase account subnet staking balance
     AccountSubnetStake::<T>::insert(
       account_id,
-      subnet_id.clone(),
+      subnet_id,
       AccountSubnetStake::<T>::get(account_id, subnet_id).saturating_add(amount),
     );
 
@@ -160,7 +160,7 @@ impl<T: Config> Pallet<T> {
     TotalAccountStake::<T>::mutate(account_id, |mut n| *n += amount);
 
     // -- increase total subnet stake
-    TotalSubnetStake::<T>::mutate(subnet_id.clone(), |mut n| *n += amount);
+    TotalSubnetStake::<T>::mutate(subnet_id, |mut n| *n += amount);
 
     // -- increase total stake overall
     TotalStake::<T>::mutate(|mut n| *n += amount);
@@ -174,7 +174,7 @@ impl<T: Config> Pallet<T> {
     // -- decrease account subnet staking balance
     AccountSubnetStake::<T>::insert(
       account_id,
-      subnet_id.clone(),
+      subnet_id,
       AccountSubnetStake::<T>::get(account_id, subnet_id).saturating_sub(amount),
     );
 
@@ -185,7 +185,7 @@ impl<T: Config> Pallet<T> {
     TotalStake::<T>::mutate(|mut n| *n -= amount);
 
     // -- decrease total subnet stake
-    TotalSubnetStake::<T>::mutate(subnet_id.clone(), |mut n| *n -= amount);
+    TotalSubnetStake::<T>::mutate(subnet_id, |mut n| *n -= amount);
   }
 
   pub fn can_remove_balance_from_coldkey_account(

@@ -47,7 +47,6 @@ pub mod pallet {
   use super::*;
   use frame_support::pallet_prelude::*;
   use pallet_network::AdminInterface as NetworkAdminInterface;
-  use pallet_subnet_democracy::AdminInterface as SubnetDemocracyAdminInterface;
   
   #[pallet::config]
   pub trait Config: frame_system::Config + Sized {
@@ -56,8 +55,6 @@ pub mod pallet {
     type CollectiveOrigin: EnsureOrigin<Self::RuntimeOrigin>;
     
     type NetworkAdminInterface: NetworkAdminInterface<Self::AccountId>; 
-
-    type SubnetDemocracyAdminInterface: SubnetDemocracyAdminInterface;
   }
 
   /// Pallet rewards for issuing rewards to block producers.
@@ -267,8 +264,6 @@ pub mod pallet {
       // log::error!("account_id set_peer_vote_premium {:?}", account_id);
       Something::<T>::put(value);
       // ensure_root(origin)?;
-      // T::SubnetDemocracyAdminInterface::set_peer_vote_premium(value)
-      // Update
       Ok(())
     }
 
@@ -276,7 +271,6 @@ pub mod pallet {
     #[pallet::weight(0)]
     pub fn set_quorum(origin: OriginFor<T>, value: u128) -> DispatchResult {
       ensure_root(origin)?;
-      // T::SubnetDemocracyAdminInterface::set_quorum(value)
       // Update
       Ok(())
     }
