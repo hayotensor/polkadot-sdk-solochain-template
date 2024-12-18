@@ -252,6 +252,10 @@ impl<T: Config> Pallet<T> {
     ) as u32 + min_subnet_nodes
   }
 
+  pub fn get_subnet_rewards(memory_mb: u128, base_reward_per_mb: u128) -> u128 {
+    Self::percent_mul(base_reward_per_mb, memory_mb)
+  }
+
   pub fn get_subnet_initialization_cost(block: u64) -> u128 {
     T::SubnetInitializationCost::get()
   }

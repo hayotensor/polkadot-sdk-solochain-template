@@ -27,7 +27,7 @@ use frame_support::traits::Currency;
 use sp_core::OpaquePeerId as PeerId;
 use crate::{
   Error, SubnetNode, PropsType, SubnetVote, VotesBalance, ReservableCurrency, PropCount, VoteType,
-  Votes, ActiveProposalsCount, Proposals, PropsStatus, PropsPathStatus, BalanceOf, PreliminarySubnetData,
+  Votes, ActiveProposalsCount, Proposals, PropsStatus, PropsPathStatus, BalanceOf, RegistrationSubnetData,
   ActivateProposalsCount, ActiveActivateProposals, DeactivateProposalsCount
 };
 use strum::IntoEnumIterator;
@@ -55,16 +55,16 @@ fn default_subnet_path() -> Vec<u8> {
   DEFAULT_MODEL_PATH.into()
 }
 
-fn default_add_subnet_data() -> PreliminarySubnetData {
-  let subnet_data = PreliminarySubnetData {
+fn default_add_subnet_data() -> RegistrationSubnetData {
+  let subnet_data = RegistrationSubnetData {
     path: DEFAULT_MODEL_PATH.into(),
 		memory_mb: 50000,
   };
   subnet_data
 }
 
-fn default_existing_add_subnet_data() -> PreliminarySubnetData {
-  let subnet_data = PreliminarySubnetData {
+fn default_existing_add_subnet_data() -> RegistrationSubnetData {
+  let subnet_data = RegistrationSubnetData {
     path: DEFAULT_EXISTING_MODEL_PATH.into(),
 		memory_mb: 50000,
   };
@@ -104,7 +104,7 @@ fn build_existing_subnet(start: u32, end: u32) {
   let subnet_initialization_cost = get_subnet_initialization_cost();
   let _ = Balances::deposit_creating(&account(0), subnet_initialization_cost+1000);
 
-  let add_subnet_data = PreliminarySubnetData {
+  let add_subnet_data = RegistrationSubnetData {
     path: subnet_path.clone(),
     memory_mb: 50000,
   };
@@ -123,7 +123,7 @@ fn build_existing_subnet(start: u32, end: u32) {
   //   )
   // );
 
-  // let add_subnet_data = PreliminarySubnetData {
+  // let add_subnet_data = RegistrationSubnetData {
   //   path: subnet_path.clone(),
   //   memory_mb: 50000,
   // };
@@ -134,7 +134,7 @@ fn build_existing_subnet(start: u32, end: u32) {
   //     add_subnet_data.clone(),
   //   ) 
   // );
-  // let add_subnet_data = PreliminarySubnetData {
+  // let add_subnet_data = RegistrationSubnetData {
   //   path: subnet_path.clone(),
   //   memory_mb: 50000,
   // };

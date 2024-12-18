@@ -67,16 +67,94 @@ impl<T: Config> Pallet<T> {
 
     let block: u64 = Self::get_current_block_as_u64();
 
+    let mut attests: BTreeSet<T::AccountId> = BTreeSet::new();
+    attests.insert(accountant.clone());
+
     AccountantData::<T>::insert(
       subnet_id,
-      accountant_data_index.clone(),
+      accountant_data_index,
       AccountantDataParams {
         accountant,
         block,
         epoch,
         data,
+        attests,
       }
     );
+
+    Ok(())
+  }
+
+  pub fn do_attest_accountant_data(
+    account_id: T::AccountId,
+    subnet_id: u32,
+    epoch: u32,
+  ) -> DispatchResult {
+    let accountant_data_index: u32 = AccountantDataCount::<T>::get(subnet_id);
+
+    AccountantData::<T>::try_mutate_exists(
+      subnet_id,
+      epoch,
+      |maybe_params| -> DispatchResult {
+        let params = maybe_params.as_mut().ok_or(Error::<T>::InvalidSubnetRewardsSubmission)?;
+        let mut attests = &mut params.attests;
+
+        ensure!(attests.insert(account_id.clone()), Error::<T>::AlreadyAttested);
+
+        params.attests = attests.clone();
+        Ok(())
+      }
+    )?;
+
+    // Self::deposit_event(
+    //   Event::Attestation { 
+    //     subnet_id: subnet_id, 
+    //     account_id: account_id, 
+    //     epoch: epoch,
+    //   }
+    // );
+
+    // Ok(Pays::No.into())
+
+    Ok(())
+  }
+
+  pub fn do_validate_accountant_data(
+    accountant_submission_id: u32,
+    block: u64,
+    epoch: u32,
+  ) -> DispatchResult {
+    let min_attestation_percentage = MinAttestationPercentage::<T>::get();
+    for (subnet_id, data) in SubnetsData::<T>::iter() {
+      let accountant_data = match AccountantData::<T>::try_get(subnet_id, epoch) {
+        Ok(accountant_data) => accountant_data,
+        Err(()) => continue,
+      };
+
+      let subnet_node_count = Self::get_classified_accounts(subnet_id, &ClassTest::Submittable, epoch as u64).len() as u128;
+
+      let attestations: u128 = accountant_data.attests.len() as u128;
+      let mut attestation_percentage: u128 = Self::percent_div(attestations, subnet_node_count);
+
+      // Redundant
+      // When subnet nodes exit, the consensus data is updated to remove them from it
+      if attestation_percentage > Self::PERCENTAGE_FACTOR {
+        attestation_percentage = Self::PERCENTAGE_FACTOR;
+      }
+
+      let validator: T::AccountId = accountant_data.accountant;
+
+      if attestation_percentage < min_attestation_percentage {
+        // --- Slash validator and increase penalty score
+        Self::slash_validator(subnet_id, validator, attestation_percentage, block);
+        
+        // --- Attestation not successful, move on to next subnet
+        continue
+      }
+
+      SubnetNodePenalties::<T>::mutate(subnet_id, validator.clone(), |n: &mut u32| n.saturating_dec());
+
+    }
 
     Ok(())
   }
@@ -88,7 +166,7 @@ impl<T: Config> Pallet<T> {
     min_subnet_nodes: u32,
     target_accountants_len: u32,
   ) {
-    let subnet_nodes = Self::get_classified_subnet_nodes(subnet_id, &ClassTest::Accountant, epoch as u64);
+    let subnet_nodes = Self::get_classified_subnet_nodes(subnet_id, &ClassTest::Submittable, epoch as u64);
     let subnet_nodes_len: u32 = subnet_nodes.len() as u32;
 
     // --- Ensure min subnet peers that are submittable are at least the minimum required

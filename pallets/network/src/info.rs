@@ -65,6 +65,21 @@ impl<T: Config> Pallet<T> {
     0
   }
 
+  pub fn get_subnet_node_by_params(
+    subnet_id: u32,
+    a: BoundedVec<u8, DefaultSubnetNodeParamLimit>,
+  ) -> Option<SubnetNode<T::AccountId>> {
+    if !SubnetsData::<T>::contains_key(subnet_id) {
+      return None
+    }
+
+    SubnetNodesData::<T>::iter_prefix_values(subnet_id)
+      .find(|x| {
+        // Find by ``a``, a unique parameter
+        x.a == *a
+      })
+  }
+
   // id is consensus ID
   pub fn get_consensus_data(
     subnet_id: u32,

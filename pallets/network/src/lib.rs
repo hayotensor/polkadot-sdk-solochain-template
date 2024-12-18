@@ -470,6 +470,14 @@ pub mod pallet {
 		pub accountant: u64,
 	}
 
+	/// account_id: 		Coldkey of subnet node
+	/// hotkey: 				Hotkey of subnet node for interacting with subnet on-chain communication
+	/// peer_id: 				Peer ID of subnet node within subnet
+	/// initialized:		Block initialized
+	/// classification:	Subnet node classification for on-chain permissions
+	/// a:							(Optional) Unique data for subnet to use and lookup via RPC, can only be added at registration
+	/// b:							(Optional) Data for subnet to use and lookup via RPC
+	/// c:							(Optional) Data for subnet to use and lookup via RPC
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 	pub struct SubnetNode<AccountId> {
 		pub account_id: AccountId,
@@ -477,6 +485,9 @@ pub mod pallet {
 		pub peer_id: PeerId,
 		pub initialized: u64,
 		pub classification: SubnetNodeV2Class,
+		pub a: Vec<u8>,
+		pub b: Vec<u8>,
+		pub c: Vec<u8>,
 	}
 
 	/// Registered: Subnet node registered, not included in consensus
@@ -565,7 +576,7 @@ pub mod pallet {
 
 	/// Subnet data used before activation
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
-	pub struct PreliminarySubnetData {
+	pub struct RegistrationSubnetData {
 		pub path: Vec<u8>,
 		pub memory_mb: u128,
 		pub registration_blocks: u64,
@@ -575,7 +586,7 @@ pub mod pallet {
 	// This is the data from the democracy voting pallet
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 	pub struct SubnetDemocracySubnetData {
-		pub data: PreliminarySubnetData,
+		pub data: RegistrationSubnetData,
 		pub active: bool,
 	}
 
@@ -605,6 +616,7 @@ pub mod pallet {
 		pub block: u64,
 		pub epoch: u32,
 		pub data: Vec<AccountantDataNodeParams>,
+		pub attests: BTreeSet<AccountId>,
 	}
 
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
@@ -642,6 +654,10 @@ pub mod pallet {
 		T::AccountId::decode(&mut TrailingZeroInput::zeroes()).unwrap()
 	}
 	#[pallet::type_value]
+	pub fn DefaultPeerId() -> PeerId {
+		PeerId(Vec::new())
+	}
+	#[pallet::type_value]
 	pub fn DefaultTxRateLimit<T: Config>() -> u64 {
 		T::InitialTxRateLimit::get()
 	}
@@ -651,7 +667,7 @@ pub mod pallet {
 	}
 	#[pallet::type_value]
 	pub fn DefaultSubnetDemocracySubnetData() -> SubnetDemocracySubnetData {
-		let pre_subnet_data = PreliminarySubnetData {
+		let pre_subnet_data = RegistrationSubnetData {
 			path: Vec::new(),
 			memory_mb: 0,
 			registration_blocks: 0,
@@ -689,6 +705,9 @@ pub mod pallet {
 				class: ClassTest::Registered,
 				start_epoch: 0,
 			},
+			a: Vec::new(),
+			b: Vec::new(),
+      c: Vec::new(),
 		};
 	}
 	#[pallet::type_value]
@@ -874,6 +893,10 @@ pub mod pallet {
 	pub fn DefaultAccountantDataNodeParamsMaxLimit() -> u32 {
 		1024_u32
 	}
+	#[pallet::type_value]
+	pub fn DefaultSubnetNodeParamLimit() -> u32 {
+		2024
+	}
 
 	/// Count of subnets
 	#[pallet::storage]
@@ -1013,7 +1036,20 @@ pub mod pallet {
 		ValueQuery,
 		DefaultAccountId<T>,
 	>;
-		
+
+	// Used for unique peer_ids
+	#[pallet::storage] // subnet_id --> param --> peer_id
+	pub type SubnetNodeParam<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		u32,
+		Identity,
+		Vec<u8>,
+		PeerId,
+		ValueQuery,
+		DefaultPeerId,
+	>;
+	
 	#[derive(Default, EnumIter, FromRepr, Copy, Encode, Decode, Clone, PartialOrd, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
   pub enum SubnetNodeClass {
     #[default] Idle,
@@ -1405,6 +1441,7 @@ pub mod pallet {
 			block: 0,
 			epoch: 0,
 			data: Vec::new(),
+			attests: BTreeSet::new(),
 		};
 	}
 
@@ -1608,6 +1645,9 @@ pub mod pallet {
 			subnet_id: u32, 
 			peer_id: PeerId, 
 			stake_to_be_added: u128,
+			a: Option<BoundedVec<u8, DefaultSubnetNodeParamLimit>>,
+			b: Option<BoundedVec<u8, DefaultSubnetNodeParamLimit>>,
+			c: Option<BoundedVec<u8, DefaultSubnetNodeParamLimit>>,
 			// signature: T::OffchainSignature,
 			// signer: T::AccountId,
 		) -> DispatchResult {
@@ -1616,6 +1656,9 @@ pub mod pallet {
 				subnet_id,
 				peer_id,
 				stake_to_be_added,
+				a,
+				b,
+				c,
 			).map_err(|e| e)?;
 
 			Self::do_activate_subnet_node(
@@ -1631,12 +1674,18 @@ pub mod pallet {
 			subnet_id: u32, 
 			peer_id: PeerId, 
 			stake_to_be_added: u128,
+			a: Option<BoundedVec<u8, DefaultSubnetNodeParamLimit>>,
+			b: Option<BoundedVec<u8, DefaultSubnetNodeParamLimit>>,
+			c: Option<BoundedVec<u8, DefaultSubnetNodeParamLimit>>,
 		) -> DispatchResult {
 			Self::do_register_subnet_node(
 				origin,
 				subnet_id,
 				peer_id,
 				stake_to_be_added,
+				a,
+				b,
+				c,
 			)
 		}
 		
@@ -2087,7 +2136,7 @@ pub mod pallet {
 		#[pallet::weight({0})]
 		pub fn register_subnet(
 			origin: OriginFor<T>, 
-			subnet_data: PreliminarySubnetData,
+			subnet_data: RegistrationSubnetData,
 	) -> DispatchResult {
 			let account_id: T::AccountId = ensure_signed(origin)?;
 	
@@ -2113,7 +2162,7 @@ pub mod pallet {
 		/// Activate subnet - called by subnet democracy logic
 		pub fn do_register_subnet(
 			activator: T::AccountId,
-			subnet_data: PreliminarySubnetData,
+			subnet_data: RegistrationSubnetData,
 		) -> DispatchResult {
 			// Ensure path is unique
 			ensure!(
@@ -2343,6 +2392,9 @@ pub mod pallet {
 			subnet_id: u32, 
 			peer_id: PeerId, 
 			stake_to_be_added: u128,
+			a: Option<BoundedVec<u8, DefaultSubnetNodeParamLimit>>,
+			b: Option<BoundedVec<u8, DefaultSubnetNodeParamLimit>>,
+			c: Option<BoundedVec<u8, DefaultSubnetNodeParamLimit>>,
 		) -> DispatchResult {
 			let account_id: T::AccountId = ensure_signed(origin.clone())?;
 
@@ -2365,6 +2417,15 @@ pub mod pallet {
 				!SubnetNodesData::<T>::contains_key(subnet_id, account_id.clone()),
 				Error::<T>::SubnetNodeExist
 			);
+
+			// Unique ``a``
+			// [here]
+			if a.is_some() {
+				ensure!(
+					!SubnetNodeParam::<T>::contains_key(subnet_id, a.unwrap()),
+					Error::<T>::SubnetNodeExist
+				);	
+			}
 
 			// Unique subnet_id -> PeerId
 			// Ensure peer ID doesn't already exist within subnet regardless of account_id
@@ -2426,6 +2487,9 @@ pub mod pallet {
 				peer_id: peer_id.clone(),
 				initialized: 0,
 				classification: classification,
+				a: Vec::new(),
+				b: Vec::new(),
+				c: Vec::new(),
 			};
 			// Insert SubnetNodesData with account_id as key
 			SubnetNodesData::<T>::insert(subnet_id, account_id.clone(), subnet_node);
@@ -2635,7 +2699,7 @@ pub mod pallet {
 			// };
 
 			// // Activate subnet
-			// let pre_subnet_data = PreliminarySubnetData {
+			// let pre_subnet_data = RegistrationSubnetData {
 			// 	path: self.subnet_path.clone(),
 			// 	memory_mb: self.memory_mb.clone(),
 			// };

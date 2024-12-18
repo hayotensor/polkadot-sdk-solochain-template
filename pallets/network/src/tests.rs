@@ -39,7 +39,7 @@ use crate::{
   AccountantDataNodeParams, SubnetRewardsValidator, SubnetRewardsSubmission, BaseSubnetReward, BaseReward,
   DelegateStakeRewardsPercentage, SubnetNodeClass, SubnetNodeClassEpochs,
   SubnetPenaltyCount, MaxSequentialAbsentSubnetNode, SequentialAbsentSubnetNode, MaxSubnetNodePenalties, 
-  SubnetNodePenalties, PreliminarySubnetData,
+  SubnetNodePenalties, RegistrationSubnetData,
   CurrentAccountants, TargetAccountantsLength, MinRequiredSubnetConsensusSubmitEpochs, BaseRewardPerMB,
   DelegateStakeUnbondingLedger, SubnetRemovalReason, ProposalBidAmount, BaseSubnetNodeMemoryMB,
   MinSubnetDelegateStakePercentage,
@@ -100,7 +100,7 @@ const DEFAULT_REGISTRATION_BLOCKS: u64 = 130_000;
 //   let cost = Network::get_subnet_initialization_cost(0);
 //   let _ = Balances::deposit_creating(&account(0), cost+1000);
 
-//   let add_subnet_data = PreliminarySubnetData {
+//   let add_subnet_data = RegistrationSubnetData {
 //     path: subnet_path.clone().into(),
 //     memory_mb: DEFAULT_MEM_MB,
 //     registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -125,7 +125,7 @@ fn build_activated_subnet(subnet_path: Vec<u8>, start: u32, mut end: u32, deposi
   let cost = Network::get_subnet_initialization_cost(0);
   let _ = Balances::deposit_creating(&account(0), cost+1000);
 
-  let add_subnet_data = PreliminarySubnetData {
+  let add_subnet_data = RegistrationSubnetData {
     path: subnet_path.clone().into(),
     memory_mb: DEFAULT_MEM_MB,
     registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -572,7 +572,7 @@ fn test_register_subnet() {
     let cost = Network::get_subnet_initialization_cost(0);
     let _ = Balances::deposit_creating(&account(0), cost+1000);
   
-    let add_subnet_data = PreliminarySubnetData {
+    let add_subnet_data = RegistrationSubnetData {
       path: subnet_path.clone().into(),
       memory_mb: DEFAULT_MEM_MB,
       registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -602,7 +602,7 @@ fn test_register_subnet_exists_error() {
     let cost = Network::get_subnet_initialization_cost(0);
     let _ = Balances::deposit_creating(&account(0), cost+1000);
   
-    let add_subnet_data = PreliminarySubnetData {
+    let add_subnet_data = RegistrationSubnetData {
       path: subnet_path.clone().into(),
       memory_mb: DEFAULT_MEM_MB,
       registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -635,7 +635,7 @@ fn test_register_subnet_registration_blocks_err() {
     let cost = Network::get_subnet_initialization_cost(0);
     let _ = Balances::deposit_creating(&account(0), cost+1000);
   
-    let add_subnet_data = PreliminarySubnetData {
+    let add_subnet_data = RegistrationSubnetData {
       path: subnet_path.clone().into(),
       memory_mb: DEFAULT_MEM_MB,
       registration_blocks: MinSubnetRegistrationBlocks::<Test>::get() - 1,
@@ -649,7 +649,7 @@ fn test_register_subnet_registration_blocks_err() {
       Error::<Test>::InvalidSubnetRegistrationBlocks
     );
 
-    let add_subnet_data = PreliminarySubnetData {
+    let add_subnet_data = RegistrationSubnetData {
       path: subnet_path.clone().into(),
       memory_mb: DEFAULT_MEM_MB,
       registration_blocks: MaxSubnetRegistrationBlocks::<Test>::get() + 1,
@@ -674,7 +674,7 @@ fn test_register_subnet_max_subnet_mem_err() {
     let max_subnet_mem = MaxSubnetMemoryMB::<Test>::get();
   
     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
-    let add_subnet_data = PreliminarySubnetData {
+    let add_subnet_data = RegistrationSubnetData {
       path: subnet_path.into(),
       memory_mb: max_subnet_mem+1,
       registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -696,7 +696,7 @@ fn test_register_subnet_not_enough_balance_err() {
     // let cost = Network::get_subnet_initialization_cost(0);
     // let _ = Balances::deposit_creating(&account(0), cost+1000);  
     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
-    let add_subnet_data = PreliminarySubnetData {
+    let add_subnet_data = RegistrationSubnetData {
       path: subnet_path.into(),
       memory_mb: DEFAULT_MEM_MB,
       registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -720,7 +720,7 @@ fn test_activate_subnet() {
     let cost = Network::get_subnet_initialization_cost(0);
     let _ = Balances::deposit_creating(&account(0), cost+1000);
   
-    let add_subnet_data = PreliminarySubnetData {
+    let add_subnet_data = RegistrationSubnetData {
       path: subnet_path.clone().into(),
       memory_mb: DEFAULT_MEM_MB,
       registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -807,7 +807,7 @@ fn test_activate_subnet_invalid_subnet_id_error() {
     let cost = Network::get_subnet_initialization_cost(0);
     let _ = Balances::deposit_creating(&account(0), cost+1000);
   
-    let add_subnet_data = PreliminarySubnetData {
+    let add_subnet_data = RegistrationSubnetData {
       path: subnet_path.clone().into(),
       memory_mb: DEFAULT_MEM_MB,
       registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -866,7 +866,7 @@ fn test_activate_subnet_already_activated_err() {
     let cost = Network::get_subnet_initialization_cost(0);
     let _ = Balances::deposit_creating(&account(0), cost+1000);
   
-    let add_subnet_data = PreliminarySubnetData {
+    let add_subnet_data = RegistrationSubnetData {
       path: subnet_path.clone().into(),
       memory_mb: DEFAULT_MEM_MB,
       registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -946,7 +946,7 @@ fn test_activate_subnet_enactment_period_remove_subnet() {
     let cost = Network::get_subnet_initialization_cost(0);
     let _ = Balances::deposit_creating(&account(0), cost+1000);
   
-    let add_subnet_data = PreliminarySubnetData {
+    let add_subnet_data = RegistrationSubnetData {
       path: subnet_path.clone().into(),
       memory_mb: DEFAULT_MEM_MB,
       registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -1038,7 +1038,7 @@ fn test_activate_subnet_initializing_error() {
     let cost = Network::get_subnet_initialization_cost(0);
     let _ = Balances::deposit_creating(&account(0), cost+1000);
   
-    let add_subnet_data = PreliminarySubnetData {
+    let add_subnet_data = RegistrationSubnetData {
       path: subnet_path.clone().into(),
       memory_mb: DEFAULT_MEM_MB,
       registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -1111,7 +1111,7 @@ fn test_activate_subnet_min_subnet_nodes_remove_subnet() {
     let cost = Network::get_subnet_initialization_cost(0);
     let _ = Balances::deposit_creating(&account(0), cost+1000);
   
-    let add_subnet_data = PreliminarySubnetData {
+    let add_subnet_data = RegistrationSubnetData {
       path: subnet_path.clone().into(),
       memory_mb: DEFAULT_MEM_MB,
       registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -1172,7 +1172,7 @@ fn test_activate_subnet_min_delegate_balance_remove_subnet() {
     let cost = Network::get_subnet_initialization_cost(0);
     let _ = Balances::deposit_creating(&account(0), cost+1000);
   
-    let add_subnet_data = PreliminarySubnetData {
+    let add_subnet_data = RegistrationSubnetData {
       path: subnet_path.clone().into(),
       memory_mb: DEFAULT_MEM_MB,
       registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -1265,7 +1265,7 @@ fn test_activate_subnet_min_delegate_balance_remove_subnet() {
 
 //     // let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
 
-//     // let add_subnet_data = PreliminarySubnetData {
+//     // let add_subnet_data = RegistrationSubnetData {
 //     //   path: subnet_path.clone().into(),
 //     //   memory_mb: DEFAULT_MEM_MB,
 //     // };
@@ -1301,7 +1301,7 @@ fn test_activate_subnet_min_delegate_balance_remove_subnet() {
 //     build_subnet(subnet_path.clone());
 
 //     assert_eq!(Network::total_subnets(), 1);
-//     // let add_subnet_data = PreliminarySubnetData {
+//     // let add_subnet_data = RegistrationSubnetData {
 //     //   path: subnet_path.clone().into(),
 //     //   memory_mb: DEFAULT_MEM_MB,
 //     // };
@@ -1353,7 +1353,7 @@ fn test_activate_subnet_min_delegate_balance_remove_subnet() {
 //     let cost = Network::get_subnet_initialization_cost(0);
 //     let _ = Balances::deposit_creating(&account(0), cost+1000);
   
-//     let add_subnet_data = PreliminarySubnetData {
+//     let add_subnet_data = RegistrationSubnetData {
 //       path: subnet_path.clone().into(),
 //       memory_mb: 500_000,
 //       registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
@@ -1476,7 +1476,7 @@ fn test_activate_subnet_min_delegate_balance_remove_subnet() {
 // //     for m in 0..n_subnets {
 // //       let subnet_path = format!("petals-team-{m}/StableBeluga");
 // //       let subnet_path_2 = format!("petals-team-{m}/StableBeluga2");
-// //       let add_subnet_data = PreliminarySubnetData {
+// //       let add_subnet_data = RegistrationSubnetData {
 // //         path: subnet_path.clone().into(),
 // //         memory_mb: DEFAULT_MEM_MB,
 // //       };
@@ -1495,7 +1495,7 @@ fn test_activate_subnet_min_delegate_balance_remove_subnet() {
 // //       //     subnet_path.clone().into(),
 // //       //   )
 // //       // );
-// //       let add_subnet_data = PreliminarySubnetData {
+// //       let add_subnet_data = RegistrationSubnetData {
 // //         path: subnet_path.clone().into(),
 // //         memory_mb: DEFAULT_MEM_MB,
 // //       };

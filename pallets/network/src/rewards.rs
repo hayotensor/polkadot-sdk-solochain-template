@@ -63,10 +63,10 @@ impl<T: Config> Pallet<T> {
         // --- Get subnet nodes count to check against attestation count
         // ``reward_subnuts`` is called before ``shift_node_classes`` so we can know how many nodes are submittable
         // while in this function that should have in the epoch the rewards are destined for
-        let submission_nodes_count = Self::get_classified_accounts(subnet_id, &ClassTest::Submittable, epoch as u64).len() as u128;
+        let subnet_node_count = Self::get_classified_accounts(subnet_id, &ClassTest::Submittable, epoch as u64).len() as u128;
 
-        let submission_attestations: u128 = submission.attests.len() as u128;
-        let mut attestation_percentage: u128 = Self::percent_div(submission_attestations, submission_nodes_count);
+        let attestations: u128 = submission.attests.len() as u128;
+        let mut attestation_percentage: u128 = Self::percent_div(attestations, subnet_node_count);
 
         // Redundant
         // When subnet nodes exit, the consensus data is updated to remove them from it
@@ -116,21 +116,7 @@ impl<T: Config> Pallet<T> {
         if attestation_percentage < min_attestation_percentage {
           // --- Slash validator and increase penalty score
           Self::slash_validator(subnet_id, validator, attestation_percentage, block);
-
-          // if subnet_node.classification.class == ClassTest::Accountant {
-          //   // --- Downgrade to submittable if Accountant
-          //   SubnetNodesData::<T>::mutate(
-          //     subnet_id,
-          //     account_id,
-          //     |params: &mut SubnetNode<T::AccountId>| {
-          //       params.classification = SubnetNodeV2Class {
-          //         class: ClassTest::Submittable,
-          //         start_epoch: epoch as u64, // in case rewards are called late, we add them to the next epoch, 2 from the consensus data
-          //       };
-          //     },
-          //   );
-          // }
-
+          
           // --- Attestation not successful, move on to next subnet
           continue
         }
@@ -142,14 +128,16 @@ impl<T: Config> Pallet<T> {
         for subnet_node in SubnetNodesData::<T>::iter_prefix_values(subnet_id) {
           let account_id: T::AccountId = subnet_node.account_id;
 
-          // --- Check if subnet node is past the max registration epochs
+          // --- (if) Check if subnet node is past the max registration epochs
+          // --- (else if) Check if can be included in validation data
+          // Always continue if any of these are true
+          // Only ``included`` or above nodes can get emissions
           if subnet_node.classification.class == ClassTest::Registered {
-            if subnet_node.classification.start_epoch + subnet_node_registration_epochs > epoch as u64 {
+            if subnet_node.classification.start_epoch.saturating_add(subnet_node_registration_epochs) > epoch as u64 {
               Self::perform_remove_subnet_node(block, subnet_id, account_id);
             }
             continue
           } else if subnet_node.classification.class == ClassTest::Idle {
-            // --- Check if can be included in validation data
             // If not, upgrade classification and continue
             // --- Upgrade to included
             SubnetNodesData::<T>::mutate(
@@ -251,7 +239,7 @@ impl<T: Config> Pallet<T> {
 
           // The subnet node has passed the gauntlet and is about to receive rewards
           
-          // --- Decrease absent count by one if in consensus and attested consensus
+          // --- Decrease subnet node penalty count by one if in consensus and attested consensus
           SubnetNodePenalties::<T>::mutate(subnet_id, account_id.clone(), |n: &mut u32| n.saturating_dec());
 
           // --- Calculate score percentage of peer versus sum
@@ -398,10 +386,10 @@ impl<T: Config> Pallet<T> {
   //     let mut nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
   //     nodes.append(&mut SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant));
 
-  //     let mut submission_nodes_count = nodes.len() as u128;
+  //     let mut subnet_node_count = nodes.len() as u128;
 
-  //     let submission_attestations: u128 = submission.attests.len() as u128;
-  //     let mut attestation_percentage: u128 = Self::percent_div(submission_attestations, submission_nodes_count);
+  //     let attestations: u128 = submission.attests.len() as u128;
+  //     let mut attestation_percentage: u128 = Self::percent_div(attestations, subnet_node_count);
 
   //     // Redundant
   //     // When subnet nodes exit, the consensus data is updated to remove them from it
@@ -603,7 +591,7 @@ impl<T: Config> Pallet<T> {
   //       epoch, 
   //       RewardsData {
   //         validator: T::AccountId::decode(&mut TrailingZeroInput::zeroes()).unwrap(),
-  //         nodes_count: 0,
+  //         subnet_node_count: 0,
   //         sum: 0,
   //         attests: BTreeSet::new(),
   //         data: Vec::new(),
@@ -722,15 +710,15 @@ impl<T: Config> Pallet<T> {
   //     // --- Get subnet nodes count to check against attestation count
   //     // ``reward_subnuts`` is called before ``shift_node_classes`` so we can know how many nodes are submittable
   //     // while in this function that should have in the epoch the rewards are destined for
-  //     // let submission_nodes_count = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable).len() as u128;
+  //     // let subnet_node_count = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable).len() as u128;
 
   //     let mut nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
   //     nodes.append(&mut SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant));
 
-  //     let mut submission_nodes_count = nodes.len() as u128;
+  //     let mut subnet_node_count = nodes.len() as u128;
 
-  //     let submission_attestations: u128 = submission.attests.len() as u128;
-  //     let mut attestation_percentage: u128 = Self::percent_div(submission_attestations, submission_nodes_count);
+  //     let attestations: u128 = submission.attests.len() as u128;
+  //     let mut attestation_percentage: u128 = Self::percent_div(attestations, subnet_node_count);
 
   //     // Redundant
   //     // When subnet nodes exit, the consensus data is updated to remove them from it
@@ -952,7 +940,7 @@ impl<T: Config> Pallet<T> {
   //       epoch, 
   //       RewardsData {
   //         validator: T::AccountId::decode(&mut TrailingZeroInput::zeroes()).unwrap(),
-  //         nodes_count: 0,
+  //         subnet_node_count: 0,
   //         sum: 0,
   //         attests: BTreeSet::new(),
   //         data: Vec::new(),
