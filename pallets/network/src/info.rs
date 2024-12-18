@@ -10,7 +10,7 @@ impl<T: Config> Pallet<T> {
     let block: u64 = Self::get_current_block_as_u64();
     let epoch_length: u64 = T::EpochLength::get();
     let epoch: u64 = block / epoch_length;
-    Self::get_classified_subnet_nodes(subnet_id, &ClassTest::Idle, epoch)
+    Self::get_classified_subnet_nodes(subnet_id, &SubetNodeClass::Idle, epoch)
   }
 
   pub fn get_subnet_nodes_included(
@@ -22,7 +22,7 @@ impl<T: Config> Pallet<T> {
     let block: u64 = Self::get_current_block_as_u64();
     let epoch_length: u64 = T::EpochLength::get();
     let epoch: u64 = block / epoch_length;
-    Self::get_classified_subnet_nodes(subnet_id, &ClassTest::Included, epoch)
+    Self::get_classified_subnet_nodes(subnet_id, &SubetNodeClass::Included, epoch)
   }
 
   // pub fn get_subnet_nodes_submittable(
@@ -52,7 +52,7 @@ impl<T: Config> Pallet<T> {
     let block: u64 = Self::get_current_block_as_u64();
     let epoch_length: u64 = T::EpochLength::get();
     let epoch: u64 = block / epoch_length;
-    Self::get_classified_subnet_nodes(subnet_id, &ClassTest::Submittable, epoch)
+    Self::get_classified_subnet_nodes(subnet_id, &SubetNodeClass::Submittable, epoch)
   }
 
   pub fn get_subnet_nodes_subnet_unconfirmed_count(

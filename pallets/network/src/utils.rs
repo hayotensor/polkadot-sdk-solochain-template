@@ -124,19 +124,11 @@ impl<T: Config> Pallet<T> {
     if let Ok(subnet_node) = SubnetNodesData::<T>::try_get(subnet_id, account_id.clone()) {
       let peer_id = subnet_node.peer_id;
 
-      SubnetNodesData::<T>::remove(subnet_id, account_id.clone());
-
-      // Remove SubnetNodeAccount peer_id as key
-      SubnetNodeAccount::<T>::remove(subnet_id, peer_id.clone());
-      // Update total subnet peers by substracting 1
-      TotalSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| *n -= 1);
-      TotalActiveSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| n.saturating_dec());
-
       // Remove from attestations
       let epoch_length: u64 = T::EpochLength::get();
 			let epoch: u64 = block / epoch_length;
 
-      let submittable_nodes: BTreeSet<T::AccountId> = Self::get_classified_accounts(subnet_id, &ClassTest::Submittable, epoch);
+      let submittable_nodes: BTreeSet<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch);
 
       SubnetRewardsSubmission::<T>::try_mutate_exists(
         subnet_id,
@@ -150,32 +142,39 @@ impl<T: Config> Pallet<T> {
             
             // --- Remove from attestations
             let mut attests = &mut params.attests;
-            if attests.remove(&account_id.clone()) {
+            if attests.remove(&account_id.clone()).is_some() {
               params.attests = attests.clone();
-            }
-
-            // --- Remove from submittable nodes count if necessary
-            // Mutate down if node was counted towards ``nodes_count``
-            // Redundant now 
-            // TODO: Remove for mainnet, it's not used in new rewards mechanism
-            let nodes_count = params.nodes_count;
-            if submittable_nodes.get(&account_id.clone()).is_some() {
-              params.nodes_count = nodes_count - 1;
             }
           };
           Ok(())
         }
       );
     
+      AccountantData::<T>::try_mutate_exists(
+        subnet_id,
+        epoch as u32,
+        |params| -> DispatchResult {
+          let params = if let Some(params) = params {
+            // --- Remove from attestations
+            let mut attests = &mut params.attests;
+            if attests.remove(&account_id.clone()).is_some() {
+              params.attests = attests.clone();
+            }
+          };
+          Ok(())
+        }
+      );
+
+      SubnetNodesData::<T>::remove(subnet_id, account_id.clone());
+
+      // Remove SubnetNodeAccount peer_id as key
+      SubnetNodeAccount::<T>::remove(subnet_id, peer_id.clone());
+      // Update total subnet peers by substracting 1
+      TotalSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| n.saturating_dec());
+      TotalActiveSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| n.saturating_dec());
+
       // Reset sequential absent subnet node count
       SubnetNodePenalties::<T>::remove(subnet_id, account_id.clone());
-
-      // Remove from classifications
-      // for class_id in SubnetNodeClass::iter() {
-      //   let mut node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, class_id);
-      //   node_sets.retain(|k, _| *k != account_id.clone());
-      //   SubnetNodesClasses::<T>::insert(subnet_id, class_id, node_sets);
-      // }
 
       Self::deposit_event(
         Event::SubnetNodeRemoved { 
@@ -350,7 +349,7 @@ impl<T: Config> Pallet<T> {
 
       // TODO: Get delegate total supply and ensure is above minimum required balance
       //       Otherwise, remove subnet
-      let subnet_nodes_count = Self::get_classified_accounts(subnet_id, &ClassTest::Submittable, epoch as u64).len();
+      let subnet_nodes_count = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch as u64).len();
 
       // Only choose validator if min nodes are present
       // The ``SubnetPenaltyCount`` when surpassed doesn't penalize anyone, only removes the subnet from the chain
@@ -418,7 +417,7 @@ impl<T: Config> Pallet<T> {
       }
 
       // let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
-      let subnet_nodes = Self::get_classified_accounts(subnet_id, &ClassTest::Submittable, epoch);
+      let subnet_nodes = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch);
 
       // --- Ensure min subnet nodes that are submittable are at least the minimum required to include in subnet democracy
       if (subnet_nodes.len() as u32) < min_subnet_nodes {
@@ -501,14 +500,14 @@ impl<T: Config> Pallet<T> {
   }
 
   /// Get subnet nodes by classification
-  pub fn get_classified_subnet_nodes(subnet_id: u32, classification: &ClassTest, epoch: u64) -> Vec<SubnetNode<T::AccountId>> {
+  pub fn get_classified_subnet_nodes(subnet_id: u32, classification: &SubetNodeClass, epoch: u64) -> Vec<SubnetNode<T::AccountId>> {
     SubnetNodesData::<T>::iter_prefix_values(subnet_id)
       .filter(|subnet_node| subnet_node.has_classification(classification, epoch))
       .collect()
   }
 
   /// Get subnet node ``account_ids`` by classification
-  pub fn get_classified_accounts(subnet_id: u32, classification: &ClassTest, epoch: u64) -> BTreeSet<T::AccountId> {
+  pub fn get_classified_accounts(subnet_id: u32, classification: &SubetNodeClass, epoch: u64) -> BTreeSet<T::AccountId> {
     SubnetNodesData::<T>::iter_prefix_values(subnet_id)
       .filter(|subnet_node| subnet_node.has_classification(classification, epoch))
       .map(|subnet_node| subnet_node.account_id)

@@ -19,6 +19,7 @@ impl<T: Config> Pallet<T> {
   pub fn do_submit_accountant_data(
     accountant: T::AccountId,
     subnet_id: u32,
+    block: u64, 
     epoch: u32,
     data: Vec<AccountantDataNodeParams>,
   ) -> DispatchResult {
@@ -45,6 +46,7 @@ impl<T: Config> Pallet<T> {
       Some(submitted) => *submitted,
       None => false,
     };
+
     ensure!(
       !has_submitted,
       Error::<T>::NotAccountant
@@ -63,16 +65,12 @@ impl<T: Config> Pallet<T> {
     current_accountants.insert(accountant.clone(), true);
     CurrentAccountants::<T>::insert(subnet_id, epoch, current_accountants);
     
-    let accountant_data_index: u32 = AccountantDataCount::<T>::get(subnet_id);
-
-    let block: u64 = Self::get_current_block_as_u64();
-
-    let mut attests: BTreeSet<T::AccountId> = BTreeSet::new();
-    attests.insert(accountant.clone());
+    let mut attests: BTreeMap<T::AccountId, u64> = BTreeMap::new();
+    attests.insert(accountant.clone(), block);
 
     AccountantData::<T>::insert(
       subnet_id,
-      accountant_data_index,
+      epoch,
       AccountantDataParams {
         accountant,
         block,
@@ -88,6 +86,7 @@ impl<T: Config> Pallet<T> {
   pub fn do_attest_accountant_data(
     account_id: T::AccountId,
     subnet_id: u32,
+    block: u64, 
     epoch: u32,
   ) -> DispatchResult {
     let accountant_data_index: u32 = AccountantDataCount::<T>::get(subnet_id);
@@ -99,7 +98,7 @@ impl<T: Config> Pallet<T> {
         let params = maybe_params.as_mut().ok_or(Error::<T>::InvalidSubnetRewardsSubmission)?;
         let mut attests = &mut params.attests;
 
-        ensure!(attests.insert(account_id.clone()), Error::<T>::AlreadyAttested);
+        ensure!(attests.insert(account_id.clone(), block) == None, Error::<T>::AlreadyAttested);
 
         params.attests = attests.clone();
         Ok(())
@@ -131,7 +130,7 @@ impl<T: Config> Pallet<T> {
         Err(()) => continue,
       };
 
-      let subnet_node_count = Self::get_classified_accounts(subnet_id, &ClassTest::Submittable, epoch as u64).len() as u128;
+      let subnet_node_count = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch as u64).len() as u128;
 
       let attestations: u128 = accountant_data.attests.len() as u128;
       let mut attestation_percentage: u128 = Self::percent_div(attestations, subnet_node_count);
@@ -166,7 +165,7 @@ impl<T: Config> Pallet<T> {
     min_subnet_nodes: u32,
     target_accountants_len: u32,
   ) {
-    let subnet_nodes = Self::get_classified_subnet_nodes(subnet_id, &ClassTest::Submittable, epoch as u64);
+    let subnet_nodes = Self::get_classified_subnet_nodes(subnet_id, &SubetNodeClass::Submittable, epoch as u64);
     let subnet_nodes_len: u32 = subnet_nodes.len() as u32;
 
     // --- Ensure min subnet peers that are submittable are at least the minimum required

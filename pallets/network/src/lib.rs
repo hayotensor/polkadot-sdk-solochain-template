@@ -462,13 +462,13 @@ pub mod pallet {
 	
 	/// Subnet node classification
 	/// u64 is epoch subnet node is inducted as each classification 
-	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
-	pub struct SubnetNodeClassification {
-		pub idle: u64,
-		pub inclusion: u64,
-		pub submission: u64,
-		pub accountant: u64,
-	}
+	// #[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
+	// pub struct SubnetNodeClassification {
+	// 	pub idle: u64,
+	// 	pub inclusion: u64,
+	// 	pub submission: u64,
+	// 	pub accountant: u64,
+	// }
 
 	/// account_id: 		Coldkey of subnet node
 	/// hotkey: 				Hotkey of subnet node for interacting with subnet on-chain communication
@@ -484,7 +484,7 @@ pub mod pallet {
 		pub hotkey: AccountId,
 		pub peer_id: PeerId,
 		pub initialized: u64,
-		pub classification: SubnetNodeV2Class,
+		pub classification: SubnetNodeClassification,
 		pub a: Vec<u8>,
 		pub b: Vec<u8>,
 		pub c: Vec<u8>,
@@ -496,7 +496,7 @@ pub mod pallet {
 	/// Submittable: Subnet node updates to Submittble from Included on the first successful consensus epoch they are included in consensus data
 	/// Accountant:  Subnet node updates to Accountant after multiple successful validations
 	#[derive(Default, EnumIter, FromRepr, Copy, Encode, Decode, Clone, PartialOrd, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
-  pub enum ClassTest {
+  pub enum SubetNodeClass {
 		#[default] Registered,
     Idle,
     Included,
@@ -505,28 +505,20 @@ pub mod pallet {
   }
 
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
-	pub struct SubnetNodeV2Class {
-		pub class: ClassTest,
+	pub struct SubnetNodeClassification {
+		pub class: SubetNodeClass,
 		pub start_epoch: u64,
-	}
-
-	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
-	pub struct SubnetNodeV2<AccountId> {
-		pub account_id: AccountId,
-		pub peer_id: PeerId,
-		pub initialized: u64,
-		pub classification: SubnetNodeV2Class,
 	}
 
 	impl<AccountId> SubnetNode<AccountId> {
     pub fn dude(&self) -> bool {
 			self.initialized > 0
     }
-		// pub fn has_classification(&self, required: &ClassTest, epoch: u64) -> bool {
+		// pub fn has_classification(&self, required: &SubetNodeClass, epoch: u64) -> bool {
 		// 	self.classification.class >= *required && self.classification.start_epoch <= epoch && self.initialized > 0
 		// }
 
-		pub fn has_classification(&self, required: &ClassTest, epoch: u64) -> bool {
+		pub fn has_classification(&self, required: &SubetNodeClass, epoch: u64) -> bool {
 			self.classification.class >= *required && self.classification.start_epoch <= epoch
 		}
 	}
@@ -550,12 +542,16 @@ pub mod pallet {
 		EnactmentPeriod,
   }
 
+	/// Attests format for consensus
+	/// ``u64`` is the block number of the accounts attestation for subnets to utilize to measure attestation speed
+	/// The blockchain itself doesn't utilize this data
+	pub type Attests<AccountId> = BTreeMap<AccountId, u64>;
+
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 	pub struct RewardsData<AccountId> {
 		pub validator: AccountId, // Chosen validator of the epoch
-		pub nodes_count: u32, // Number of nodes expected to submit attestations
 		pub sum: u128, // Sum of the data scores
-		pub attests: BTreeSet<AccountId>, // Count of attestations of the submitted data
+		pub attests: Attests<AccountId>, // Count of attestations of the submitted data
 		pub data: Vec<SubnetNodeData>, // Data submitted by chosen validator
 		pub complete: bool, // Data submitted by chosen validator
 	}
@@ -616,7 +612,7 @@ pub mod pallet {
 		pub block: u64,
 		pub epoch: u32,
 		pub data: Vec<AccountantDataNodeParams>,
-		pub attests: BTreeSet<AccountId>,
+		pub attests: Attests<AccountId>,
 	}
 
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
@@ -701,8 +697,8 @@ pub mod pallet {
 			hotkey: T::AccountId::decode(&mut TrailingZeroInput::zeroes()).unwrap(),
 			peer_id: PeerId(Vec::new()),
 			initialized: 0,
-			classification: SubnetNodeV2Class {
-				class: ClassTest::Registered,
+			classification: SubnetNodeClassification {
+				class: SubetNodeClass::Registered,
 				start_epoch: 0,
 			},
 			a: Vec::new(),
@@ -801,12 +797,12 @@ pub mod pallet {
 		1e+18 as u128
 	}
 	#[pallet::type_value]
-	pub fn DefaultBaseReward() -> u128 {
+	pub fn DefaultBaseValidatorReward() -> u128 {
 		1e+18 as u128
 	}
 	#[pallet::type_value]
-	pub fn DefaultBaseSubnetReward() -> u128 {
-		9e+18 as u128
+	pub fn DefaultBaseAccountantReward() -> u128 {
+		1e+9 as u128
 	}
 	#[pallet::type_value]
 	pub fn DefaultMaxSequentialAbsentSubnetNode() -> u32 {
@@ -1178,18 +1174,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type MinVastMajorityAttestationPercentage<T> = StorageValue<_, u128, ValueQuery, DefaultMinVastMajorityAttestationPercentage>;
 
-	// Rewards
-
-	// Base reward per subnet
-	#[pallet::storage]
-	pub type BaseSubnetReward<T> = StorageValue<_, u128, ValueQuery, DefaultBaseSubnetReward>;
+	// Rewards (validator, scoring consensus)
 	
-	// TODO: BaseReward → BaseValidatorReward
-	// Base reward per epoch for validators and accountants
+	// Base reward per epoch for validators
 	// This is the base reward to subnet validators on successful attestation
-	// This is the base reward to accountants when they agree to validation data.?
 	#[pallet::storage]
-	pub type BaseReward<T> = StorageValue<_, u128, ValueQuery, DefaultBaseReward>;
+	pub type BaseValidatorReward<T> = StorageValue<_, u128, ValueQuery, DefaultBaseValidatorReward>;
 
 	// Base reward per MB per epoch based on 4,380 MB per year
 	#[pallet::storage]
@@ -1217,6 +1207,19 @@ pub mod pallet {
 		ValueQuery,
 		DefaultZeroU32,
 	>;
+
+	// Rewards (accountant, scoring consensus)
+
+	// Base reward per epoch for accountants
+	// This is the base reward to subnet accountants on successful attestation
+	#[pallet::storage]
+	pub type BaseAccountantReward<T> = StorageValue<_, u128, ValueQuery, DefaultBaseAccountantReward>;
+
+	// Base reward per epoch for accountants
+	// This is the base reward to subnet accountants on successful attestation
+	#[pallet::storage]
+	pub type BaseAccountingReward<T> = StorageValue<_, u128, ValueQuery, DefaultBaseAccountantReward>;
+
 
 	// Maximum epochs in a row a subnet node can be absent from validator submitted consensus data
 	#[pallet::storage]
@@ -1441,7 +1444,7 @@ pub mod pallet {
 			block: 0,
 			epoch: 0,
 			data: Vec::new(),
-			attests: BTreeSet::new(),
+			attests: BTreeMap::new(),
 		};
 	}
 
@@ -2467,16 +2470,16 @@ pub mod pallet {
 			// ========================
 			// Insert peer into storage
 			// ========================
-			let mut classification: SubnetNodeV2Class = SubnetNodeV2Class {
-				class: ClassTest::Registered,
+			let mut classification: SubnetNodeClassification = SubnetNodeClassification {
+				class: SubetNodeClass::Registered,
 				start_epoch: epoch,
 			};
 			// --- Initial nodes before activation are entered as ``submittable`` nodes
 			// They initiate the first consensus epoch and are responsible for increasing classifications
 			// of other nodes that come in post activation
 			if subnet.activated == 0 {
-				classification = SubnetNodeV2Class {
-					class: ClassTest::Submittable,
+				classification = SubnetNodeClassification {
+					class: SubetNodeClass::Submittable,
 					start_epoch: epoch,
 				};
 			}
@@ -2535,22 +2538,22 @@ pub mod pallet {
 
 			SubnetNodesData::<T>::try_mutate_exists(
 				subnet_id,
-				account_id.clone(),
+				account_id,
 				|maybe_params| -> DispatchResult {
 					let params = maybe_params.as_mut().ok_or(Error::<T>::SubnetNodeExist)?;	
 					ensure!(
 						params.initialized == 0,
             Error::<T>::SubnetNodeAlreadyActivated
 					);
-					let mut class = ClassTest::Idle;
+					let mut class = SubetNodeClass::Idle;
 					let mut epoch_increase = 0;
 					if subnet.activated == 0 {
-						class = ClassTest::Submittable
+						class = SubetNodeClass::Submittable
 					} else {
 						epoch_increase += 1;
 					}
 					params.initialized = block;
-					params.classification = SubnetNodeV2Class {
+					params.classification = SubnetNodeClassification {
 						class: class,
 						start_epoch: epoch + epoch_increase,
 					};
@@ -2584,8 +2587,8 @@ pub mod pallet {
             Error::<T>::SubnetNodeNotActivated
 					);
 					params.initialized = 0;
-					params.classification = SubnetNodeV2Class {
-						class: ClassTest::Registered,
+					params.classification = SubnetNodeClassification {
+						class: SubetNodeClass::Registered,
 						start_epoch: epoch,
 					};
 					Ok(())
