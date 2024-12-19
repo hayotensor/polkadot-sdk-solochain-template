@@ -50,17 +50,26 @@ impl<T: Config> Pallet<T> {
     };
 
     // --- Ensure the minimum required subnet peers exist
-    // --- Only accountants can vote on proposals
+    // --- Only submittable can vote on proposals
     // --- Get all eligible voters from this block
-    let accountant_nodes: BTreeSet<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch);
-    let accountant_nodes_count = accountant_nodes.len();
+    let subnet_nodes: BTreeSet<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch);
+    let subnet_nodes_count = subnet_nodes.len();
 
     // There must always be the required minimum subnet peers for each vote
     // This ensure decentralization in order for proposals to be accepted 
 
     // safe unwrap after `contains_key`
     ensure!(
-      accountant_nodes_count as u32 >= subnet.min_nodes,
+      subnet_nodes_count as u32 >= subnet.min_nodes,
+      Error::<T>::SubnetNodesMin
+    );
+
+    // --- Ensure min nodes for proposals
+    // Because of slashing of funds is possible, we ensure the subnet is well decentralized
+    // If a subnet is under this amount, it's best to have logic in the subnet to have them absent
+    // from consensus data and have them removed after the required consecutive epochs
+    ensure!(
+      subnet_nodes_count as u32 >= ProposalMinSubnetNodes::<T>::get(),
       Error::<T>::SubnetNodesMin
     );
 
@@ -94,40 +103,43 @@ impl<T: Config> Pallet<T> {
       ExistenceRequirement::KeepAlive,
     );
 
-    let proposal_index = ProposalsCount::<T>::get();
+    let proposal_id = ProposalsCount::<T>::get();
 
     // TODO: Test adding quorum and consensus into the Proposal storage
     //       by using the amount of nodes in the subnet
     //       It's possible the quorum or consensus for smaller subnets may not be divisible
     Proposals::<T>::insert(
       subnet_id,
-      proposal_index,
+      proposal_id,
       ProposalParams {
         subnet_id: subnet_id,
         plaintiff: account_id.clone(),
         defendant: defendant_account_id.clone(),
         plaintiff_bond: proposal_bid_amount,
         defendant_bond: 0,
-        eligible_voters: accountant_nodes,
+        eligible_voters: subnet_nodes,
         votes: VoteParams {
           yay: BTreeSet::new(),
           nay: BTreeSet::new(),
         },
         start_block: block,
         challenge_block: 0, // No challenge block initially
-        plaintiff_data: data,
+        plaintiff_data: data.clone(),
         defendant_data: Vec::new(),
         complete: false,
       }
     );
 
-    ProposalsCount::<T>::put(proposal_index + 1);
+    ProposalsCount::<T>::put(proposal_id + 1);
 
     Self::deposit_event(
-      Event::DishonestSubnetNodeProposed{ 
+      Event::Proposal { 
         subnet_id: subnet_id, 
-        account_id: account_id, 
-        block: block
+        proposal_id: proposal_id,
+        epoch: epoch as u32,
+        plaintiff: account_id, 
+        defendant: defendant_account_id,
+        plaintiff_data: data
       }
     );
 
@@ -145,6 +157,15 @@ impl<T: Config> Pallet<T> {
       Err(()) =>
         return Err(Error::<T>::ProposalInvalid.into()),
     };
+
+    // Self::deposit_event(
+    //   Event::ProposalAttested{ 
+    //     subnet_id: subnet_id, 
+    //     plaintiff: account_id, 
+    //     defendant: defendant_account_id,
+    //     block: block
+    //   }
+    // );
 
     Ok(())
   }
@@ -211,13 +232,24 @@ impl<T: Config> Pallet<T> {
       ExistenceRequirement::KeepAlive,
     );
 
+    let epoch: u64 = block / T::EpochLength::get();
+
     Proposals::<T>::mutate(
       subnet_id,
-      0,
+      proposal_id,
       |params: &mut ProposalParams<T::AccountId>| {
-        params.defendant_data = data;
+        params.defendant_data = data.clone();
         params.defendant_bond = proposal.plaintiff_bond;
         params.challenge_block = block;
+      }
+    );
+
+    Self::deposit_event(
+      Event::ProposalChallenged { 
+        subnet_id: subnet_id, 
+        proposal_id: proposal_id,
+        defendant: account_id, 
+        defendant_data: data,
       }
     );
 
@@ -295,13 +327,22 @@ impl<T: Config> Pallet<T> {
       proposal_id,
       |params: &mut ProposalParams<T::AccountId>| {
         if vote == VoteType::Yay {
-          params.votes.yay.insert(account_id);
+          params.votes.yay.insert(account_id.clone());
         } else {
-          params.votes.nay.insert(account_id);
+          params.votes.nay.insert(account_id.clone());
         };  
       }
     );
     
+    Self::deposit_event(
+      Event::ProposalVote { 
+        subnet_id: subnet_id, 
+        proposal_id: proposal_id,
+        account_id: account_id,
+        vote: vote,
+      }
+    );
+
     Ok(())
   }
 
@@ -334,15 +375,20 @@ impl<T: Config> Pallet<T> {
       Error::<T>::ProposalComplete
     );
 
-    Proposals::<T>::remove(
-      subnet_id,
-      proposal_id,
-    );
+    // --- Remove proposal
+    Proposals::<T>::remove(subnet_id, proposal_id);
 
     let plaintiff_bond_as_balance = Self::u128_to_balance(proposal.plaintiff_bond);
 
     // Give plaintiff bond back
     T::Currency::deposit_creating(&proposal.plaintiff, plaintiff_bond_as_balance.unwrap());
+
+    Self::deposit_event(
+      Event::ProposalCanceled { 
+        subnet_id: subnet_id, 
+        proposal_id: proposal_id,
+      }
+    );
 
     Ok(())
   }
@@ -445,6 +491,13 @@ impl<T: Config> Pallet<T> {
       );
     }
 
+    Self::deposit_event(
+      Event::ProposalFinalized{ 
+        subnet_id: subnet_id, 
+        proposal_id: proposal_id, 
+      }
+    );
+
     Ok(())
   }
 
@@ -492,6 +545,12 @@ impl<T: Config> Pallet<T> {
     let voting_period = VotingPeriod::<T>::get();
 
     let mut active_proposal: bool = false;
+
+    // Proposals::<T>::iter_prefix_values(subnet_id)
+    //   .find(|x| {
+    //     .defendant == *account_id
+    //   })
+
     for proposal in Proposals::<T>::iter_prefix_values(subnet_id) {
       let defendant: T::AccountId = proposal.defendant;
       if defendant != account_id {

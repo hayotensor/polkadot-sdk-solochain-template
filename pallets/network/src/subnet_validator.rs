@@ -136,7 +136,7 @@ impl<T: Config> Pallet<T> {
       account_id.clone()
     ) {
       Ok(subnet_node) => subnet_node.has_classification(&SubetNodeClass::Submittable, epoch as u64),
-      Err(()) => return Err(Error::<T>::SubnetNotExist.into()),
+      Err(()) => return Err(Error::<T>::SubnetNodeNotExist.into()),
     };
 
     SubnetRewardsSubmission::<T>::try_mutate_exists(

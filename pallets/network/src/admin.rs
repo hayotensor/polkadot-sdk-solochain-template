@@ -67,6 +67,11 @@ impl<T: Config> Pallet<T> {
     Ok(())
   }
 
+  pub fn set_proposal_min_subnet_nodes(value: u32) -> DispatchResult {
+    ProposalMinSubnetNodes::<T>::put(value);
+    Ok(())
+  }
+  
   pub fn set_subnet_node_registration_epochs(value: u64) -> DispatchResult {
     SubnetNodeRegistrationEpochs::<T>::put(value);
     Ok(())

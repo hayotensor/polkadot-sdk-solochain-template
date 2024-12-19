@@ -89,13 +89,20 @@ impl<T: Config> Pallet<T> {
     block: u64, 
     epoch: u32,
   ) -> DispatchResult {
-    let accountant_data_index: u32 = AccountantDataCount::<T>::get(subnet_id);
-
+    // --- Ensure subnet node exists and is submittable
+    match SubnetNodesData::<T>::try_get(
+      subnet_id, 
+      account_id.clone()
+    ) {
+      Ok(subnet_node) => subnet_node.has_classification(&SubetNodeClass::Submittable, epoch as u64),
+      Err(()) => return Err(Error::<T>::SubnetNodeNotExist.into()),
+    };
+  
     AccountantData::<T>::try_mutate_exists(
       subnet_id,
       epoch,
       |maybe_params| -> DispatchResult {
-        let params = maybe_params.as_mut().ok_or(Error::<T>::InvalidSubnetRewardsSubmission)?;
+        let params = maybe_params.as_mut().ok_or(Error::<T>::InvalidAccountantData)?;
         let mut attests = &mut params.attests;
 
         ensure!(attests.insert(account_id.clone(), block) == None, Error::<T>::AlreadyAttested);

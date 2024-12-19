@@ -219,10 +219,12 @@ pub mod pallet {
 		SetSubnetConsensusUnconfirmedThreshold(u128),
 		SetRemoveSubnetNodeEpochPercentage(u128),
 
-		// Dishonesty Proposals
-		DishonestSubnetNodeProposed { subnet_id: u32, account_id: T::AccountId, block: u64},
-		DishonestSubnetNodeVote { subnet_id: u32, account_id: T::AccountId, voter_account_id: T::AccountId, block: u64 },
-		DishonestAccountRemoved { subnet_id: u32, account_id: T::AccountId, block: u64},
+		// Proposals
+		Proposal { subnet_id: u32, proposal_id: u32, epoch: u32, plaintiff: T::AccountId, defendant: T::AccountId, plaintiff_data: Vec<u8> },
+		ProposalChallenged { subnet_id: u32, proposal_id: u32, defendant: T::AccountId, defendant_data: Vec<u8> },
+		ProposalVote { subnet_id: u32, proposal_id: u32, account_id: T::AccountId, vote: VoteType },
+		ProposalFinalized { subnet_id: u32, proposal_id: u32 },
+		ProposalCanceled { subnet_id: u32, proposal_id: u32 },
 
 		// Validation and Attestation
 		ValidatorSubmission { subnet_id: u32, account_id: T::AccountId, epoch: u32},
@@ -428,9 +430,9 @@ pub mod pallet {
 		DuplicateVote,
 		NotAccountant,
 		InvalidAccountantDataId,
-		InvalidAccountantData,
 		DataEmpty,
 
+		InvalidAccountantData,
 		InvalidSubnetRewardsSubmission,
 		SubnetInitializing,
 		SubnetActivatedAlready,
@@ -1495,6 +1497,14 @@ pub mod pallet {
 		ValueQuery,
 		DefaultProposalParams<T>,
 	>;
+	
+	#[pallet::type_value]
+	pub fn DefaultProposalMinSubnetNodes() -> u32 {
+		16
+	}
+
+	#[pallet::storage] 
+	pub type ProposalMinSubnetNodes<T> = StorageValue<_, u32, ValueQuery, DefaultProposalMinSubnetNodes>;
 
 	#[pallet::type_value]
 	pub fn DefaultProposalsCount() -> u32 {
@@ -2365,6 +2375,15 @@ pub mod pallet {
 
 			// Remove all subnet consensus data
 			let _ = SubnetPenaltyCount::<T>::remove(subnet_id);
+
+			// Remove consensus data
+			let _ = SubnetRewardsSubmission::<T>::clear_prefix(subnet_id, u32::MAX, None);
+
+			// Remove accounting data
+			let _ = AccountantData::<T>::clear_prefix(subnet_id, u32::MAX, None);
+
+			// Remove proposals
+			let _ = Proposals::<T>::clear_prefix(subnet_id, u32::MAX, None);
 	
 			Self::deposit_event(Event::SubnetRemoved { 
 				subnet_id: subnet_id, 
