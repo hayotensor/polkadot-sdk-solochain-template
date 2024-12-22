@@ -49,6 +49,12 @@ impl<T: Config> Pallet<T> {
       Err(()) => return Err(Error::<T>::PeerIdNotExist.into()),
     };
 
+    // --- Disputed account_id cannot be the proposer
+    ensure!(
+      defendant_account_id.clone() != account_id.clone(),
+      Error::<T>::PlaintiffIsDefendant
+    );
+
     // --- Ensure the minimum required subnet peers exist
     // --- Only submittable can vote on proposals
     // --- Get all eligible voters from this block
@@ -74,7 +80,16 @@ impl<T: Config> Pallet<T> {
     );
 
     ensure!(
-      !Self::account_has_active_proposal(
+      !Self::account_has_active_proposal_as_plaintiff(
+        subnet_id, 
+        account_id.clone(), 
+        block,
+      ),
+      Error::<T>::NodeHasActiveProposal
+    );
+
+    ensure!(
+      !Self::account_has_active_proposal_as_defendant(
         subnet_id, 
         defendant_account_id.clone(), 
         block,
@@ -158,14 +173,14 @@ impl<T: Config> Pallet<T> {
         return Err(Error::<T>::ProposalInvalid.into()),
     };
 
-    // Self::deposit_event(
-    //   Event::ProposalAttested{ 
-    //     subnet_id: subnet_id, 
-    //     plaintiff: account_id, 
-    //     defendant: defendant_account_id,
-    //     block: block
-    //   }
-    // );
+    Self::deposit_event(
+      Event::ProposalAttested{ 
+        subnet_id: subnet_id, 
+        proposal_id: proposal_id, 
+        account_id: account_id,
+        attestor_data: data
+      }
+    );
 
     Ok(())
   }
@@ -534,9 +549,46 @@ impl<T: Config> Pallet<T> {
     }
   }
 
+  fn account_has_active_proposal_as_plaintiff(
+    subnet_id: u32, 
+    account_id: T::AccountId, 
+    block: u64,
+  ) -> bool {
+    let challenge_period = ChallengePeriod::<T>::get();
+    let voting_period = VotingPeriod::<T>::get();
+
+    let mut active_proposal: bool = false;
+
+    for proposal in Proposals::<T>::iter_prefix_values(subnet_id) {
+      let plaintiff: T::AccountId = proposal.plaintiff;
+      if plaintiff != account_id {
+        continue;
+      }
+
+      // At this point we have a proposal that matches the plaintiff
+      let proposal_block: u64 = proposal.start_block;
+      let challenge_block: u64 = proposal.challenge_block;
+      if challenge_block == 0 {
+        // If time remaining for challenge
+        if block < proposal.start_block + challenge_period {
+          active_proposal = true;
+          break;
+        }
+      } else {
+        // If time remaining for vote
+        if block < challenge_block + voting_period {
+          active_proposal = true;
+          break;
+        }
+      }
+    }
+
+    active_proposal
+  }
+
   /// Does a subnet node have a proposal against them under the following conditions
   /// Proposal must not be completed to qualify or awaiting challenge
-  fn account_has_active_proposal(
+  fn account_has_active_proposal_as_defendant(
     subnet_id: u32, 
     account_id: T::AccountId, 
     block: u64,

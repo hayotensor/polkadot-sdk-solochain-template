@@ -222,6 +222,7 @@ pub mod pallet {
 		// Proposals
 		Proposal { subnet_id: u32, proposal_id: u32, epoch: u32, plaintiff: T::AccountId, defendant: T::AccountId, plaintiff_data: Vec<u8> },
 		ProposalChallenged { subnet_id: u32, proposal_id: u32, defendant: T::AccountId, defendant_data: Vec<u8> },
+		ProposalAttested { subnet_id: u32, proposal_id: u32, account_id: T::AccountId, attestor_data: Vec<u8> },
 		ProposalVote { subnet_id: u32, proposal_id: u32, account_id: T::AccountId, vote: VoteType },
 		ProposalFinalized { subnet_id: u32, proposal_id: u32 },
 		ProposalCanceled { subnet_id: u32, proposal_id: u32 },
@@ -431,6 +432,7 @@ pub mod pallet {
 		NotAccountant,
 		InvalidAccountantDataId,
 		DataEmpty,
+		PlaintiffIsDefendant,
 
 		InvalidAccountantData,
 		InvalidSubnetRewardsSubmission,
