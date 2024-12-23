@@ -924,16 +924,6 @@ pub mod pallet {
 	#[pallet::getter(fn subnet_paths)]
 	pub type SubnetPaths<T: Config> = StorageMap<_, Blake2_128Concat, Vec<u8>, u32>;
 
-	#[pallet::storage] // subnet ID => account_id
-	pub type SubnetActivated<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		Vec<u8>,
-		SubnetDemocracySubnetData,
-		ValueQuery,
-		DefaultSubnetDemocracySubnetData,
-	>;
-
 	/// Minimum blocks required from subnet registration to activation
 	#[pallet::storage]
 	pub type MinSubnetRegistrationBlocks<T> = StorageValue<_, u64, ValueQuery, DefaultMinSubnetRegistrationBlocks>;
@@ -2566,11 +2556,14 @@ pub mod pallet {
 						params.initialized == 0,
             Error::<T>::SubnetNodeAlreadyActivated
 					);
+					// --- If subnet activated, activate starting at `Idle`
 					let mut class = SubetNodeClass::Idle;
 					let mut epoch_increase = 0;
+					// --- If subnet in registration, activate starting at `Submittable` to start off subnet consensus
 					if subnet.activated == 0 {
 						class = SubetNodeClass::Submittable
 					} else {
+						// --- Increase start epoch when `Idle` so they always start on a fresh epoch after a successful consensus epoch
 						epoch_increase += 1;
 					}
 					params.initialized = block;
@@ -2836,26 +2829,15 @@ pub trait IncreaseStakeVault {
 
 impl<T: Config> SubnetVote<OriginFor<T>, T::AccountId> for Pallet<T> {
 	fn vote_subnet_in(vote_subnet_data: SubnetDemocracySubnetData) -> DispatchResult {
-		SubnetActivated::<T>::insert(vote_subnet_data.clone().data.path, vote_subnet_data.clone());
 		Ok(())
 	}
 	fn vote_subnet_out(vote_subnet_data: SubnetDemocracySubnetData) -> DispatchResult {
-		SubnetActivated::<T>::insert(vote_subnet_data.clone().data.path, vote_subnet_data.clone());
 		Ok(())
 	}
 	fn vote_activated(activator: T::AccountId, path: Vec<u8>, proposer: T::AccountId, vote_subnet_data: SubnetDemocracySubnetData) -> DispatchResult {
-		SubnetActivated::<T>::insert(path, vote_subnet_data.clone());
-
-		// Self::activate_subnet(
-		// 	activator, 
-		// 	proposer,
-		// 	vote_subnet_data.clone().data,
-		// )
 		Ok(())
 	}
 	fn vote_deactivated(deactivator: T::AccountId, path: Vec<u8>, proposer: T::AccountId, vote_subnet_data: SubnetDemocracySubnetData) -> DispatchResult {
-		SubnetActivated::<T>::insert(path, vote_subnet_data.clone());
-
 		Self::deactivate_subnet(
 			vote_subnet_data.clone().data.path,
 			SubnetRemovalReason::SubnetDemocracy

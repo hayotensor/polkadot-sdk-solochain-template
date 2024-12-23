@@ -35,16 +35,16 @@ fn test_set_vote_subnet_in() {
   new_test_ext().execute_with(|| {
     let subnet_path: Vec<u8> = "petals-team-3/StableBeluga2".into();
 
-    let value = pallet_network::SubnetActivated::<Test>::get(subnet_path.clone());
-    assert_eq!(value.active, false);
+    // let value = pallet_network::SubnetActivated::<Test>::get(subnet_path.clone());
+    // assert_eq!(value.active, false);
 
-    assert_ok!(
-      Admin::set_vote_subnet_in(
-        RuntimeOrigin::root(),
-        subnet_path.clone(),
-        50000
-      )
-    );
+    // assert_ok!(
+    //   Admin::set_vote_subnet_in(
+    //     RuntimeOrigin::root(),
+    //     subnet_path.clone(),
+    //     50000
+    //   )
+    // );
 
     // let value1 = pallet_network::SubnetActivated::<Test>::get(subnet_path.clone());
     // assert_eq!(value1, Some(true));

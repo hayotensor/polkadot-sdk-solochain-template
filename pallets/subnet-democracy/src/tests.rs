@@ -293,8 +293,8 @@ fn post_abstain_ensures(proposal_index: u32, prev_votes: u128, voter: u32, vote_
 
 
 fn post_activate_execute_succeeded_ensures(proposal_index: u32, path: Vec<u8>) {
-  let vote_subnet_data = pallet_network::SubnetActivated::<Test>::get(path.clone());
-  assert_eq!(vote_subnet_data.active, true);
+  // let vote_subnet_data = pallet_network::SubnetActivated::<Test>::get(path.clone());
+  // assert_eq!(vote_subnet_data.active, true);
 
   let proposal = Proposals::<Test>::get(proposal_index);
   assert_eq!(proposal.proposal_status, PropsStatus::Succeeded);
@@ -318,8 +318,8 @@ fn post_activate_execute_succeeded_ensures(proposal_index: u32, path: Vec<u8>) {
 }
 
 fn post_deactivate_succeeded_execute_ensures(proposal_index: u32, path: Vec<u8>) {
-  let vote_subnet_data = pallet_network::SubnetActivated::<Test>::get(path.clone());
-  assert_eq!(vote_subnet_data.active, false);
+  // let vote_subnet_data = pallet_network::SubnetActivated::<Test>::get(path.clone());
+  // assert_eq!(vote_subnet_data.active, false);
 
   let proposal = Proposals::<Test>::get(proposal_index);
   assert_eq!(proposal.proposal_status, PropsStatus::Succeeded);
@@ -339,9 +339,9 @@ fn post_deactivate_succeeded_execute_ensures(proposal_index: u32, path: Vec<u8>)
 
 
 fn post_activate_cancel_ensures(proposal_index: u32, path: Vec<u8>) {
-  let vote_subnet_data = pallet_network::SubnetActivated::<Test>::get(path.clone());
+  // let vote_subnet_data = pallet_network::SubnetActivated::<Test>::get(path.clone());
   // assert_eq!(vote_subnet_data, None);
-  assert_eq!(vote_subnet_data.active, false);
+  // assert_eq!(vote_subnet_data.active, false);
 
   let proposal = Proposals::<Test>::get(proposal_index);
   assert_eq!(proposal.proposal_status, PropsStatus::Cancelled);
@@ -1216,8 +1216,8 @@ fn test_execute_activate_succeeded_reexecute_expired_enactment() {
     
       assert_eq!(proposal.proposal_status, PropsStatus::Expired);
   
-      let is_active = pallet_network::SubnetActivated::<Test>::get(path);
-      assert_eq!(is_active.active, false);
+      // let is_active = pallet_network::SubnetActivated::<Test>::get(path);
+      // assert_eq!(is_active.active, false);
     }
   })
 }
@@ -1346,8 +1346,8 @@ fn test_execute_quorum_not_reached_err() {
   
     assert_eq!(proposal.proposal_status, PropsStatus::Expired);
 
-    let is_active = pallet_network::SubnetActivated::<Test>::get(path);
-    assert_eq!(is_active.active, false);
+    // let is_active = pallet_network::SubnetActivated::<Test>::get(path);
+    // assert_eq!(is_active.active, false);
 
 
     post_proposal_conclusion_unreserves(proposal_index, 0, min_subnet_nodes, DEFAUT_VOTE_AMOUNT);
@@ -1855,9 +1855,9 @@ fn test_propose_activate_expired() {
   
     assert_eq!(proposal.proposal_status, PropsStatus::Expired);
 
-    let is_active = pallet_network::SubnetActivated::<Test>::get(path);
+    // let is_active = pallet_network::SubnetActivated::<Test>::get(path);
     // assert_eq!(is_active, None);
-    assert_eq!(is_active.active, false);
+    // assert_eq!(is_active.active, false);
 
   })
 }
