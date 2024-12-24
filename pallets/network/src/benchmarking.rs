@@ -43,12 +43,14 @@ const SEED: u32 = 0;
 
 const DEFAULT_SCORE: u128 = 5000;
 const DEFAULT_SUBNET_MEM_MB: u128 = 50000;
+const DEFAULT_SUBNET_INIT_COST: u128 = 100e+18 as u128;
 const DEFAULT_SUBNET_PATH: &str = "petals-team/StableBeluga2";
 const DEFAULT_SUBNET_PATH_2: &str = "petals-team/StableBeluga3";
 const DEFAULT_SUBNET_NODE_STAKE: u128 = 1000e+18 as u128;
 const DEFAULT_SUBNET_REGISTRATION_BLOCKS: u64 = 130_000;
 const DEFAULT_STAKE_TO_BE_ADDED: u128 = 1000e+18 as u128;
 const DEFAULT_DELEGATE_STAKE_TO_BE_ADDED: u128 = 1000e+18 as u128;
+const DEFAULT_DEPOSIT_AMOUNT: u128 = 10000e+18 as u128;
 
 pub type BalanceOf<T> = <T as Config>::Currency;
 
@@ -71,7 +73,7 @@ fn funded_initializer<T: Config>(name: &'static str, index: u32) -> T::AccountId
 	let caller: T::AccountId = account(name, index, SEED);
 	// Give the account half of the maximum value of the `Balance` type.
 	// Otherwise some transfers will fail with an overflow error.
-	let deposit_amount: u128 = Network::<T>::get_subnet_initialization_cost(0) + 10000;
+	let deposit_amount: u128 = Network::<T>::get_subnet_initialization_cost(0) + 1000000;
 	T::Currency::deposit_creating(&caller, deposit_amount.try_into().ok().expect("REASON"));
 	caller
 }
@@ -104,7 +106,7 @@ fn build_activated_subnet<T: Config>(
 	deposit_amount: u128, 
 	amount: u128
 ) {
-	let funded_initializer = funded_account::<T>("funded_initializer", 0);
+	let funded_initializer = funded_initializer::<T>("funded_initializer", 0);
 
   let add_subnet_data = RegistrationSubnetData {
     path: subnet_path.clone().into(),
@@ -136,7 +138,7 @@ fn build_activated_subnet<T: Config>(
   let block_number = get_current_block_as_u64::<T>();
   let mut amount_staked = 0;
   for n in start..end {
-		let subnet_node_account: T::AccountId = funded_account::<T>("subnet_node_account", 0);
+		let subnet_node_account: T::AccountId = funded_account::<T>("subnet_node_account", n);
 		T::Currency::deposit_creating(&subnet_node_account, DEFAULT_STAKE_TO_BE_ADDED.try_into().ok().expect("REASON"));
     amount_staked += amount;
     assert_ok!(
@@ -150,7 +152,7 @@ fn build_activated_subnet<T: Config>(
         None,
       ) 
     );
-
+		// subnet_nodes
     let subnet_node_data = SubnetNodesData::<T>::try_get(subnet_id, subnet_node_account.clone()).unwrap();
     assert_eq!(subnet_node_data.account_id, subnet_node_account.clone());
     assert_eq!(subnet_node_data.hotkey, subnet_node_account.clone());
@@ -178,6 +180,7 @@ fn build_activated_subnet<T: Config>(
   // --- Add the minimum required delegate stake balance to activate the subnet
 
 	let delegate_staker_account: T::AccountId = funded_account::<T>("subnet_node_account", 1);
+	T::Currency::deposit_creating(&delegate_staker_account, min_subnet_delegate_stake.try_into().ok().expect("REASON"));
   assert_ok!(
     Network::<T>::add_to_delegate_stake(
       RawOrigin::Signed(delegate_staker_account.clone()).into(),
@@ -275,23 +278,39 @@ mod benchmarks {
 
 	#[benchmark]
 	fn register_subnet() {
-		let funded_initializer = funded_account::<T>("funded_initializer", 0);
+		let funded_initializer = funded_initializer::<T>("funded_initializer", 0);
 
 		let register_subnet_data = RegistrationSubnetData {
 			path: DEFAULT_SUBNET_PATH.into(),
 			memory_mb: DEFAULT_SUBNET_MEM_MB,
 			registration_blocks: DEFAULT_SUBNET_REGISTRATION_BLOCKS,
 		};
+
+		let current_block_number = get_current_block_as_u64::<T>();
 	
 		#[extrinsic_call]
 		register_subnet(RawOrigin::Signed(funded_initializer.clone()), register_subnet_data);
 
+		let subnet = SubnetsData::<T>::get(1).unwrap();
+		assert_eq!(subnet.id, 1);
+		let path: Vec<u8> = DEFAULT_SUBNET_PATH.into();
+		assert_eq!(subnet.path, path);
+		// assert_eq!(subnet.min_nodes, 1);
+		// assert_eq!(subnet.target_nodes, 1);
+		assert_eq!(subnet.memory_mb, DEFAULT_SUBNET_MEM_MB);
+		assert_eq!(subnet.registration_blocks, DEFAULT_SUBNET_REGISTRATION_BLOCKS);
+		assert_eq!(subnet.initialized, current_block_number + 1);
+		assert_eq!(subnet.activated, 0);
 	}
 
 	#[benchmark]
 	fn activate_subnet() {
-		let funded_initializer = funded_account::<T>("funded_initializer", 0);
-
+		let funded_initializer = funded_initializer::<T>("funded_initializer", 0);
+		let start: u32 = 0; 
+		let mut end: u32 = 12; 
+		let deposit_amount: u128 = DEFAULT_DEPOSIT_AMOUNT;
+		let amount: u128 = DEFAULT_SUBNET_NODE_STAKE;
+	
 		let register_subnet_data = RegistrationSubnetData {
 			path: DEFAULT_SUBNET_PATH.into(),
 			memory_mb: DEFAULT_SUBNET_MEM_MB,
@@ -300,192 +319,353 @@ mod benchmarks {
 
 		assert_ok!(Network::<T>::register_subnet(RawOrigin::Signed(funded_initializer.clone()).into(), register_subnet_data));
 
-		let subnet_id = 1;
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
+		let subnet = SubnetsData::<T>::get(subnet_id).unwrap();
+		let min_nodes = subnet.min_nodes;
+
+		let epoch_length = T::EpochLength::get();
+		let epoch = get_current_block_as_u64::<T>() / epoch_length;
+	
+		let block_number = get_current_block_as_u64::<T>();
+		let mut amount_staked = 0;
+		for n in start..end {
+			let subnet_node_account: T::AccountId = funded_account::<T>("subnet_node_account", n);
+			T::Currency::deposit_creating(&subnet_node_account, DEFAULT_STAKE_TO_BE_ADDED.try_into().ok().expect("REASON"));
+			amount_staked += amount;
+			assert_ok!(
+				Network::<T>::add_subnet_node(
+					RawOrigin::Signed(subnet_node_account.clone()).into(),
+					subnet_id,
+					peer(n),
+					amount,
+					None,
+					None,
+					None,
+				) 
+			);
+			// subnet_nodes
+			let subnet_node_data = SubnetNodesData::<T>::try_get(subnet_id, subnet_node_account.clone()).unwrap();
+			assert_eq!(subnet_node_data.account_id, subnet_node_account.clone());
+			assert_eq!(subnet_node_data.hotkey, subnet_node_account.clone());
+			assert_eq!(subnet_node_data.peer_id, peer(n));
+			assert_eq!(subnet_node_data.initialized, block_number);
+			// --- Is ``Submittable`` if registered before subnet activation
+			assert_eq!(subnet_node_data.classification.class, SubetNodeClass::Submittable);
+			assert!(subnet_node_data.has_classification(&SubetNodeClass::Submittable, epoch));
+	
+			let subnet_node_account = SubnetNodeAccount::<T>::get(subnet_id, peer(n));
+			assert_eq!(subnet_node_account, subnet_node_account.clone());
+	
+			let account_subnet_stake = AccountSubnetStake::<T>::get(subnet_node_account.clone(), subnet_id);
+			assert_eq!(account_subnet_stake, amount);
+		}
+	
+		let total_subnet_stake = TotalSubnetStake::<T>::get(subnet_id);
+		assert_eq!(total_subnet_stake, amount_staked);
+	
+		let total_stake = TotalStake::<T>::get();
+		assert_eq!(total_subnet_stake, amount_staked);
+	
+	
+		let min_subnet_delegate_stake = Network::<T>::get_min_subnet_delegate_stake_balance(min_nodes);
+		// --- Add the minimum required delegate stake balance to activate the subnet
+	
+		let delegate_staker_account: T::AccountId = funded_account::<T>("subnet_node_account", 1);
+		T::Currency::deposit_creating(&delegate_staker_account, min_subnet_delegate_stake.try_into().ok().expect("REASON"));
+		assert_ok!(
+			Network::<T>::add_to_delegate_stake(
+				RawOrigin::Signed(delegate_staker_account.clone()).into(),
+				subnet_id,
+				min_subnet_delegate_stake,
+			) 
+		);
+	
+		let delegate_shares = AccountSubnetDelegateStakeShares::<T>::get(delegate_staker_account.clone(), subnet_id);
+		// 1000 is for inflation attack mitigation
+		assert_eq!(min_subnet_delegate_stake - 1000, delegate_shares);
+	
+		// --- Increase blocks to max registration block
+		frame_system::Pallet::<T>::set_block_number(
+			frame_system::Pallet::<T>::block_number() + 
+			u64_to_block::<T>(subnet.registration_blocks + 1)
+		);
+	
+		let current_block_number = get_current_block_as_u64::<T>();
 	
 		#[extrinsic_call]
 		activate_subnet(RawOrigin::Signed(funded_initializer.clone()), subnet_id);
 
+		let subnet = SubnetsData::<T>::get(1).unwrap();
+		assert_eq!(subnet.memory_mb, DEFAULT_SUBNET_MEM_MB);
+		assert_eq!(subnet.registration_blocks, DEFAULT_SUBNET_REGISTRATION_BLOCKS);
+		assert_eq!(subnet.activated, current_block_number);
 	}
 
 	#[benchmark]
 	fn add_subnet_node() {
-		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, 0, DEFAULT_SUBNET_NODE_STAKE, DEFAULT_SUBNET_NODE_STAKE);
-		let subnet_node_account = funded_account::<T>("subnet_node_account", 0);
+		let end = 12;
+		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+		let subnet_node_account = funded_account::<T>("subnet_node_account", end+1);
 
-		let subnet_id = 1;
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
+
+		let current_block_number = get_current_block_as_u64::<T>();
 
 		#[extrinsic_call]
 		add_subnet_node(
 			RawOrigin::Signed(subnet_node_account.clone()), 
 			subnet_id, 
-			peer(0), 
+			peer(end+1), 
 			DEFAULT_SUBNET_NODE_STAKE,
 			None,
 			None,
 			None,
 		);
 		
-		assert_eq!(TotalSubnetNodes::<T>::get(subnet_id), 1);
+		assert_eq!(TotalSubnetNodes::<T>::get(subnet_id), end+1);
 		let subnet_node_data = Network::<T>::subnet_nodes(subnet_id, subnet_node_account.clone());
 		assert_eq!(subnet_node_data.account_id, subnet_node_account.clone());
-		assert_eq!(subnet_node_data.peer_id, peer(0));
-		assert_eq!(subnet_node_data.initialized, 1);
+		assert_eq!(subnet_node_data.peer_id, peer(end+1));
+		assert_eq!(subnet_node_data.initialized, current_block_number);
+		// assert_eq!(subnet_node_data.classification.class, SubetNodeClass::Submittable);
 
 		let account_subnet_stake = Network::<T>::account_subnet_stake(subnet_node_account.clone(), subnet_id);
 		assert_eq!(account_subnet_stake, DEFAULT_SUBNET_NODE_STAKE);
 
 		assert_eq!(Network::<T>::total_account_stake(subnet_node_account.clone()), DEFAULT_SUBNET_NODE_STAKE);    
-		assert_eq!(Network::<T>::total_subnet_nodes(subnet_id), 1 as u32);
+		assert_eq!(Network::<T>::total_subnet_nodes(subnet_id), (end+1) as u32);
 	}
 
-	// #[benchmark]
-	// fn remove_subnet_node() {
-	// 	build_subnet::<T>(DEFAULT_SUBNET_PATH.into());
-	// 	let subnet_id = 1;
+	#[benchmark]
+	fn register_subnet_node() {
+		let end = 12;
+		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+		let subnet_node_account = funded_account::<T>("subnet_node_account", end+1);
 
-	// 	let subnet_node_account: T::AccountId = funded_account::<T>("subnet_node_account", 0);
-	// 	assert_ok!(
-	// 		Network::<T>::add_subnet_node(
-  //       RawOrigin::Signed(subnet_node_account.clone()).into(),
-  //       subnet_id,
-  //       peer(0),
-  //       DEFAULT_SUBNET_NODE_STAKE,
-  //     )
-	// 	);
-	// 	assert_eq!(TotalSubnetNodes::<T>::get(subnet_id), 1);
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
 
-	// 	let subnet_node_account_1: T::AccountId = funded_account::<T>("subnet_node_account", 1);
-	// 	assert_ok!(
-	// 		Network::<T>::add_subnet_node(
-  //       RawOrigin::Signed(subnet_node_account_1.clone()).into(),
-  //       subnet_id,
-  //       peer(1),
-  //       DEFAULT_SUBNET_NODE_STAKE,
-  //     )
-	// 	);
-	// 	assert_eq!(TotalSubnetNodes::<T>::get(subnet_id), 2);
+		#[extrinsic_call]
+		register_subnet_node(
+			RawOrigin::Signed(subnet_node_account.clone()), 
+			subnet_id, 
+			peer(end+1), 
+			DEFAULT_SUBNET_NODE_STAKE,
+			None,
+			None,
+			None,
+		);
 
-	// 	#[extrinsic_call]
-	// 	remove_subnet_node(RawOrigin::Signed(subnet_node_account_1.clone()), subnet_id);
+		assert_eq!(TotalSubnetNodes::<T>::get(subnet_id), end+1);
+
+	}
+
+	#[benchmark]
+	fn activate_subnet_node() {
+		let end = 12;
+		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+		let subnet_node_account = funded_account::<T>("subnet_node_account", end+1);
+
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
+		assert_ok!(
+			Network::<T>::register_subnet_node(
+				RawOrigin::Signed(subnet_node_account.clone()).into(), 
+				subnet_id, 
+				peer(end+1), 
+				DEFAULT_SUBNET_NODE_STAKE,
+				None,
+				None,
+				None,
+			) 
+		);
+
+		#[extrinsic_call]
+		activate_subnet_node(RawOrigin::Signed(subnet_node_account.clone()), subnet_id);
+
+		assert_eq!(TotalSubnetNodes::<T>::get(subnet_id), end+1);
+	}
+
+	#[benchmark]
+	fn deactivate_subnet_node() {
+		let end = 12;
+		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+		let subnet_node_account = funded_account::<T>("subnet_node_account", end+1);
+
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
+		assert_ok!(
+			Network::<T>::register_subnet_node(
+				RawOrigin::Signed(subnet_node_account.clone()).into(), 
+				subnet_id, 
+				peer(end+1), 
+				DEFAULT_SUBNET_NODE_STAKE,
+				None,
+				None,
+				None,
+			) 
+		);
+
+		assert_ok!(
+			Network::<T>::activate_subnet_node(
+				RawOrigin::Signed(subnet_node_account.clone()).into(), 
+				subnet_id, 
+			) 
+		);
+
+		#[extrinsic_call]
+		deactivate_subnet_node(RawOrigin::Signed(subnet_node_account.clone()), subnet_id);
+
+		assert_eq!(TotalSubnetNodes::<T>::get(subnet_id), end+1);
+		assert_eq!(TotalActiveSubnetNodes::<T>::get(subnet_id), end);
+	}
+
+	#[benchmark]
+	fn remove_subnet_node() {
+		let end = 12;
+		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
+
+		let subnet_node_account: T::AccountId = funded_account::<T>("subnet_node_account", end+1);
+		assert_ok!(
+			Network::<T>::add_subnet_node(
+        RawOrigin::Signed(subnet_node_account.clone()).into(),
+        subnet_id,
+        peer(end+1),
+        DEFAULT_SUBNET_NODE_STAKE,
+				None,
+				None,
+				None,	
+      )
+		);
+
+		#[extrinsic_call]
+		remove_subnet_node(RawOrigin::Signed(subnet_node_account.clone()), subnet_id);
 		
-	// 	assert_eq!(TotalSubnetNodes::<T>::get(subnet_id), 1);
-	// 	let subnet_node_data = Network::<T>::subnet_nodes(subnet_id, subnet_node_account_1.clone());
-	// 	assert_eq!(subnet_node_data.initialized, 0);
-	// }
+		assert_eq!(TotalSubnetNodes::<T>::get(subnet_id), end);
+		let subnet_node_data = Network::<T>::subnet_nodes(subnet_id, subnet_node_account.clone());
+		assert_eq!(subnet_node_data.initialized, 0);
+	}
 
-	// #[benchmark]
-	// fn add_to_stake() {
-	// 	build_subnet::<T>(DEFAULT_SUBNET_PATH.into());
-	// 	let subnet_id = 1;
+	#[benchmark]
+	fn add_to_stake() {
+		let end = 12;
+		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
 
-	// 	let subnet_node_account: T::AccountId = funded_account::<T>("subnet_node_account", 0);
-	// 	assert_ok!(
-	// 		Network::<T>::add_subnet_node(
-  //       RawOrigin::Signed(subnet_node_account.clone()).into(),
-  //       subnet_id,
-  //       peer(0),
-  //       DEFAULT_SUBNET_NODE_STAKE,
-  //     )
-	// 	);
+		let subnet_node_account: T::AccountId = funded_account::<T>("subnet_node_account", end+1);
+		assert_ok!(
+			Network::<T>::add_subnet_node(
+        RawOrigin::Signed(subnet_node_account.clone()).into(),
+        subnet_id,
+        peer(end+1),
+        DEFAULT_SUBNET_NODE_STAKE,
+				None,
+				None,
+				None,	
+      )
+		);
 
-	// 	T::Currency::deposit_creating(&subnet_node_account, DEFAULT_STAKE_TO_BE_ADDED.try_into().ok().expect("REASON"));
+		T::Currency::deposit_creating(&subnet_node_account, DEFAULT_STAKE_TO_BE_ADDED.try_into().ok().expect("REASON"));
 
-	// 	#[extrinsic_call]
-	// 	add_to_stake(RawOrigin::Signed(subnet_node_account.clone()), subnet_id, DEFAULT_STAKE_TO_BE_ADDED);
+		#[extrinsic_call]
+		add_to_stake(RawOrigin::Signed(subnet_node_account.clone()), subnet_id, DEFAULT_STAKE_TO_BE_ADDED);
 		
-	// 	let account_subnet_stake = Network::<T>::account_subnet_stake(subnet_node_account.clone(), subnet_id);
-	// 	assert_eq!(account_subnet_stake, DEFAULT_SUBNET_NODE_STAKE + DEFAULT_STAKE_TO_BE_ADDED);
-	// }
+		let account_subnet_stake = Network::<T>::account_subnet_stake(subnet_node_account.clone(), subnet_id);
+		assert_eq!(account_subnet_stake, DEFAULT_SUBNET_NODE_STAKE + DEFAULT_STAKE_TO_BE_ADDED);
+	}
 
-	// #[benchmark]
-	// fn remove_stake() {
-	// 	build_subnet::<T>(DEFAULT_SUBNET_PATH.into());
-	// 	let subnet_id = 1;
+	#[benchmark]
+	fn remove_stake() {
+		let end = 12;
+		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
 
-	// 	let subnet_node_account: T::AccountId = funded_account::<T>("subnet_node_account", 0);
-	// 	assert_ok!(
-	// 		Network::<T>::add_subnet_node(
-  //       RawOrigin::Signed(subnet_node_account.clone()).into(),
-  //       subnet_id,
-  //       peer(0),
-  //       DEFAULT_SUBNET_NODE_STAKE,
-  //     )
-	// 	);
+		let subnet_node_account: T::AccountId = funded_account::<T>("subnet_node_account", end+1);
+		assert_ok!(
+			Network::<T>::add_subnet_node(
+        RawOrigin::Signed(subnet_node_account.clone()).into(),
+        subnet_id,
+        peer(end+1),
+        DEFAULT_SUBNET_NODE_STAKE,
+				None,
+				None,
+				None,	
+      )
+		);
 
-	// 	T::Currency::deposit_creating(&subnet_node_account, DEFAULT_STAKE_TO_BE_ADDED.try_into().ok().expect("REASON"));
-	// 	assert_ok!(
-	// 		Network::<T>::add_to_stake(
-	// 			RawOrigin::Signed(subnet_node_account.clone()).into(), 
-	// 			subnet_id, 
-	// 			DEFAULT_STAKE_TO_BE_ADDED
-	// 		)
-	// 	);
-	// 	let account_subnet_stake = Network::<T>::account_subnet_stake(subnet_node_account.clone(), subnet_id);
-	// 	assert_eq!(account_subnet_stake, DEFAULT_SUBNET_NODE_STAKE + DEFAULT_STAKE_TO_BE_ADDED);
+		T::Currency::deposit_creating(&subnet_node_account, DEFAULT_STAKE_TO_BE_ADDED.try_into().ok().expect("REASON"));
+		assert_ok!(
+			Network::<T>::add_to_stake(
+				RawOrigin::Signed(subnet_node_account.clone()).into(), 
+				subnet_id, 
+				DEFAULT_STAKE_TO_BE_ADDED
+			)
+		);
+		let account_subnet_stake = Network::<T>::account_subnet_stake(subnet_node_account.clone(), subnet_id);
+		assert_eq!(account_subnet_stake, DEFAULT_SUBNET_NODE_STAKE + DEFAULT_STAKE_TO_BE_ADDED);
 
-	// 	let epoch_length = T::EpochLength::get();
-  //   let min_required_unstake_epochs = MinRequiredUnstakeEpochs::<T>::get();
+		// let epoch_length = T::EpochLength::get();
+    // let min_required_unstake_epochs = MinRequiredUnstakeEpochs::<T>::get();
 
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(epoch_length * min_required_unstake_epochs + 1)
-	// 	);
+		// frame_system::Pallet::<T>::set_block_number(
+		// 	frame_system::Pallet::<T>::block_number() + 
+		// 	u64_to_block::<T>(epoch_length * min_required_unstake_epochs + 1)
+		// );
 
-	// 	#[extrinsic_call]
-	// 	remove_stake(RawOrigin::Signed(subnet_node_account.clone()), subnet_id, DEFAULT_STAKE_TO_BE_ADDED);
+		#[extrinsic_call]
+		remove_stake(RawOrigin::Signed(subnet_node_account.clone()), subnet_id, DEFAULT_STAKE_TO_BE_ADDED);
 		
-	// 	let account_subnet_stake = Network::<T>::account_subnet_stake(subnet_node_account.clone(), subnet_id);
-	// 	assert_eq!(account_subnet_stake, DEFAULT_SUBNET_NODE_STAKE);
-	// }
+		let account_subnet_stake = Network::<T>::account_subnet_stake(subnet_node_account.clone(), subnet_id);
+		assert_eq!(account_subnet_stake, DEFAULT_SUBNET_NODE_STAKE);
+	}
 
-	// #[benchmark]
-	// fn add_to_delegate_stake() {
-	// 	build_subnet::<T>(DEFAULT_SUBNET_PATH.into());
-	// 	let subnet_id = 1;
+	#[benchmark]
+	fn add_to_delegate_stake() {
+		let end = 12;
+		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
 
-	// 	let delegate_account: T::AccountId = funded_account::<T>("delegate_account", 0);
+		let delegate_account: T::AccountId = funded_account::<T>("delegate_account", 0);
 
-	// 	let total_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<T>::get(subnet_id);
-  //   let total_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);
+		let total_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<T>::get(subnet_id);
+    let total_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);
 
-  //   let mut delegate_stake_to_be_added_as_shares = Network::<T>::convert_to_shares(
-  //     DEFAULT_DELEGATE_STAKE_TO_BE_ADDED,
-  //     total_subnet_delegated_stake_shares,
-  //     total_subnet_delegated_stake_balance
-  //   );
+    let mut delegate_stake_to_be_added_as_shares = Network::<T>::convert_to_shares(
+      DEFAULT_DELEGATE_STAKE_TO_BE_ADDED,
+      total_subnet_delegated_stake_shares,
+      total_subnet_delegated_stake_balance
+    );
 
-  //   if total_subnet_delegated_stake_shares == 0 {
-  //     delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
-  //   }
+    if total_subnet_delegated_stake_shares == 0 {
+      delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
+    }
 
-	// 	let starting_delegator_balance = T::Currency::free_balance(&delegate_account.clone());
+		let starting_delegator_balance = T::Currency::free_balance(&delegate_account.clone());
 
-	// 	#[extrinsic_call]
-	// 	add_to_delegate_stake(RawOrigin::Signed(delegate_account.clone()), subnet_id, DEFAULT_DELEGATE_STAKE_TO_BE_ADDED);
+		#[extrinsic_call]
+		add_to_delegate_stake(RawOrigin::Signed(delegate_account.clone()), subnet_id, DEFAULT_DELEGATE_STAKE_TO_BE_ADDED);
 
-	// 	let post_delegator_balance = T::Currency::free_balance(&delegate_account.clone());
-  //   assert_eq!(post_delegator_balance, starting_delegator_balance - DEFAULT_DELEGATE_STAKE_TO_BE_ADDED.try_into().ok().expect("REASON"));
+		let post_delegator_balance = T::Currency::free_balance(&delegate_account.clone());
+    assert_eq!(post_delegator_balance, starting_delegator_balance - DEFAULT_DELEGATE_STAKE_TO_BE_ADDED.try_into().ok().expect("REASON"));
 
-  //   let delegate_shares = AccountSubnetDelegateStakeShares::<T>::get(delegate_account.clone(), subnet_id);
-  //   assert_eq!(delegate_shares, delegate_stake_to_be_added_as_shares);
-  //   assert_ne!(delegate_shares, 0);
+    let delegate_shares = AccountSubnetDelegateStakeShares::<T>::get(delegate_account.clone(), subnet_id);
+    assert_eq!(delegate_shares, delegate_stake_to_be_added_as_shares);
+    assert_ne!(delegate_shares, 0);
 
-  //   let total_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<T>::get(subnet_id);
-  //   let total_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);
+    let total_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<T>::get(subnet_id);
+    let total_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);
 
-  //   let delegate_balance = Network::<T>::convert_to_balance(
-  //     delegate_shares,
-  //     total_subnet_delegated_stake_shares,
-  //     total_subnet_delegated_stake_balance
-  //   );
-  //   // The first depositor will lose a percentage of their deposit depending on the size
-  //   // https://docs.openzeppelin.com/contracts/4.x/erc4626#inflation-attack
-  //   assert_eq!(delegate_balance, delegate_stake_to_be_added_as_shares);
-	// 	assert!(
-  //     (delegate_balance >= Network::<T>::percent_mul(DEFAULT_DELEGATE_STAKE_TO_BE_ADDED, 9999)) &&
-  //     (delegate_balance <= DEFAULT_DELEGATE_STAKE_TO_BE_ADDED)
-  //   );
-	// }
+    let delegate_balance = Network::<T>::convert_to_balance(
+      delegate_shares,
+      total_subnet_delegated_stake_shares,
+      total_subnet_delegated_stake_balance
+    );
+    // The first depositor will lose a percentage of their deposit depending on the size
+    // https://docs.openzeppelin.com/contracts/4.x/erc4626#inflation-attack
+    assert_eq!(delegate_balance, delegate_stake_to_be_added_as_shares);
+		assert!(
+      (delegate_balance >= Network::<T>::percent_mul(DEFAULT_DELEGATE_STAKE_TO_BE_ADDED, 9999)) &&
+      (delegate_balance <= DEFAULT_DELEGATE_STAKE_TO_BE_ADDED)
+    );
+	}
 
 	// #[benchmark]
 	// fn transfer_delegate_stake() {
@@ -1205,8 +1385,8 @@ mod benchmarks {
 	// 	}	
 
 	// 	// --- push to next epoch block where ``on_initialize`` is called		
-	// 	let curr_block_number = get_current_block_as_u64::<T>();
-	// 	let next_epoch_block = curr_block_number - (curr_block_number % epoch_length) + epoch_length;
+	// 	let current_block_number = get_current_block_as_u64::<T>();
+	// 	let next_epoch_block = current_block_number - (current_block_number % epoch_length) + epoch_length;
 
 	// 	frame_system::Pallet::<T>::set_block_number(u64_to_block::<T>(next_epoch_block + 1));
 
@@ -1274,19 +1454,19 @@ mod benchmarks {
 	// 	}
 	// }
 
-	#[benchmark]
-	fn on_initialize() {
-		// get to a block where none of the functions will be ran
-		frame_system::Pallet::<T>::set_block_number(
-			frame_system::Pallet::<T>::block_number() + u64_to_block::<T>(1)
-		);
+	// #[benchmark]
+	// fn on_initialize() {
+	// 	// get to a block where none of the functions will be ran
+	// 	frame_system::Pallet::<T>::set_block_number(
+	// 		frame_system::Pallet::<T>::block_number() + u64_to_block::<T>(1)
+	// 	);
 
-		#[block]
-		{
-			let block = frame_system::Pallet::<T>::block_number();
-			Network::<T>::on_initialize(block);
-		}
-	}
+	// 	#[block]
+	// 	{
+	// 		let block = frame_system::Pallet::<T>::block_number();
+	// 		Network::<T>::on_initialize(block);
+	// 	}
+	// }
 
 	impl_benchmark_test_suite!(Network, crate::mock::new_test_ext(), crate::mock::Test);
 }
