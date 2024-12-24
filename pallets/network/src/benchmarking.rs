@@ -218,7 +218,7 @@ fn build_activated_subnet<T: Config>(
 fn build_subnet_nodes<T: Config>(subnet_id: u32, start: u32, end: u32, amount: u128) -> u128 {
   let mut amount_staked = 0;
   for n in start..end {
-    let subnet_node = funded_account::<T>("subnet_node", n);
+    let subnet_node = funded_account::<T>("subnet_node_account", n);
     amount_staked += amount;
     assert_ok!(
       Network::<T>::add_subnet_node(
@@ -934,473 +934,269 @@ mod benchmarks {
     assert_eq!(submission.attests.get(&attester.clone()), Some(&current_block_number));
 	}
 
-	// #[benchmark]
-	// fn propose() {
-	// 	build_subnet::<T>(DEFAULT_SUBNET_PATH.into());
-	// 	let subnet_id = 1;
-
-	// 	let epoch_length = T::EpochLength::get();
-
-	// 	let min_required_subnet_consensus_submit_epochs: u64 = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();	
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(epoch_length * min_required_subnet_consensus_submit_epochs)
-	// 	);
-
-	// 	let n_peers: u32 = Network::<T>::max_subnet_nodes();
-
-  //   let amount: u128 = 				 1000000000000000000000;
-
-	// 	build_subnet_nodes::<T>(subnet_id, 0, n_peers, amount);
-
-	// 	let epochs = SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Accountant);
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(epochs * (epoch_length + 1))
-	// 	);
-
-	// 	let block_number = get_current_block_as_u64::<T>();
-
-	// 	// shift node classes
-  //   Network::<T>::shift_node_classes(block_number, epoch_length);
-
-	// 	let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
-
-	// 	let proposer = funded_account::<T>("subnet_node", 0);
-	// 	let defendant = funded_account::<T>("subnet_node", 1);
-
-	// 	let proposal_bid_amount = ProposalBidAmount::<T>::get();
-  //   let plaintiff_starting_balance = T::Currency::free_balance(&proposer.clone());
-	// 	let data = Vec::new();
-
-	// 	let accountant_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
-
-	// 	#[extrinsic_call]
-	// 	propose(RawOrigin::Signed(proposer.clone()), subnet_id, peer(1), data.clone());
-
-  //   let plaintiff_after_balance = T::Currency::free_balance(&proposer.clone());
-  //   assert_eq!(plaintiff_starting_balance - u128_to_balance::<T>(proposal_bid_amount).unwrap(), plaintiff_after_balance);
-
-	// 	let proposal = Proposals::<T>::get(subnet_id, 0);
-  //   assert_eq!(proposal.subnet_id, subnet_id);
-  //   assert_eq!(proposal.plaintiff, proposer.clone());
-  //   assert_eq!(proposal.defendant, defendant);
-  //   assert_eq!(proposal.plaintiff_bond, proposal_bid_amount);
-  //   assert_eq!(proposal.defendant_bond, 0);
-  //   assert_eq!(proposal.eligible_voters.len(), accountant_nodes.len());
-  //   assert_eq!(proposal.start_block, get_current_block_as_u64::<T>());
-  //   assert_eq!(proposal.challenge_block, 0);
-  //   assert_eq!(proposal.plaintiff_data, data);
-  //   assert_eq!(proposal.defendant_data, data);
-  //   assert_eq!(proposal.complete, false);
-	// }
-
-	// #[benchmark]
-	// fn cancel_proposal() {
-	// 	build_subnet::<T>(DEFAULT_SUBNET_PATH.into());
-	// 	let subnet_id = 1;
-
-	// 	let epoch_length = T::EpochLength::get();
-
-	// 	let min_required_subnet_consensus_submit_epochs: u64 = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();	
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(epoch_length * min_required_subnet_consensus_submit_epochs)
-	// 	);
-
-	// 	let n_peers: u32 = Network::<T>::max_subnet_nodes();
-
-  //   let amount: u128 = 				 1000000000000000000000;
-
-	// 	build_subnet_nodes::<T>(subnet_id, 0, n_peers, amount);
-
-	// 	let epochs = SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Accountant);
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(epochs * (epoch_length + 1))
-	// 	);
-
-	// 	let block_number = get_current_block_as_u64::<T>();
-
-	// 	// shift node classes
-  //   Network::<T>::shift_node_classes(block_number, epoch_length);
-
-	// 	let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
-
-	// 	let proposer = funded_account::<T>("subnet_node", 0);
-	// 	let defendant = funded_account::<T>("subnet_node", 1);
-
-	// 	let proposal_bid_amount = ProposalBidAmount::<T>::get();
-  //   let plaintiff_starting_balance = T::Currency::free_balance(&proposer.clone());
-	// 	let data = Vec::new();
-
-	// 	let accountant_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
-
-	// 	assert_ok!(
-	// 		Network::<T>::propose(
-	// 			RawOrigin::Signed(proposer.clone()).into(), 
-	// 			subnet_id, 
-	// 			peer(1), 
-	// 			data.clone()
-	// 		)
-	// 	);
-
-	// 	#[extrinsic_call]
-	// 	cancel_proposal(RawOrigin::Signed(proposer.clone()), subnet_id, 0);
-
-  //   let plaintiff_after_balance = T::Currency::free_balance(&proposer.clone());
-  //   assert_eq!(plaintiff_starting_balance, plaintiff_after_balance);
-
-  //   let proposal = Proposals::<T>::try_get(subnet_id, 0);
-  //   assert_eq!(proposal, Err(()));
-	// }
-
-	// #[benchmark]
-	// fn challenge_proposal() {
-	// 	build_subnet::<T>(DEFAULT_SUBNET_PATH.into());
-	// 	let subnet_id = 1;
-
-	// 	let epoch_length = T::EpochLength::get();
-
-	// 	let min_required_subnet_consensus_submit_epochs: u64 = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();	
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(epoch_length * min_required_subnet_consensus_submit_epochs)
-	// 	);
-
-	// 	let n_peers: u32 = Network::<T>::max_subnet_nodes();
-
-  //   let amount: u128 = 				 1000000000000000000000;
-
-	// 	build_subnet_nodes::<T>(subnet_id, 0, n_peers, amount);
-
-	// 	let epochs = SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Accountant);
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(epochs * (epoch_length + 1))
-	// 	);
-
-	// 	let block_number = get_current_block_as_u64::<T>();
-
-	// 	// shift node classes
-  //   Network::<T>::shift_node_classes(block_number, epoch_length);
-
-	// 	let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
-
-	// 	let proposer = funded_account::<T>("subnet_node", 0);
-	// 	let defendant = funded_account::<T>("subnet_node", 1);
-
-	// 	let proposal_bid_amount = ProposalBidAmount::<T>::get();
-  //   let plaintiff_starting_balance = T::Currency::free_balance(&proposer.clone());
-	// 	let data = Vec::new();
-
-	// 	let accountant_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
-
-	// 	assert_ok!(
-	// 		Network::<T>::propose(
-	// 			RawOrigin::Signed(proposer.clone()).into(), 
-	// 			subnet_id, 
-	// 			peer(1), 
-	// 			data.clone()
-	// 		)
-	// 	);
-
-	// 	let challenger_starting_balance = T::Currency::free_balance(&defendant.clone());
-
-	// 	#[extrinsic_call]
-	// 	challenge_proposal(RawOrigin::Signed(defendant.clone()), subnet_id, 0, Vec::new());
-
-  //   let challenger_after_balance = T::Currency::free_balance(&defendant.clone());
-  //   assert_eq!(challenger_starting_balance - u128_to_balance::<T>(proposal_bid_amount).unwrap(), challenger_after_balance);
-
-	// 	let proposal = Proposals::<T>::get(subnet_id, 0);
-  //   assert_eq!(proposal.subnet_id, subnet_id);
-  //   assert_eq!(proposal.plaintiff, proposer.clone());
-  //   assert_eq!(proposal.defendant, defendant.clone());
-  //   assert_eq!(proposal.plaintiff_bond, proposal_bid_amount);
-  //   assert_eq!(proposal.defendant_bond, proposal_bid_amount);
-  //   assert_eq!(proposal.eligible_voters.len(), accountant_nodes.len());
-  //   assert_eq!(proposal.start_block, get_current_block_as_u64::<T>());
-  //   assert_eq!(proposal.challenge_block, get_current_block_as_u64::<T>());
-  //   assert_eq!(proposal.plaintiff_data, data);
-  //   assert_eq!(proposal.defendant_data, data);
-  //   assert_eq!(proposal.complete, false);
-	// }
-
-	// #[benchmark]
-	// fn vote() {
-	// 	build_subnet::<T>(DEFAULT_SUBNET_PATH.into());
-	// 	let subnet_id = 1;
-
-	// 	let epoch_length = T::EpochLength::get();
-
-	// 	let min_required_subnet_consensus_submit_epochs: u64 = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();	
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(epoch_length * min_required_subnet_consensus_submit_epochs)
-	// 	);
-
-	// 	let n_peers: u32 = Network::<T>::max_subnet_nodes();
-
-  //   let amount: u128 = 				 1000000000000000000000;
-
-	// 	build_subnet_nodes::<T>(subnet_id, 0, n_peers, amount);
-
-	// 	let epochs = SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Accountant);
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(epochs * (epoch_length + 1))
-	// 	);
-
-	// 	let block_number = get_current_block_as_u64::<T>();
-
-	// 	// shift node classes
-  //   Network::<T>::shift_node_classes(block_number, epoch_length);
-
-	// 	let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
-
-	// 	let proposer = funded_account::<T>("subnet_node", 0);
-	// 	let defendant = funded_account::<T>("subnet_node", 1);
-
-	// 	let proposal_bid_amount = ProposalBidAmount::<T>::get();
-  //   let plaintiff_starting_balance = T::Currency::free_balance(&proposer.clone());
-	// 	let data = Vec::new();
-
-	// 	let accountant_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
-
-	// 	assert_ok!(
-	// 		Network::<T>::propose(
-	// 			RawOrigin::Signed(proposer.clone()).into(), 
-	// 			subnet_id, 
-	// 			peer(1), 
-	// 			data.clone()
-	// 		)
-	// 	);
-
-	// 	assert_ok!(
-	// 		Network::<T>::challenge_proposal(
-	// 			RawOrigin::Signed(defendant.clone()).into(), 
-	// 			subnet_id, 
-	// 			0, 
-	// 			data.clone()
-	// 		)
-	// 	);
-
-	// 	let voter = funded_account::<T>("subnet_node", 2);
-
-	// 	#[extrinsic_call]
-	// 	vote(RawOrigin::Signed(voter.clone()), subnet_id, 0, VoteType::Yay);
-
-  //   let proposal = Proposals::<T>::get(subnet_id, 0);
-  //   assert_eq!(proposal.votes.yay.get(&voter.clone()), Some(&voter.clone()));
-  //   assert_ne!(proposal.votes.yay.get(&voter.clone()), None);
-	// }
-
-	// #[benchmark]
-	// fn finalize_proposal() {
-	// 	build_subnet::<T>(DEFAULT_SUBNET_PATH.into());
-	// 	let subnet_id = 1;
-
-	// 	let epoch_length = T::EpochLength::get();
-
-	// 	let min_required_subnet_consensus_submit_epochs: u64 = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();	
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(epoch_length * min_required_subnet_consensus_submit_epochs)
-	// 	);
-
-	// 	let n_peers: u32 = Network::<T>::max_subnet_nodes();
-
-  //   let amount: u128 = 				 1000000000000000000000;
-
-	// 	build_subnet_nodes::<T>(subnet_id, 0, n_peers, amount);
-
-	// 	let epochs = SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Accountant);
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(epochs * (epoch_length + 1))
-	// 	);
-
-	// 	let block_number = get_current_block_as_u64::<T>();
-
-	// 	// shift node classes
-  //   Network::<T>::shift_node_classes(block_number, epoch_length);
-
-	// 	let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
-
-	// 	let proposer = funded_account::<T>("subnet_node", 0);
-	// 	let defendant = funded_account::<T>("subnet_node", 1);
-
-	// 	let proposal_bid_amount = ProposalBidAmount::<T>::get();
-  //   let plaintiff_starting_balance = T::Currency::free_balance(&proposer.clone());
-	// 	let data = Vec::new();
-
-	// 	let accountant_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
-
-	// 	assert_ok!(
-	// 		Network::<T>::propose(
-	// 			RawOrigin::Signed(proposer.clone()).into(), 
-	// 			subnet_id, 
-	// 			peer(1), 
-	// 			data.clone()
-	// 		)
-	// 	);
-
-	// 	assert_ok!(
-	// 		Network::<T>::challenge_proposal(
-	// 			RawOrigin::Signed(defendant.clone()).into(), 
-	// 			subnet_id, 
-	// 			0, 
-	// 			data.clone()
-	// 		)
-	// 	);
-
-	// 	for n in 0..n_peers {
-  //     if n == 0 || n == 1 {
-  //       continue
-  //     }
-	// 		let voter = funded_account::<T>("subnet_node", n);
-	// 		assert_ok!(
-	// 			Network::<T>::vote(
-	// 				RawOrigin::Signed(voter.clone()).into(), 
-	// 				subnet_id, 
-	// 				0, 
-	// 				VoteType::Yay
-	// 			)
-	// 		);
-  //   }
-
-	// 	let voting_period = VotingPeriod::<T>::get();
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(voting_period + 1)
-	// 	);
-
-	// 	// anone can call this
-	// 	let finalizer = funded_account::<T>("subnet_node", n_peers);
-
-	// 	#[extrinsic_call]
-	// 	finalize_proposal(RawOrigin::Signed(finalizer.clone()), subnet_id, 0);
-
-	// 	let plaintiff_after_balance = T::Currency::free_balance(&proposer.clone());
-  //   assert!(plaintiff_after_balance > plaintiff_starting_balance);
-
-  //   let proposal = Proposals::<T>::get(subnet_id, 0);
-  //   assert_eq!(proposal.votes.yay.len(), (n_peers-2) as usize);
-  //   assert_eq!(proposal.plaintiff_bond, 0);
-  //   assert_eq!(proposal.defendant_bond, 0);
-  //   assert_eq!(proposal.complete, true);
-	// }
-
-	// #[benchmark]
-	// fn reward_subnet() {
-	// 	let rewarder = funded_account::<T>("rewarder", 0);
-
-	// 	let n_peers: u32 = Network::<T>::max_subnet_nodes();
-  //   let amount: u128 = 				 1000000000000000000000;
-
-	// 	build_subnet::<T>(DEFAULT_SUBNET_PATH.into());
-	// 	let subnet_id = 1;
-
-	// 	build_subnet_nodes::<T>(subnet_id, 0, n_peers, amount);
-
-	// 	let epoch_length = T::EpochLength::get();
-
-	// 	let min_required_subnet_consensus_submit_epochs: u64 = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();	
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(epoch_length * min_required_subnet_consensus_submit_epochs)
-	// 	);
-
-	// 	let class_epochs = SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Submittable);
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(class_epochs * (epoch_length + 1))
-	// 	);
-
-	// 	let block_number = get_current_block_as_u64::<T>();
-  //   Network::<T>::shift_node_classes(block_number, epoch_length);
-	// 	let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
-
-	// 	// --- get validator
-  //   Network::<T>::do_choose_validator_and_accountants(
-	// 		get_current_block_as_u64::<T>(), 
-	// 		epoch as u32, 
-	// 		epoch_length
-	// 	);
-
-	// 	let validator = SubnetRewardsValidator::<T>::get(subnet_id, epoch as u32);
-	// 	assert!(validator != None, "Validator is None");
-
-	// 	let subnet_node_data_vec = subnet_node_data(0, n_peers);
-
-	// 	// --- validate
-	// 	assert_ok!(
-	// 		Network::<T>::validate(
-	// 			RawOrigin::Signed(validator.clone().unwrap()).into(), 
-	// 			subnet_id, 
-	// 			subnet_node_data_vec.clone()
-	// 		)
-	// 	);
-
-	// 	// Attest
-	// 	for n in 1..n_peers {
-	// 		let attester = funded_account::<T>("subnet_node", n);
-	// 		assert_ok!(
-	// 			Network::<T>::attest(
-	// 				RawOrigin::Signed(attester).into(), 
-	// 				subnet_id,
-	// 			)
-	// 		);
-	// 	}	
-
-	// 	// --- push to next epoch block where ``on_initialize`` is called		
-	// 	let current_block_number = get_current_block_as_u64::<T>();
-	// 	let next_epoch_block = current_block_number - (current_block_number % epoch_length) + epoch_length;
-
-	// 	frame_system::Pallet::<T>::set_block_number(u64_to_block::<T>(next_epoch_block + 1));
-
-		
-	// 	#[extrinsic_call]
-	// 	reward_subnet(RawOrigin::Signed(rewarder.clone()), subnet_id, epoch as u32);
-
-	// 	for n in 1..n_peers {
-	// 		let subnet_node = funded_account::<T>("subnet_node", n);
-	// 		let account_subnet_stake = Network::<T>::account_subnet_stake(subnet_node.clone(), subnet_id);
-	// 		assert!(account_subnet_stake > amount);
-	// 	}	
-	// }
+	#[benchmark]
+	fn propose() {
+		let end = 64;
+		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
+		let subnet = SubnetsData::<T>::get(subnet_id).unwrap();
+		let n_peers: u32 = TotalSubnetNodes::<T>::get(subnet_id);
+
+		let epoch_length = T::EpochLength::get();
+		let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
+
+		let proposer = funded_account::<T>("subnet_node_account", 0);
+		let defendant = funded_account::<T>("subnet_node_account", 1);
+
+		let proposal_bid_amount = ProposalBidAmount::<T>::get();
+    let plaintiff_starting_balance = T::Currency::free_balance(&proposer.clone());
+		let data = Vec::new();
+
+		#[extrinsic_call]
+		propose(RawOrigin::Signed(proposer.clone()), subnet_id, peer(1), data.clone());
+
+    let plaintiff_after_balance = T::Currency::free_balance(&proposer.clone());
+    assert_eq!(plaintiff_starting_balance - u128_to_balance::<T>(proposal_bid_amount).unwrap(), plaintiff_after_balance);
+
+		let proposal = Proposals::<T>::get(subnet_id, 0);
+    assert_eq!(proposal.subnet_id, subnet_id);
+    assert_eq!(proposal.plaintiff, proposer.clone());
+    assert_eq!(proposal.defendant, defendant);
+    assert_eq!(proposal.plaintiff_bond, proposal_bid_amount);
+    assert_eq!(proposal.defendant_bond, 0);
+    assert_eq!(proposal.eligible_voters.len(), end as usize);
+    assert_eq!(proposal.start_block, get_current_block_as_u64::<T>());
+    assert_eq!(proposal.challenge_block, 0);
+    assert_eq!(proposal.plaintiff_data, data);
+    assert_eq!(proposal.defendant_data, data);
+    assert_eq!(proposal.complete, false);
+	}
+
+	#[benchmark]
+	fn cancel_proposal() {
+		let end = 64;
+		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
+		let subnet = SubnetsData::<T>::get(subnet_id).unwrap();
+		let n_peers: u32 = TotalSubnetNodes::<T>::get(subnet_id);
+
+		let epoch_length = T::EpochLength::get();
+		let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
+
+		let proposer = funded_account::<T>("subnet_node_account", 0);
+		let defendant = funded_account::<T>("subnet_node_account", 1);
+
+		let proposal_bid_amount = ProposalBidAmount::<T>::get();
+    let plaintiff_starting_balance = T::Currency::free_balance(&proposer.clone());
+		let data = Vec::new();
+
+		let accountant_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
+
+		assert_ok!(
+			Network::<T>::propose(
+				RawOrigin::Signed(proposer.clone()).into(), 
+				subnet_id, 
+				peer(1), 
+				data.clone()
+			)
+		);
+
+		#[extrinsic_call]
+		cancel_proposal(RawOrigin::Signed(proposer.clone()), subnet_id, 0);
+
+    let plaintiff_after_balance = T::Currency::free_balance(&proposer.clone());
+    assert_eq!(plaintiff_starting_balance, plaintiff_after_balance);
+
+    let proposal = Proposals::<T>::try_get(subnet_id, 0);
+    assert_eq!(proposal, Err(()));
+	}
+
+	#[benchmark]
+	fn challenge_proposal() {
+		let end = 64;
+		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
+		let subnet = SubnetsData::<T>::get(subnet_id).unwrap();
+		let n_peers: u32 = TotalSubnetNodes::<T>::get(subnet_id);
+
+		let epoch_length = T::EpochLength::get();
+		let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
+
+		let proposer = funded_account::<T>("subnet_node_account", 0);
+		let defendant = funded_account::<T>("subnet_node_account", 1);
+
+		let proposal_bid_amount = ProposalBidAmount::<T>::get();
+    let plaintiff_starting_balance = T::Currency::free_balance(&proposer.clone());
+		let data = Vec::new();
+
+		let accountant_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
+
+		assert_ok!(
+			Network::<T>::propose(
+				RawOrigin::Signed(proposer.clone()).into(), 
+				subnet_id, 
+				peer(1), 
+				data.clone()
+			)
+		);
+
+		let challenger_starting_balance = T::Currency::free_balance(&defendant.clone());
+
+		#[extrinsic_call]
+		challenge_proposal(RawOrigin::Signed(defendant.clone()), subnet_id, 0, Vec::new());
+
+    let challenger_after_balance = T::Currency::free_balance(&defendant.clone());
+    assert_eq!(challenger_starting_balance - u128_to_balance::<T>(proposal_bid_amount).unwrap(), challenger_after_balance);
+
+		let proposal = Proposals::<T>::get(subnet_id, 0);
+    assert_eq!(proposal.subnet_id, subnet_id);
+    assert_eq!(proposal.plaintiff, proposer.clone());
+    assert_eq!(proposal.defendant, defendant.clone());
+    assert_eq!(proposal.plaintiff_bond, proposal_bid_amount);
+    assert_eq!(proposal.defendant_bond, proposal_bid_amount);
+    assert_eq!(proposal.eligible_voters.len(), end as usize);
+    assert_eq!(proposal.start_block, get_current_block_as_u64::<T>());
+    assert_eq!(proposal.challenge_block, get_current_block_as_u64::<T>());
+    assert_eq!(proposal.plaintiff_data, data);
+    assert_eq!(proposal.defendant_data, data);
+    assert_eq!(proposal.complete, false);
+	}
+
+	#[benchmark]
+	fn vote() {
+		let end = 64;
+		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
+		let subnet = SubnetsData::<T>::get(subnet_id).unwrap();
+		let n_peers: u32 = TotalSubnetNodes::<T>::get(subnet_id);
+
+		let epoch_length = T::EpochLength::get();
+		let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
+
+		let proposer = funded_account::<T>("subnet_node_account", 0);
+		let defendant = funded_account::<T>("subnet_node_account", 1);
+
+		let proposal_bid_amount = ProposalBidAmount::<T>::get();
+    let plaintiff_starting_balance = T::Currency::free_balance(&proposer.clone());
+		let data = Vec::new();
+
+		let accountant_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
+
+		assert_ok!(
+			Network::<T>::propose(
+				RawOrigin::Signed(proposer.clone()).into(), 
+				subnet_id, 
+				peer(1), 
+				data.clone()
+			)
+		);
+
+		assert_ok!(
+			Network::<T>::challenge_proposal(
+				RawOrigin::Signed(defendant.clone()).into(), 
+				subnet_id, 
+				0, 
+				data.clone()
+			)
+		);
+
+		let voter = funded_account::<T>("subnet_node_account", 2);
+
+		#[extrinsic_call]
+		vote(RawOrigin::Signed(voter.clone()), subnet_id, 0, VoteType::Yay);
+
+    let proposal = Proposals::<T>::get(subnet_id, 0);
+    assert_eq!(proposal.votes.yay.get(&voter.clone()), Some(&voter.clone()));
+    assert_ne!(proposal.votes.yay.get(&voter.clone()), None);
+	}
+
+	#[benchmark]
+	fn finalize_proposal() {
+		let end = 64;
+		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
+		let subnet = SubnetsData::<T>::get(subnet_id).unwrap();
+		let n_peers: u32 = TotalSubnetNodes::<T>::get(subnet_id);
+
+		let epoch_length = T::EpochLength::get();
+		let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
+
+		let proposer = funded_account::<T>("subnet_node_account", 0);
+		let defendant = funded_account::<T>("subnet_node_account", 1);
+
+		let proposal_bid_amount = ProposalBidAmount::<T>::get();
+    let plaintiff_starting_balance = T::Currency::free_balance(&proposer.clone());
+		let data = Vec::new();
+
+		let accountant_nodes = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Accountant);
+
+		assert_ok!(
+			Network::<T>::propose(
+				RawOrigin::Signed(proposer.clone()).into(), 
+				subnet_id, 
+				peer(1), 
+				data.clone()
+			)
+		);
+
+		assert_ok!(
+			Network::<T>::challenge_proposal(
+				RawOrigin::Signed(defendant.clone()).into(), 
+				subnet_id, 
+				0, 
+				data.clone()
+			)
+		);
+
+		for n in 0..n_peers {
+      if n == 0 || n == 1 {
+        continue
+      }
+			let voter = funded_account::<T>("subnet_node_account", n);
+			assert_ok!(
+				Network::<T>::vote(
+					RawOrigin::Signed(voter.clone()).into(), 
+					subnet_id, 
+					0, 
+					VoteType::Yay
+				)
+			);
+    }
+
+		let voting_period = VotingPeriod::<T>::get();
+		frame_system::Pallet::<T>::set_block_number(
+			frame_system::Pallet::<T>::block_number() + 
+			u64_to_block::<T>(voting_period + 1)
+		);
+
+		// anone can call this
+		let finalizer = funded_account::<T>("subnet_node_account", n_peers);
+
+		#[extrinsic_call]
+		finalize_proposal(RawOrigin::Signed(finalizer.clone()), subnet_id, 0);
+
+		let plaintiff_after_balance = T::Currency::free_balance(&proposer.clone());
+    assert!(plaintiff_after_balance > plaintiff_starting_balance);
+
+    let proposal = Proposals::<T>::get(subnet_id, 0);
+    assert_eq!(proposal.votes.yay.len(), (n_peers-2) as usize);
+    assert_eq!(proposal.plaintiff_bond, 0);
+    assert_eq!(proposal.defendant_bond, 0);
+    assert_eq!(proposal.complete, true);
+	}
 
 	// #[benchmark]
 	// fn on_initialize_do_choose_validator_and_accountants() {
 	// 	let max_subnets: u32 = Network::<T>::max_subnets();
 	// 	let n_peers: u32 = Network::<T>::max_subnet_nodes();
-  //   let amount: u128 = 				 1000000000000000000000;
 
 	// 	for s in 0..max_subnets {
-	// 		let subnet_path = format!("subnet-path-{s}");
-	// 		build_subnet::<T>(subnet_path.clone().into());
-
-	// 		let subnet_id = s+1;
-	// 		build_subnet_nodes::<T>(subnet_id, 0, n_peers, amount);
+	// 		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, n_peers, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
 	// 	}
 
 	// 	let epoch_length = T::EpochLength::get();
 
-	// 	let min_required_subnet_consensus_submit_epochs: u64 = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();	
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(epoch_length * min_required_subnet_consensus_submit_epochs)
-	// 	);
-
-	// 	let class_epochs = SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Submittable);
-	// 	frame_system::Pallet::<T>::set_block_number(
-	// 		frame_system::Pallet::<T>::block_number() + 
-	// 		u64_to_block::<T>(class_epochs * (epoch_length + 1))
-	// 	);
-
 	// 	let block_number = get_current_block_as_u64::<T>();
-  //   Network::<T>::shift_node_classes(block_number, epoch_length);
 	// 	let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
 
 	// 	#[block]
