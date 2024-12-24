@@ -153,6 +153,8 @@ impl<T: Config> Pallet<T> {
             continue
           }
 
+          // --- At this point, all nodes should be included in consensus data
+
           let peer_id: PeerId = subnet_node.peer_id;
 
           let mut subnet_node_data: SubnetNodeData = SubnetNodeData::default();

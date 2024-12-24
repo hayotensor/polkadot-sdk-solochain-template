@@ -77,6 +77,11 @@ impl<T: Config> Pallet<T> {
     Ok(())
   }
 
+  pub fn set_target_subnet_node_multiplier(value: u128) -> DispatchResult {
+    TargetSubnetNodesMultiplier::<T>::put(value);
+    Ok(())
+  }
+
   pub fn set_subnet_memory(subnet_id: u32, memory_mb: u128) -> DispatchResult {
     let subnet = match SubnetsData::<T>::try_get(subnet_id) {
       Ok(subnet) => subnet,
@@ -119,46 +124,46 @@ impl<T: Config> Pallet<T> {
       idle < included && included < submittable && submittable < accountant,
       Error::<T>::SubnetNotExist
     );
-    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Idle, idle);
-    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Included, included);
-    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Submittable, submittable);
-    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Accountant, accountant);
+    // SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Idle, idle);
+    // SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Included, included);
+    // SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Submittable, submittable);
+    // SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Accountant, accountant);
     Ok(())
   }
 
   pub fn set_subnet_node_idle_epochs(value: u64) -> DispatchResult {
-    ensure!(
-      value < SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Included) && value > 0,
-      Error::<T>::SubnetNotExist
-    );
-    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Idle, value);
+    // ensure!(
+    //   value < SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Included) && value > 0,
+    //   Error::<T>::SubnetNotExist
+    // );
+    // SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Idle, value);
     Ok(())
   }
 
   pub fn set_subnet_node_included_epochs(value: u64) -> DispatchResult {
-    ensure!(
-      value > SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Idle),
-      Error::<T>::SubnetNotExist
-    );
-    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Included, value);
+    // ensure!(
+    //   value > SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Idle),
+    //   Error::<T>::SubnetNotExist
+    // );
+    // SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Included, value);
     Ok(())
   }
 
   pub fn set_subnet_node_submittable_epochs(value: u64) -> DispatchResult {
-    ensure!(
-      value > SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Included),
-      Error::<T>::SubnetNotExist
-    );
-    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Submittable, value);
+    // ensure!(
+    //   value > SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Included),
+    //   Error::<T>::SubnetNotExist
+    // );
+    // SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Submittable, value);
     Ok(())
   }
 
   pub fn set_subnet_node_accountant_epochs(value: u64) -> DispatchResult {
-    ensure!(
-      value > SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Submittable),
-      Error::<T>::SubnetNotExist
-    );
-    SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Accountant, value);
+    // ensure!(
+    //   value > SubnetNodeClassEpochs::<T>::get(SubnetNodeClass::Submittable),
+    //   Error::<T>::SubnetNotExist
+    // );
+    // SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Accountant, value);
     Ok(())
   }
 

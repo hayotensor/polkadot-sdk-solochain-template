@@ -37,7 +37,7 @@ use crate::{
   AccountSubnetDelegateStakeShares, TotalSubnetDelegateStakeShares, TotalSubnetDelegateStakeBalance,
   TotalSubnets, AccountantDataCount,
   AccountantDataNodeParams, SubnetRewardsValidator, SubnetRewardsSubmission, BaseValidatorReward,
-  DelegateStakeRewardsPercentage, SubnetNodeClass, SubnetNodeClassEpochs,
+  DelegateStakeRewardsPercentage, SubnetNodeClass,
   SubnetPenaltyCount, MaxSequentialAbsentSubnetNode, MaxSubnetNodePenalties, 
   SubnetNodePenalties, RegistrationSubnetData,
   CurrentAccountants, TargetAccountantsLength, MinRequiredSubnetConsensusSubmitEpochs, BaseRewardPerMB,

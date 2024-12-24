@@ -1060,15 +1060,15 @@ pub mod pallet {
 	// How many epochs until an account can reach the next node class
 	// e.g. Idle 			2 epochs => account must be Idle for 2 epochs from their initialization epoch
 	//			Included	2 epochs => account must be Included for 2 epochs from their initialization epoch
-	#[pallet::storage] // subnet => account_id
-	pub type SubnetNodeClassEpochs<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		SubnetNodeClass,
-		u64,
-		ValueQuery,
-		DefaultSubnetNodeClassEpochs
-	>;
+	// #[pallet::storage] // subnet => account_id
+	// pub type SubnetNodeClassEpochs<T: Config> = StorageMap<
+	// 	_,
+	// 	Blake2_128Concat,
+	// 	SubnetNodeClass,
+	// 	u64,
+	// 	ValueQuery,
+	// 	DefaultSubnetNodeClassEpochs
+	// >;
 
 	#[pallet::storage] // subnet_id -> class_id -> BTreeMap(account_id, block)
 	pub type SubnetNodesClasses<T: Config> = StorageDoubleMap<
@@ -1495,6 +1495,10 @@ pub mod pallet {
 		16
 	}
 
+	/// The minimum subnet nodes for a subnet to have to be able to use the proposal mechanism
+	// Because of slashing of funds is possible, we ensure the subnet is well decentralized
+	// If a subnet is under this amount, it's best to have logic in the subnet to have them absent
+	// from the incentives consensus data and have them removed after the required consecutive epochs
 	#[pallet::storage] 
 	pub type ProposalMinSubnetNodes<T> = StorageValue<_, u32, ValueQuery, DefaultProposalMinSubnetNodes>;
 
@@ -2712,21 +2716,11 @@ pub mod pallet {
 			// 	min_nodes: min_subnet_nodes,
 			// 	target_nodes: target_subnet_nodes,
 			// 	memory_mb: self.memory_mb.clone(),
+			// 	registration_blocks: MinSubnetRegistrationBlocks::<T>::get(),
 			// 	initialized: 0,
+			// 	activated: 0,
 			// };
 
-			// // Activate subnet
-			// let pre_subnet_data = RegistrationSubnetData {
-			// 	path: self.subnet_path.clone(),
-			// 	memory_mb: self.memory_mb.clone(),
-			// };
-		
-			// let vote_subnet_data = SubnetDemocracySubnetData {
-			// 	data: pre_subnet_data,
-			// 	active: true,
-			// };
-
-			// SubnetActivated::<T>::insert(self.subnet_path.clone(), vote_subnet_data);
 			// // Store unique path
 			// SubnetPaths::<T>::insert(self.subnet_path.clone(), subnet_id);
 			// // Store subnet data
@@ -2734,7 +2728,12 @@ pub mod pallet {
 			// // Increase total subnets count
 			// TotalSubnets::<T>::mutate(|n: &mut u32| *n += 1);
 
-			// StakeVaultBalance::<T>::mutate(|n: &mut u128| *n += 10000000000000000000);
+
+
+			
+			// --- Initialize subnet nodes
+			// Only initialize to test using subnet nodes
+			// If testing using subnet nodes in a subnet, comment out the ``for`` loop
 
 			// let mut stake_amount: u128 = MinStakeBalance::<T>::get();
 			
@@ -2784,31 +2783,31 @@ pub mod pallet {
 			// 	// ========================
 			// 	// Insert peer into storage
 			// 	// ========================
+			// 	let classification = SubnetNodeClassification {
+			// 		class: SubetNodeClass::Submittable,
+			// 		start_epoch: 0,
+			// 	};
+
 			// 	let subnet_node: SubnetNode<T::AccountId> = SubnetNode {
 			// 		account_id: account_id.clone(),
 			// 		hotkey: account_id.clone(),
 			// 		peer_id: peer_id.clone(),
 			// 		initialized: 0,
+			// 		classification: classification,
+			// 		a: Vec::new(),
+			// 		b: Vec::new(),
+			// 		c: Vec::new(),
 			// 	};
+	
 			// 	// Insert SubnetNodesData with account_id as key
 			// 	SubnetNodesData::<T>::insert(subnet_id, account_id.clone(), subnet_node);
 
 			// 	// Insert subnet peer account to keep peer_ids unique within subnets
 			// 	SubnetNodeAccount::<T>::insert(subnet_id, peer_id.clone(), account_id.clone());
 
-			// 	if let Ok(mut node_class) = SubnetNodesClasses::<T>::try_get(subnet_id, SubnetNodeClass::Idle) {
-			// 		node_class.insert(account_id.clone(), 0);
-			// 		SubnetNodesClasses::<T>::insert(subnet_id, SubnetNodeClass::Idle, node_class);	
-			// 	} else {
-			// 		// If new subnet, initialize classes
-			// 		let mut node_class: BTreeMap<T::AccountId, u64> = BTreeMap::new();
-			// 		node_class.insert(account_id.clone(), 0);
-			// 		SubnetNodesClasses::<T>::insert(subnet_id, SubnetNodeClass::Idle, node_class);	
-			// 	}
-
 			// 	// Increase total subnet peers
 			// 	TotalSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
-
+			// 	TotalActiveSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
 
 			// 	count += 1;
 			// }

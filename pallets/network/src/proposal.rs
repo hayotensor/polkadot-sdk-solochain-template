@@ -71,9 +71,6 @@ impl<T: Config> Pallet<T> {
     );
 
     // --- Ensure min nodes for proposals
-    // Because of slashing of funds is possible, we ensure the subnet is well decentralized
-    // If a subnet is under this amount, it's best to have logic in the subnet to have them absent
-    // from consensus data and have them removed after the required consecutive epochs
     ensure!(
       subnet_nodes_count as u32 >= ProposalMinSubnetNodes::<T>::get(),
       Error::<T>::SubnetNodesMin

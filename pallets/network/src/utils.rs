@@ -259,77 +259,77 @@ impl<T: Config> Pallet<T> {
     T::SubnetInitializationCost::get()
   }
 
-    /// Shift up subnet nodes to new classifications
+  // Shift up subnet nodes to new classifications
   // This is used to know the len() of each class of subnet nodes instead of iterating through each time
-  pub fn shift_node_classes(block: u64, epoch_length: u64) {
-    for (subnet_id, _) in SubnetsData::<T>::iter() {
-      let class_ids = SubnetNodeClass::iter();
-      let last_class_id = class_ids.clone().last().unwrap();
-      for mut class_id in class_ids {
-        // Can't increase user class after last so skip
-        if class_id == last_class_id {
-          continue;
-        }
+  // pub fn shift_node_classes(block: u64, epoch_length: u64) {
+  //   for (subnet_id, _) in SubnetsData::<T>::iter() {
+  //     let class_ids = SubnetNodeClass::iter();
+  //     let last_class_id = class_ids.clone().last().unwrap();
+  //     for mut class_id in class_ids {
+  //       // Can't increase user class after last so skip
+  //       if class_id == last_class_id {
+  //         continue;
+  //       }
 
-        let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(
-          subnet_id, 
-          class_id.clone()
-        );
+  //       let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(
+  //         subnet_id, 
+  //         class_id.clone()
+  //       );
 
-        // If initialized but empty, then skip
-        if node_sets.is_empty() {
-          continue;
-        }
+  //       // If initialized but empty, then skip
+  //       if node_sets.is_empty() {
+  //         continue;
+  //       }
         
-        // --- Get next class to shift into
-        let class_index = class_id.index();
+  //       // --- Get next class to shift into
+  //       let class_index = class_id.index();
 
-        // --- Safe unwrap from `continue` from last
-        let next_class_id: SubnetNodeClass = SubnetNodeClass::from_repr(class_index + 1).unwrap();
+  //       // --- Safe unwrap from `continue` from last
+  //       let next_class_id: SubnetNodeClass = SubnetNodeClass::from_repr(class_index + 1).unwrap();
 
-        // --- Copy the node sets for mutation
-        let mut node_sets_copy: BTreeMap<T::AccountId, u64> = node_sets.clone();
+  //       // --- Copy the node sets for mutation
+  //       let mut node_sets_copy: BTreeMap<T::AccountId, u64> = node_sets.clone();
         
-        // --- Get next node sets for mutation or initialize new BTreeMap
-        let mut next_node_sets: BTreeMap<T::AccountId, u64> = match SubnetNodesClasses::<T>::try_get(subnet_id, next_class_id) {
-          Ok(next_node_sets) => next_node_sets,
-          Err(_) => BTreeMap::new(),
-        };
+  //       // --- Get next node sets for mutation or initialize new BTreeMap
+  //       let mut next_node_sets: BTreeMap<T::AccountId, u64> = match SubnetNodesClasses::<T>::try_get(subnet_id, next_class_id) {
+  //         Ok(next_node_sets) => next_node_sets,
+  //         Err(_) => BTreeMap::new(),
+  //       };
 
-        // --- Get epochs required to be in class from the initialization block
-        let epochs = SubnetNodeClassEpochs::<T>::get(class_id.clone());
+  //       // --- Get epochs required to be in class from the initialization block
+  //       let epochs = SubnetNodeClassEpochs::<T>::get(class_id.clone());
 
-        for node_set in node_sets.iter() {
-          let account_eligible: bool = Self::is_account_eligible(node_set.0.clone());
+  //       for node_set in node_sets.iter() {
+  //         let account_eligible: bool = Self::is_account_eligible(node_set.0.clone());
 
-          if !account_eligible {
-            next_node_sets.remove(&node_set.0.clone());
-            node_sets_copy.remove(&node_set.0.clone());
-            continue;
-          }
+  //         if !account_eligible {
+  //           next_node_sets.remove(&node_set.0.clone());
+  //           node_sets_copy.remove(&node_set.0.clone());
+  //           continue;
+  //         }
 
-          if let Ok(subnet_node_data) = SubnetNodesData::<T>::try_get(subnet_id, node_set.0.clone()) {
-            let initialized: u64 = subnet_node_data.initialized;
-            if Self::is_epoch_block_eligible(
-              block, 
-              epoch_length, 
-              epochs, 
-              initialized
-            ) {
-              // --- Insert to the next classification, will only insert if doesn't already exist
-              next_node_sets.insert(node_set.0.clone(), *node_set.1);
-            }  
-          } else {
-            // Remove the account from classification if they don't exist anymore
-            node_sets_copy.remove(&node_set.0.clone());
-          }
-        }
-        // --- Update classifications
-        SubnetNodesClasses::<T>::insert(subnet_id, class_id, node_sets_copy);
-        SubnetNodesClasses::<T>::insert(subnet_id, next_class_id, next_node_sets);
-      }
-    }
-  }
+  //         if let Ok(subnet_node_data) = SubnetNodesData::<T>::try_get(subnet_id, node_set.0.clone()) {
+  //           let initialized: u64 = subnet_node_data.initialized;
+  //           if Self::is_epoch_block_eligible(
+  //             block, 
+  //             epoch_length, 
+  //             epochs, 
+  //             initialized
+  //           ) {
+  //             // --- Insert to the next classification, will only insert if doesn't already exist
+  //             next_node_sets.insert(node_set.0.clone(), *node_set.1);
+  //           }  
+  //         } else {
+  //           // Remove the account from classification if they don't exist anymore
+  //           node_sets_copy.remove(&node_set.0.clone());
+  //         }
+  //       }
+  //       // --- Update classifications
+  //       SubnetNodesClasses::<T>::insert(subnet_id, class_id, node_sets_copy);
+  //       SubnetNodesClasses::<T>::insert(subnet_id, next_class_id, next_node_sets);
+  //     }
+  //   }
+  // }
 
   pub fn do_choose_validator_and_accountants(block: u64, epoch: u32, epoch_length: u64) {
     let min_required_subnet_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
