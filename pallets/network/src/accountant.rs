@@ -137,7 +137,8 @@ impl<T: Config> Pallet<T> {
         Err(()) => continue,
       };
 
-      let subnet_node_count = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch as u64).len() as u128;
+      let subnet_node: Vec<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch as u64);
+      let subnet_node_count = subnet_node.len() as u128;
 
       let attestations: u128 = accountant_data.attests.len() as u128;
       let mut attestation_percentage: u128 = Self::percent_div(attestations, subnet_node_count);
@@ -169,11 +170,11 @@ impl<T: Config> Pallet<T> {
     block: u64,
     epoch: u32,
     subnet_id: u32,
+    account_ids: Vec<T::AccountId>,
     min_subnet_nodes: u32,
     target_accountants_len: u32,
   ) {
-    let subnet_nodes = Self::get_classified_subnet_nodes(subnet_id, &SubetNodeClass::Submittable, epoch as u64);
-    let subnet_nodes_len: u32 = subnet_nodes.len() as u32;
+    let subnet_nodes_len = account_ids.len() as u32;
 
     // --- Ensure min subnet peers that are submittable are at least the minimum required
     // --- Consensus cannot begin until this minimum is reached
@@ -205,7 +206,7 @@ impl<T: Config> Pallet<T> {
 
     for n in 0..max_accountants {
       let rand = rand_index + n % subnet_nodes_len_for_overflow as u32;
-      let random_accountant: &T::AccountId = &subnet_nodes[rand as usize].account_id;
+      let random_accountant: &T::AccountId = &account_ids[rand as usize];
 
       current_accountants.insert(random_accountant.clone(), false);
     }

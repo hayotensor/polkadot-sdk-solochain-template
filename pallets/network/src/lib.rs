@@ -1604,11 +1604,7 @@ pub mod pallet {
 
 			// --- Ensure the subnet has passed it's required period to begin consensus submissions
 			ensure!(
-				block > Self::get_eligible_epoch_block(
-					T::EpochLength::get(), 
-					subnet.initialized, 
-					min_required_subnet_consensus_submit_epochs
-				),
+				block > subnet.activated,
 				Error::<T>::SubnetInitializing
 			);
 
@@ -2326,12 +2322,6 @@ pub mod pallet {
 				}
 			)?;
 
-			// --- Choose validator for next epoch
-			let epoch_length: u64 = T::EpochLength::get();
-			let next_epoch: u64 = block / epoch_length + 1;
-
-			Self::choose_validator(block, subnet_id, subnet.min_nodes, next_epoch as u32);
-
       // Self::deposit_event(Event::SubnetActivated { 
       //   subnet_id: subnet_id, 
       //   validator: validator,
@@ -2623,6 +2613,11 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
+			// 1. Reward subnets that successfully attested validator data
+			// 2. Choose validators per subnet for next epoch
+			//			- If subnet is under any of the following conditions they are removed:
+			//						- Passed max penalties
+			//						- Under minimum delegate stake threshold
 			let block: u64 = Self::convert_block_as_u64(block_number);
 			let epoch_length: u64 = T::EpochLength::get();
 

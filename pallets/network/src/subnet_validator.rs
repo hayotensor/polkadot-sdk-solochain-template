@@ -167,6 +167,7 @@ impl<T: Config> Pallet<T> {
   pub fn choose_validator(
     block: u64,
     subnet_id: u32,
+    account_ids: Vec<T::AccountId>,
     min_subnet_nodes: u32,
     epoch: u32,
   ) {
@@ -178,9 +179,7 @@ impl<T: Config> Pallet<T> {
       return
     }
 
-    let subnet_nodes = Self::get_classified_subnet_nodes(subnet_id, &SubetNodeClass::Submittable, epoch as u64);
-    let subnet_nodes_len = subnet_nodes.len();
-
+    let subnet_nodes_len = account_ids.len();
     
     // --- Ensure min subnet peers that are submittable are at least the minimum required
     // --- Consensus cannot begin until this minimum is reached
@@ -192,7 +191,7 @@ impl<T: Config> Pallet<T> {
     let rand_index = Self::get_random_number((subnet_nodes_len - 1) as u32, block as u32);
 
     // --- Choose random accountant from eligible accounts
-    let validator: &T::AccountId = &subnet_nodes[rand_index as usize].account_id;
+    let validator: &T::AccountId = &account_ids[rand_index as usize];
 
     // --- Insert validator for next epoch
     SubnetRewardsValidator::<T>::insert(subnet_id, epoch, validator);
