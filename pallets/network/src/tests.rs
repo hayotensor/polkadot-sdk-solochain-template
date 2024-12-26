@@ -3867,7 +3867,7 @@ fn test_remove_delegate_stake_after_subnet_remove() {
 //     let accountants = CurrentAccountants::<Test>::get(subnet_id, epoch as u32);
 //     assert!(accountants == None, "Accountant should be None");
 
-//     Network::do_choose_validator_and_accountants(System::block_number(), epoch as u32, epoch_length);
+//     Network::do_epoch_preliminaries(System::block_number(), epoch as u32, epoch_length);
 
 //     let validator = SubnetRewardsValidator::<Test>::get(subnet_id, epoch as u32);
 //     assert!(validator != None, "Validator is None");
@@ -3906,12 +3906,9 @@ fn test_validate() {
     let epoch_length = EpochLength::get();
     let epoch = System::block_number() / epoch_length;
 
-    Network::do_choose_validator_and_accountants(System::block_number(), epoch as u32, epoch_length);
+    Network::do_epoch_preliminaries(System::block_number(), epoch as u32, epoch_length);
 
     let subnet_node_data_vec = subnet_node_data(0, total_subnet_nodes);
-
-    // --- Insert validator
-    // SubnetRewardsValidator::<Test>::insert(subnet_id, epoch as u32, account(0));
 
     let validator = SubnetRewardsValidator::<Test>::get(subnet_id, epoch as u32);
     assert!(validator != None, "Validator is None");
@@ -3958,7 +3955,7 @@ fn test_validate_invalid_validator() {
     let epoch_length = EpochLength::get();
     let epoch = System::block_number() / epoch_length;
 
-    Network::do_choose_validator_and_accountants(System::block_number(), epoch as u32, epoch_length);
+    Network::do_epoch_preliminaries(System::block_number(), epoch as u32, epoch_length);
 
     let subnet_node_data_vec = subnet_node_data(0, total_subnet_nodes);
 
@@ -3998,7 +3995,7 @@ fn test_attest() {
     let epoch_length = EpochLength::get();
     let epoch = System::block_number() / epoch_length;
 
-    Network::do_choose_validator_and_accountants(System::block_number(), epoch as u32, epoch_length);
+    Network::do_epoch_preliminaries(System::block_number(), epoch as u32, epoch_length);
 
     let subnet_node_data_vec = subnet_node_data(0, total_subnet_nodes);
 
@@ -4059,7 +4056,7 @@ fn test_attest_remove_exiting_attester() {
     let epoch_length = EpochLength::get();
     let epoch = System::block_number() / epoch_length;
 
-    Network::do_choose_validator_and_accountants(System::block_number(), epoch as u32, epoch_length);
+    Network::do_epoch_preliminaries(System::block_number(), epoch as u32, epoch_length);
 
     let subnet_node_data_vec = subnet_node_data(0, total_subnet_nodes);
 
@@ -4134,7 +4131,7 @@ fn test_attest_no_submission_err() {
     let epoch_length = EpochLength::get();
     let epoch = System::block_number() / epoch_length;
 
-    Network::do_choose_validator_and_accountants(System::block_number(), epoch as u32, epoch_length);
+    Network::do_epoch_preliminaries(System::block_number(), epoch as u32, epoch_length);
 
     let subnet_node_data_vec = subnet_node_data(0, total_subnet_nodes);
 
@@ -4169,7 +4166,7 @@ fn test_attest_already_attested_err() {
     let epoch_length = EpochLength::get();
     let epoch = System::block_number() / epoch_length;
 
-    Network::do_choose_validator_and_accountants(System::block_number(), epoch as u32, epoch_length);
+    Network::do_epoch_preliminaries(System::block_number(), epoch as u32, epoch_length);
 
     let subnet_node_data_vec = subnet_node_data(0, total_subnet_nodes);
 
@@ -4261,7 +4258,7 @@ fn test_reward_subnets() {
     let epoch_length = EpochLength::get();
     let epoch = System::block_number() / epoch_length;
 
-    Network::do_choose_validator_and_accountants(System::block_number(), epoch as u32, epoch_length);
+    Network::do_epoch_preliminaries(System::block_number(), epoch as u32, epoch_length);
 
 
     let subnet_node_data_vec = subnet_node_data(0, total_subnet_nodes);
@@ -4605,7 +4602,7 @@ fn test_reward_subnets_validator_slash() {
     let epoch_length = EpochLength::get();
     let epoch = System::block_number() / epoch_length;
 
-    Network::do_choose_validator_and_accountants(System::block_number(), epoch as u32, epoch_length);
+    Network::do_epoch_preliminaries(System::block_number(), epoch as u32, epoch_length);
 
     let subnet_node_data_vec = subnet_node_data(0, total_subnet_nodes);
 

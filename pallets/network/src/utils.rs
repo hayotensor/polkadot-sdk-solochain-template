@@ -150,20 +150,20 @@ impl<T: Config> Pallet<T> {
         }
       );
     
-      AccountantData::<T>::try_mutate_exists(
-        subnet_id,
-        epoch as u32,
-        |params| -> DispatchResult {
-          let params = if let Some(params) = params {
-            // --- Remove from attestations
-            let mut attests = &mut params.attests;
-            if attests.remove(&account_id.clone()).is_some() {
-              params.attests = attests.clone();
-            }
-          };
-          Ok(())
-        }
-      );
+      // AccountantData::<T>::try_mutate_exists(
+      //   subnet_id,
+      //   epoch as u32,
+      //   |params| -> DispatchResult {
+      //     let params = if let Some(params) = params {
+      //       // --- Remove from attestations
+      //       let mut attests = &mut params.attests;
+      //       if attests.remove(&account_id.clone()).is_some() {
+      //         params.attests = attests.clone();
+      //       }
+      //     };
+      //     Ok(())
+      //   }
+      // );
 
       SubnetNodesData::<T>::remove(subnet_id, account_id.clone());
 
@@ -331,25 +331,36 @@ impl<T: Config> Pallet<T> {
   //   }
   // }
 
-  pub fn do_choose_validator_and_accountants(block: u64, epoch: u32, epoch_length: u64) {
+  pub fn do_epoch_preliminaries(block: u64, epoch: u32, epoch_length: u64) {
     let min_required_subnet_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
     let target_accountants_len: u32 = TargetAccountantsLength::<T>::get();
     let max_subnet_penalty_count = MaxSubnetPenaltyCount::<T>::get();
+    let subnet_activation_enactment_period = SubnetActivationEnactmentPeriod::<T>::get();
 
     for (subnet_id, data) in SubnetsData::<T>::iter() {
       let min_subnet_nodes = data.min_nodes;
 
-      // --- Ensure subnet is able to submit consensus
-      if data.activated < block {
+      // --- Ensure subnet is active is able to submit consensus
+      // We check if the subnet is still in registration phase and not yet out of the enactment phase
+      if data.activated < block && block < data.initialized + data.registration_blocks + subnet_activation_enactment_period {
         continue
-      }
+      } else if data.activated == 0 && block > data.initialized + data.registration_blocks + subnet_activation_enactment_period {
+        // --- Ensure subnet is in registration period and hasn't passed enactmen period
+				Self::deactivate_subnet(
+					data.path,
+					SubnetRemovalReason::EnactmentPeriod,
+				);
+        continue
+			}
 
+      // --- Get all possible validators
       let subnet_node_accounts: Vec<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch as u64);
 
       let subnet_nodes_count = subnet_node_accounts.len();
 			let subnet_delegate_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);
 			let min_subnet_delegate_stake_balance = Self::get_min_subnet_delegate_stake_balance(min_subnet_nodes);
 
+      // --- Ensure min delegate stake balance is met
       if subnet_delegate_stake_balance < min_subnet_delegate_stake_balance {
         Self::deactivate_subnet(
           data.path,
@@ -358,12 +369,15 @@ impl<T: Config> Pallet<T> {
         continue
       }
 
+      // --- Ensure min nodes are active
       // Only choose validator if min nodes are present
       // The ``SubnetPenaltyCount`` when surpassed doesn't penalize anyone, only removes the subnet from the chain
       if (subnet_nodes_count as u32) < min_subnet_nodes {
         SubnetPenaltyCount::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
       }
 
+
+      // --- Check penalties and remove subnet is threshold is breached
       let penalties = SubnetPenaltyCount::<T>::get(subnet_id);
       if penalties >  max_subnet_penalty_count{
         Self::deactivate_subnet(
@@ -511,12 +525,6 @@ impl<T: Config> Pallet<T> {
     min_subnet_delegate_stake_balance
   }
 
-  fn test_filter(subnet_id: u32, classification: SubnetNodeClass) -> Vec<SubnetNode<T::AccountId>> {
-    SubnetNodesData::<T>::iter_prefix_values(subnet_id)
-      .filter(|subnet_node| subnet_node.initialized <= 0)
-      .collect()
-  }
-
   /// Get subnet nodes by classification
   pub fn get_classified_subnet_nodes(subnet_id: u32, classification: &SubetNodeClass, epoch: u64) -> Vec<SubnetNode<T::AccountId>> {
     SubnetNodesData::<T>::iter_prefix_values(subnet_id)
@@ -525,13 +533,6 @@ impl<T: Config> Pallet<T> {
   }
 
   // Get subnet node ``account_ids`` by classification
-  // pub fn get_classified_accounts(subnet_id: u32, classification: &SubetNodeClass, epoch: u64) -> BTreeSet<T::AccountId> {
-  //   SubnetNodesData::<T>::iter_prefix_values(subnet_id)
-  //     .filter(|subnet_node| subnet_node.has_classification(classification, epoch))
-  //     .map(|subnet_node| subnet_node.account_id)
-  //     .collect()
-  // }
-
   pub fn get_classified_accounts<C>(
     subnet_id: u32,
     classification: &SubetNodeClass,

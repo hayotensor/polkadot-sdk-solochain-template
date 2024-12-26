@@ -1204,7 +1204,7 @@ mod benchmarks {
 	// 		let block = get_current_block_as_u64::<T>();
 	// 		let epoch_length = T::EpochLength::get();
 	// 		let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
-	// 		Network::<T>::do_choose_validator_and_accountants(
+	// 		Network::<T>::do_epoch_preliminaries(
 	// 			block, 
 	// 			epoch as u32, 
 	// 			epoch_length

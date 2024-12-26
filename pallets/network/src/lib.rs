@@ -616,7 +616,7 @@ pub mod pallet {
 		pub block: u64,
 		pub epoch: u32,
 		pub data: Vec<AccountantDataNodeParams>,
-		pub attests: Attests<AccountId>,
+		// pub attests: Attests<AccountId>,
 	}
 
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
@@ -1438,7 +1438,7 @@ pub mod pallet {
 			block: 0,
 			epoch: 0,
 			data: Vec::new(),
-			attests: BTreeMap::new(),
+			// attests: BTreeMap::new(),
 		};
 	}
 
@@ -1570,11 +1570,36 @@ pub mod pallet {
 	/// The [`weight`] macro is used to assign a weight to each call.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[pallet::call_index(0)]
+		#[pallet::weight({0})]
+		pub fn register_subnet(
+			origin: OriginFor<T>, 
+			subnet_data: RegistrationSubnetData,
+		) -> DispatchResult {
+			let account_id: T::AccountId = ensure_signed(origin)?;
+	
+			Self::do_register_subnet(
+				account_id,
+				subnet_data,
+			)
+		}
+
+		#[pallet::call_index(1)]
+		#[pallet::weight({0})]
+		pub fn activate_subnet(
+			origin: OriginFor<T>, 
+			subnet_id: u32,
+		) -> DispatchResult {
+			let account_id: T::AccountId = ensure_signed(origin)?;
+	
+			Self::do_activate_subnet(subnet_id)
+		}
+
 		/// Anyone can remove a subnet if:
 		/// - The time period allotted to initialize a subnet to reach consensus submissions
 		///   and
 		/// - The delegate stake balance is below the minimum required threshold
-		#[pallet::call_index(0)]
+		#[pallet::call_index(2)]
 		#[pallet::weight({0})]
 		pub fn remove_subnet(
 			origin: OriginFor<T>, 
@@ -1642,7 +1667,7 @@ pub mod pallet {
 		// due to the requirement of staking this is an unlikely scenario.
 		// Once you claim the peer_id, no one else can claim it.
 		// After RequiredSubnetNodeEpochs pass and the peer is in consensus, rewards will be emitted to the account
-		#[pallet::call_index(1)]
+		#[pallet::call_index(3)]
 		// #[pallet::weight(T::WeightInfo::add_subnet_node())]
 		#[pallet::weight({0})]
 		pub fn add_subnet_node(
@@ -1653,8 +1678,6 @@ pub mod pallet {
 			a: Option<BoundedVec<u8, DefaultSubnetNodeParamLimit>>,
 			b: Option<BoundedVec<u8, DefaultSubnetNodeParamLimit>>,
 			c: Option<BoundedVec<u8, DefaultSubnetNodeParamLimit>>,
-			// signature: T::OffchainSignature,
-			// signer: T::AccountId,
 		) -> DispatchResult {
 			Self::do_register_subnet_node(
 				origin.clone(),
@@ -1672,7 +1695,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(2)]
+		#[pallet::call_index(4)]
 		#[pallet::weight({0})]
 		pub fn register_subnet_node(
 			origin: OriginFor<T>, 
@@ -1694,7 +1717,7 @@ pub mod pallet {
 			)
 		}
 		
-		#[pallet::call_index(3)]
+		#[pallet::call_index(5)]
 		#[pallet::weight({0})]
 		pub fn activate_subnet_node(
 			origin: OriginFor<T>, 
@@ -1707,7 +1730,7 @@ pub mod pallet {
 		}	
 
 		/// Update a subnet peer
-		#[pallet::call_index(4)]
+		#[pallet::call_index(6)]
 		#[pallet::weight({0})]
 		pub fn deactivate_subnet_node(
 			origin: OriginFor<T>, 
@@ -1722,7 +1745,7 @@ pub mod pallet {
 		/// Remove your subnet peer
 		/// Unstaking must be done seperately
 		/// Infallible
-		#[pallet::call_index(5)]
+		#[pallet::call_index(7)]
 		// #[pallet::weight(T::WeightInfo::remove_subnet_node())]
 		#[pallet::weight({0})]
 		pub fn remove_subnet_node(
@@ -1736,7 +1759,7 @@ pub mod pallet {
 
 		/// Remove a subnet peer that has surpassed the max penalties allowed
 		// This is redundant 
-		#[pallet::call_index(6)]
+		#[pallet::call_index(8)]
 		#[pallet::weight({0})]
 		pub fn remove_account_subnet_nodes(
 			origin: OriginFor<T>, 
@@ -1762,7 +1785,7 @@ pub mod pallet {
 
 		
 		/// Increase stake towards the specified subnet ID
-		#[pallet::call_index(7)]
+		#[pallet::call_index(9)]
 		// #[pallet::weight(T::WeightInfo::add_to_stake())]
 		#[pallet::weight({0})]
 		pub fn add_to_stake(
@@ -1800,7 +1823,7 @@ pub mod pallet {
 		// Decrease stake on accounts peer if minimum required isn't surpassed
 		// to-do: if removed through consensus, add removed_block to storage and require time 
 		//				to pass until they can remove their stake
-		#[pallet::call_index(8)]
+		#[pallet::call_index(10)]
 		#[pallet::weight({0})]
 		pub fn remove_stake(
 			origin: OriginFor<T>, 
@@ -1829,7 +1852,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(9)]
+		#[pallet::call_index(11)]
 		#[pallet::weight({0})]
 		pub fn claim_stake_unbondings(
 			origin: OriginFor<T>, 
@@ -1845,7 +1868,7 @@ pub mod pallet {
 		}
 
 		/// Increase stake towards subnet ID
-		#[pallet::call_index(10)]
+		#[pallet::call_index(12)]
 		// #[pallet::weight(T::WeightInfo::add_to_delegate_stake())]
 		#[pallet::weight({0})]
 		pub fn add_to_delegate_stake(
@@ -1869,7 +1892,7 @@ pub mod pallet {
 		}
 		
 		/// Swaps the balance of the ``from_subnet_id`` shares to ``to_subnet_id``
-		#[pallet::call_index(11)]
+		#[pallet::call_index(13)]
 		#[pallet::weight({0})]
 		pub fn transfer_delegate_stake(
 			origin: OriginFor<T>, 
@@ -1898,7 +1921,7 @@ pub mod pallet {
 
 		/// Remove delegate stake and add to delegate stake unboding ledger
 		/// Enter shares and will convert to balance automatically
-		#[pallet::call_index(12)]
+		#[pallet::call_index(14)]
 		// #[pallet::weight(T::WeightInfo::remove_delegate_stake())]
 		#[pallet::weight({0})]
 		pub fn remove_delegate_stake(
@@ -1913,7 +1936,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(13)]
+		#[pallet::call_index(15)]
 		// #[pallet::weight(T::WeightInfo::claim_delegate_stake_unbondings())]
 		#[pallet::weight({0})]
 		pub fn claim_delegate_stake_unbondings(
@@ -1930,7 +1953,7 @@ pub mod pallet {
 		}
 		
 		/// Allows anyone to increase a subnets delegate stake pool
-		#[pallet::call_index(14)]
+		#[pallet::call_index(16)]
 		#[pallet::weight({0})]
 		pub fn increase_delegate_stake(
 			origin: OriginFor<T>, 
@@ -1973,7 +1996,7 @@ pub mod pallet {
 		}
 
 		/// Delete proposals that are no longer live
-		#[pallet::call_index(15)]
+		#[pallet::call_index(17)]
 		#[pallet::weight({0})]
 		pub fn validate(
 			origin: OriginFor<T>, 
@@ -1996,7 +2019,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(16)]
+		#[pallet::call_index(18)]
 		#[pallet::weight({0})]
 		pub fn attest(
 			origin: OriginFor<T>, 
@@ -2017,7 +2040,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(17)]
+		#[pallet::call_index(19)]
 		#[pallet::weight({0})]
 		pub fn propose(
 			origin: OriginFor<T>, 
@@ -2035,7 +2058,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(18)]
+		#[pallet::call_index(20)]
 		#[pallet::weight({0})]
 		pub fn attest_proposal(
 			origin: OriginFor<T>, 
@@ -2053,7 +2076,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(19)]
+		#[pallet::call_index(21)]
 		#[pallet::weight({0})]
 		pub fn cancel_proposal(
 			origin: OriginFor<T>, 
@@ -2069,7 +2092,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(20)]
+		#[pallet::call_index(22)]
 		#[pallet::weight({0})]
 		pub fn challenge_proposal(
 			origin: OriginFor<T>, 
@@ -2087,7 +2110,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(21)]
+		#[pallet::call_index(23)]
 		#[pallet::weight({0})]
 		pub fn vote(
 			origin: OriginFor<T>, 
@@ -2105,7 +2128,7 @@ pub mod pallet {
 			)
 		}
 
-		#[pallet::call_index(22)]
+		#[pallet::call_index(24)]
 		#[pallet::weight({0})]
 		pub fn finalize_proposal(
 			origin: OriginFor<T>, 
@@ -2119,47 +2142,6 @@ pub mod pallet {
 				subnet_id,
 				proposal_id,
 			)
-		}
-
-		#[pallet::call_index(23)]
-		#[pallet::weight({0})]
-		pub fn reward_subnet(
-			origin: OriginFor<T>, 
-			subnet_id: u32,
-			epoch: u32,
-	) -> DispatchResultWithPostInfo {
-			let account_id: T::AccountId = ensure_signed(origin)?;
-	
-			// Self::do_reward_subnet(
-			// 	subnet_id,
-			// 	epoch,
-			// )
-			Ok(None.into())
-		}
-
-		#[pallet::call_index(24)]
-		#[pallet::weight({0})]
-		pub fn register_subnet(
-			origin: OriginFor<T>, 
-			subnet_data: RegistrationSubnetData,
-	) -> DispatchResult {
-			let account_id: T::AccountId = ensure_signed(origin)?;
-	
-			Self::do_register_subnet(
-				account_id,
-				subnet_data,
-			)
-		}
-
-		#[pallet::call_index(25)]
-		#[pallet::weight({0})]
-		pub fn activate_subnet(
-			origin: OriginFor<T>, 
-			subnet_id: u32,
-	) -> DispatchResult {
-			let account_id: T::AccountId = ensure_signed(origin)?;
-	
-			Self::do_activate_subnet(subnet_id)
 		}
 	}
 
@@ -2475,19 +2457,10 @@ pub mod pallet {
 			// ========================
 			// Insert peer into storage
 			// ========================
-			let mut classification: SubnetNodeClassification = SubnetNodeClassification {
+			let classification: SubnetNodeClassification = SubnetNodeClassification {
 				class: SubetNodeClass::Registered,
 				start_epoch: epoch,
 			};
-			// --- Initial nodes before activation are entered as ``submittable`` nodes
-			// They initiate the first consensus epoch and are responsible for increasing classifications
-			// of other nodes that come in post activation
-			if subnet.activated == 0 {
-				classification = SubnetNodeClassification {
-					class: SubetNodeClass::Submittable,
-					start_epoch: epoch,
-				};
-			}
 
 			let subnet_node: SubnetNode<T::AccountId> = SubnetNode {
 				account_id: account_id.clone(),
@@ -2504,12 +2477,6 @@ pub mod pallet {
 
 			// Insert subnet peer account to keep peer_ids unique within subnets
 			SubnetNodeAccount::<T>::insert(subnet_id, peer_id.clone(), account_id.clone());
-
-			// --- If subnet not activated, send subnet node to submission class, otherwise send to idle
-			let mut classification = SubnetNodeClass::Idle;
-			if subnet.activated == 0 {
-				classification = SubnetNodeClass::Submittable;
-			}
 
 			// Increase total subnet peers
 			TotalSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
@@ -2554,6 +2521,9 @@ pub mod pallet {
 					let mut class = SubetNodeClass::Idle;
 					let mut epoch_increase = 0;
 					// --- If subnet in registration, activate starting at `Submittable` to start off subnet consensus
+					// --- Initial nodes before activation are entered as ``submittable`` nodes
+					// They initiate the first consensus epoch and are responsible for increasing classifications
+					// of other nodes that come in post activation
 					if subnet.activated == 0 {
 						class = SubetNodeClass::Submittable
 					} else {
@@ -2640,7 +2610,7 @@ pub mod pallet {
 				let epoch: u64 = block / epoch_length;
 
 				// Choose validators and accountants for the current epoch
-				Self::do_choose_validator_and_accountants(block, epoch as u32, epoch_length);
+				Self::do_epoch_preliminaries(block, epoch as u32, epoch_length);
 
 				// return T::WeightInfo::on_initialize_do_choose_validator_and_accountants();
 				return Weight::from_parts(207_283_478_000, 22166406)
@@ -2692,36 +2662,36 @@ pub mod pallet {
 			// SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Submittable, 6);
 			// SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Accountant, 8);
 
-			// let subnet_id = 1;
+			let subnet_id = 1;
 
-			// let base_node_memory: u128 = BaseSubnetNodeMemoryMB::<T>::get();
+			let base_node_memory: u128 = BaseSubnetNodeMemoryMB::<T>::get();
 
-			// // --- Get min nodes based on default memory settings
-			// let real_min_subnet_nodes: u128 = self.memory_mb.clone() / base_node_memory;
-			// let mut min_subnet_nodes: u32 = MinSubnetNodes::<T>::get();
-			// if real_min_subnet_nodes as u32 > min_subnet_nodes {
-			// 	min_subnet_nodes = real_min_subnet_nodes as u32;
-			// }
+			// --- Get min nodes based on default memory settings
+			let real_min_subnet_nodes: u128 = self.memory_mb.clone() / base_node_memory;
+			let mut min_subnet_nodes: u32 = MinSubnetNodes::<T>::get();
+			if real_min_subnet_nodes as u32 > min_subnet_nodes {
+				min_subnet_nodes = real_min_subnet_nodes as u32;
+			}
 				
-			// let target_subnet_nodes: u32 = (min_subnet_nodes as u128).saturating_mul(TargetSubnetNodesMultiplier::<T>::get()).saturating_div(10000) as u32 + min_subnet_nodes;
+			let target_subnet_nodes: u32 = (min_subnet_nodes as u128).saturating_mul(TargetSubnetNodesMultiplier::<T>::get()).saturating_div(10000) as u32 + min_subnet_nodes;
 
-			// let subnet_data = SubnetData {
-			// 	id: subnet_id,
-			// 	path: self.subnet_path.clone(),
-			// 	min_nodes: min_subnet_nodes,
-			// 	target_nodes: target_subnet_nodes,
-			// 	memory_mb: self.memory_mb.clone(),
-			// 	registration_blocks: MinSubnetRegistrationBlocks::<T>::get(),
-			// 	initialized: 0,
-			// 	activated: 0,
-			// };
+			let subnet_data = SubnetData {
+				id: subnet_id,
+				path: self.subnet_path.clone(),
+				min_nodes: min_subnet_nodes,
+				target_nodes: target_subnet_nodes,
+				memory_mb: self.memory_mb.clone(),
+				registration_blocks: MinSubnetRegistrationBlocks::<T>::get(),
+				initialized: 0,
+				activated: 0,
+			};
 
-			// // Store unique path
-			// SubnetPaths::<T>::insert(self.subnet_path.clone(), subnet_id);
-			// // Store subnet data
-			// SubnetsData::<T>::insert(subnet_id, subnet_data.clone());
-			// // Increase total subnets count
-			// TotalSubnets::<T>::mutate(|n: &mut u32| *n += 1);
+			// Store unique path
+			SubnetPaths::<T>::insert(self.subnet_path.clone(), subnet_id);
+			// Store subnet data
+			SubnetsData::<T>::insert(subnet_id, subnet_data.clone());
+			// Increase total subnets count
+			TotalSubnets::<T>::mutate(|n: &mut u32| *n += 1);
 
 
 

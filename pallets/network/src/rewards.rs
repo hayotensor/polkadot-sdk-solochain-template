@@ -41,7 +41,7 @@ impl<T: Config> Pallet<T> {
 
     for (subnet_id, data) in SubnetsData::<T>::iter() {
       // --- We don't check for minimum nodes because nodes cannot validate or attest if they are not met
-      //     as they the validator will not be chosen in ``do_choose_validator_and_accountants`` if the 
+      //     as they the validator will not be chosen in ``do_epoch_preliminaries`` if the 
       //     min nodes are not met on that epoch.
       if let Ok(mut submission) = SubnetRewardsSubmission::<T>::try_get(subnet_id, epoch) {
         // --- Get memory of the subnet

@@ -65,8 +65,8 @@ impl<T: Config> Pallet<T> {
     current_accountants.insert(accountant.clone(), true);
     CurrentAccountants::<T>::insert(subnet_id, epoch, current_accountants);
     
-    let mut attests: BTreeMap<T::AccountId, u64> = BTreeMap::new();
-    attests.insert(accountant.clone(), block);
+    // let mut attests: BTreeMap<T::AccountId, u64> = BTreeMap::new();
+    // attests.insert(accountant.clone(), block);
 
     AccountantData::<T>::insert(
       subnet_id,
@@ -76,95 +76,85 @@ impl<T: Config> Pallet<T> {
         block,
         epoch,
         data,
-        attests,
+        // attests,
       }
     );
 
     Ok(())
   }
 
-  pub fn do_attest_accountant_data(
-    account_id: T::AccountId,
-    subnet_id: u32,
-    block: u64, 
-    epoch: u32,
-  ) -> DispatchResult {
-    // --- Ensure subnet node exists and is submittable
-    match SubnetNodesData::<T>::try_get(
-      subnet_id, 
-      account_id.clone()
-    ) {
-      Ok(subnet_node) => subnet_node.has_classification(&SubetNodeClass::Submittable, epoch as u64),
-      Err(()) => return Err(Error::<T>::SubnetNodeNotExist.into()),
-    };
+  // pub fn do_attest_accountant_data(
+  //   account_id: T::AccountId,
+  //   subnet_id: u32,
+  //   block: u64, 
+  //   epoch: u32,
+  // ) -> DispatchResult {
+  //   // --- Ensure subnet node exists and is submittable
+  //   match SubnetNodesData::<T>::try_get(
+  //     subnet_id, 
+  //     account_id.clone()
+  //   ) {
+  //     Ok(subnet_node) => subnet_node.has_classification(&SubetNodeClass::Submittable, epoch as u64),
+  //     Err(()) => return Err(Error::<T>::SubnetNodeNotExist.into()),
+  //   };
   
-    AccountantData::<T>::try_mutate_exists(
-      subnet_id,
-      epoch,
-      |maybe_params| -> DispatchResult {
-        let params = maybe_params.as_mut().ok_or(Error::<T>::InvalidAccountantData)?;
-        let mut attests = &mut params.attests;
+  //   AccountantData::<T>::try_mutate_exists(
+  //     subnet_id,
+  //     epoch,
+  //     |maybe_params| -> DispatchResult {
+  //       let params = maybe_params.as_mut().ok_or(Error::<T>::InvalidAccountantData)?;
+  //       let mut attests = &mut params.attests;
 
-        ensure!(attests.insert(account_id.clone(), block) == None, Error::<T>::AlreadyAttested);
+  //       ensure!(attests.insert(account_id.clone(), block) == None, Error::<T>::AlreadyAttested);
 
-        params.attests = attests.clone();
-        Ok(())
-      }
-    )?;
+  //       params.attests = attests.clone();
+  //       Ok(())
+  //     }
+  //   )?;
 
-    // Self::deposit_event(
-    //   Event::Attestation { 
-    //     subnet_id: subnet_id, 
-    //     account_id: account_id, 
-    //     epoch: epoch,
-    //   }
-    // );
+  //   Ok(())
+  // }
 
-    // Ok(Pays::No.into())
+  // pub fn do_validate_accountant_data(
+  //   accountant_submission_id: u32,
+  //   block: u64,
+  //   epoch: u32,
+  // ) -> DispatchResult {
+  //   let min_attestation_percentage = MinAttestationPercentage::<T>::get();
+  //   for (subnet_id, data) in SubnetsData::<T>::iter() {
+  //     let accountant_data = match AccountantData::<T>::try_get(subnet_id, epoch) {
+  //       Ok(accountant_data) => accountant_data,
+  //       Err(()) => continue,
+  //     };
 
-    Ok(())
-  }
+  //     let subnet_node: Vec<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch as u64);
+  //     let subnet_node_count = subnet_node.len() as u128;
 
-  pub fn do_validate_accountant_data(
-    accountant_submission_id: u32,
-    block: u64,
-    epoch: u32,
-  ) -> DispatchResult {
-    let min_attestation_percentage = MinAttestationPercentage::<T>::get();
-    for (subnet_id, data) in SubnetsData::<T>::iter() {
-      let accountant_data = match AccountantData::<T>::try_get(subnet_id, epoch) {
-        Ok(accountant_data) => accountant_data,
-        Err(()) => continue,
-      };
+  //     let attestations: u128 = accountant_data.attests.len() as u128;
+  //     let mut attestation_percentage: u128 = Self::percent_div(attestations, subnet_node_count);
 
-      let subnet_node: Vec<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch as u64);
-      let subnet_node_count = subnet_node.len() as u128;
+  //     // Redundant
+  //     // When subnet nodes exit, the consensus data is updated to remove them from it
+  //     if attestation_percentage > Self::PERCENTAGE_FACTOR {
+  //       attestation_percentage = Self::PERCENTAGE_FACTOR;
+  //     }
 
-      let attestations: u128 = accountant_data.attests.len() as u128;
-      let mut attestation_percentage: u128 = Self::percent_div(attestations, subnet_node_count);
+  //     let validator: T::AccountId = accountant_data.accountant;
 
-      // Redundant
-      // When subnet nodes exit, the consensus data is updated to remove them from it
-      if attestation_percentage > Self::PERCENTAGE_FACTOR {
-        attestation_percentage = Self::PERCENTAGE_FACTOR;
-      }
-
-      let validator: T::AccountId = accountant_data.accountant;
-
-      if attestation_percentage < min_attestation_percentage {
-        // --- Slash validator and increase penalty score
-        Self::slash_validator(subnet_id, validator, attestation_percentage, block);
+  //     if attestation_percentage < min_attestation_percentage {
+  //       // --- Slash validator and increase penalty score
+  //       Self::slash_validator(subnet_id, validator, attestation_percentage, block);
         
-        // --- Attestation not successful, move on to next subnet
-        continue
-      }
+  //       // --- Attestation not successful, move on to next subnet
+  //       continue
+  //     }
 
-      SubnetNodePenalties::<T>::mutate(subnet_id, validator.clone(), |n: &mut u32| n.saturating_dec());
+  //     SubnetNodePenalties::<T>::mutate(subnet_id, validator.clone(), |n: &mut u32| n.saturating_dec());
 
-    }
+  //   }
 
-    Ok(())
-  }
+  //   Ok(())
+  // }
 
   pub fn choose_accountants(
     block: u64,
