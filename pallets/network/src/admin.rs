@@ -96,7 +96,7 @@ impl<T: Config> Pallet<T> {
     let base_node_memory: u128 = BaseSubnetNodeMemoryMB::<T>::get();
 
     let min_subnet_nodes: u32 = Self::get_min_subnet_nodes(base_node_memory, memory_mb);
-    let target_subnet_nodes: u32 = Self::get_target_subnet_nodes(base_node_memory, min_subnet_nodes);
+    let target_subnet_nodes: u32 = Self::get_target_subnet_nodes(min_subnet_nodes);
 
     let subnet_data = SubnetData {
       id: subnet_id,

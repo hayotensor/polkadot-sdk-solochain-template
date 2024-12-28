@@ -66,7 +66,7 @@ impl<T: Config> Pallet<T> {
         subnet_id, 
         SubnetNodeAccount::<T>::get(subnet_id, x.peer_id.clone())
       ) {
-        Ok(subnet_node) => subnet_node.has_classification(&SubetNodeClass::Included, epoch as u64),
+        Ok(subnet_node) => subnet_node.has_classification(&SubnetNodeClass::Included, epoch as u64),
         Err(()) => false,
       }
     });
@@ -77,7 +77,7 @@ impl<T: Config> Pallet<T> {
 
     // --- Get count of eligible nodes that can be submitted for consensus rewards
     // This is the maximum amount of nodes that can be entered
-    let included_nodes = Self::get_classified_subnet_nodes(subnet_id, &SubetNodeClass::Included, epoch as u64);
+    let included_nodes = Self::get_classified_subnet_nodes(subnet_id, &SubnetNodeClass::Included, epoch as u64);
     let included_nodes_count = included_nodes.len();
 
     // --- Ensure data isn't greater than current registered subnet peers
@@ -91,7 +91,7 @@ impl<T: Config> Pallet<T> {
     // We don't check data accuracy here because that's the job of attesters
     let scores_sum = data.iter().fold(0, |acc, x| acc + x.score);
 
-    let submittable_nodes = Self::get_classified_subnet_nodes(subnet_id, &SubetNodeClass::Submittable, epoch as u64);
+    let submittable_nodes = Self::get_classified_subnet_nodes(subnet_id, &SubnetNodeClass::Submittable, epoch as u64);
     let submittable_nodes_count = submittable_nodes.len();
 
     // If data.len() is 0 then the validator is deeming the epoch as invalid
@@ -135,7 +135,7 @@ impl<T: Config> Pallet<T> {
       subnet_id, 
       account_id.clone()
     ) {
-      Ok(subnet_node) => subnet_node.has_classification(&SubetNodeClass::Submittable, epoch as u64),
+      Ok(subnet_node) => subnet_node.has_classification(&SubnetNodeClass::Submittable, epoch as u64),
       Err(()) => return Err(Error::<T>::SubnetNodeNotExist.into()),
     };
 

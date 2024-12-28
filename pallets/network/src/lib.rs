@@ -494,13 +494,125 @@ pub mod pallet {
 		pub c: Vec<u8>,
 	}
 
+	#[derive(Encode, Decode, scale_info::TypeInfo, Clone, PartialEq, Eq)]
+	pub enum ActionType {
+		Deregister,
+		Deactivate,
+	}
+
+	#[derive(Encode, Decode, Default, scale_info::TypeInfo, Clone, PartialEq, Eq)]
+	pub struct PendingActions<AccountId> {
+		pub actions: BTreeMap<AccountId, (ActionType, u64)>, // AccountId -> (ActionType, Target Epoch)
+	}
+
+	impl<AccountId> PendingActions<AccountId>
+	where
+		AccountId: Ord,
+	{
+    /// Add a new action for an account.
+    pub fn add_action(&mut self, account: AccountId, action: ActionType, target_epoch: u64) {
+			self.actions.insert(account, (action, target_epoch));
+    }
+
+    /// Remove an action for a specific account.
+    pub fn remove_action(&mut self, account: &AccountId) -> Option<(ActionType, u64)> {
+			self.actions.remove(account)
+    }
+
+    /// Check if an account has a pending action.
+    pub fn has_action(&self, account: &AccountId) -> bool {
+			self.actions.contains_key(account)
+    }
+
+    /// Retrieve the pending action for a specific account.
+    pub fn get_action(&self, account: &AccountId) -> Option<&(ActionType, u64)> {
+			self.actions.get(account)
+    }
+
+    /// Clear all pending actions (use with caution).
+    pub fn clear_actions(&mut self) {
+			self.actions.clear();
+    }
+	}
+
+	// #[derive(EnumIter, FromRepr, Copy, Encode, Decode, Clone, PartialOrd, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
+	// pub enum SubnetNodeActionType {
+	// 	Deregister,
+	// 	Deactivate,
+	// }
+
+	// #[derive(Default, Encode, Decode, Clone, PartialEq, Eq, scale_info::TypeInfo)]
+	// pub struct SubnetNodePendingActions<AccountId> {
+  //   actions: BTreeMap<AccountId, (SubnetNodeActionType, u64)>,
+	// }
+
+	// impl<T: Config> SubnetNodePendingActions<T> {
+	// 	// fn default() -> Self {
+	// 	// 	SubnetNodePendingActions {
+	// 	// 		actions: BTreeMap::new(),
+	// 	// 	}
+	// 	// }
+
+  //   /// Adds a pending action for a node.
+  //   pub fn add_action(&mut self, account_id: T::AccountId, action: SubnetNodeActionType, target_epoch: u64) {
+	// 		self.actions.insert(account_id, (action, target_epoch));
+  //   }
+
+  //   /// Removes a pending action for a node.
+  //   pub fn remove_action(&mut self, account_id: T::AccountId) {
+	// 		self.actions.remove(&account_id);
+  //   }
+
+  //   /// Checks for actions to be executed at the current epoch.
+  //   pub fn process_actions(&mut self, current_epoch: u64) -> Vec<(T::AccountId, SubnetNodeActionType)> {
+	// 		let mut to_process = vec![];
+
+	// 		for (account_id, (action, target_epoch)) in self.actions.iter() {
+	// 			if *target_epoch <= current_epoch {
+	// 				to_process.push((account_id.clone(), action.clone()));
+	// 			}
+	// 		}
+
+	// 		// Remove processed actions.
+	// 		for (account_id, _) in &to_process {
+	// 			self.actions.remove(account_id);
+	// 		}
+
+	// 		to_process
+  //   }
+
+	// 	pub fn execute_actions(
+	// 		&mut self,
+	// 		current_epoch: u64,
+	// 		nodes: &mut BTreeMap<T::AccountId, SubnetNode<T::AccountId>>,
+	// ) {
+	// 		let actions = self.process_actions(current_epoch);
+
+	// 		for (node_id, action) in actions {
+	// 			if let Some(node) = nodes.get_mut(&node_id) {
+	// 				match action {
+	// 					SubnetNodeActionType::Deregister => {
+	// 						// Remove node if not activated.
+	// 						nodes.remove(&node_id);
+	// 					}
+	// 					SubnetNodeActionType::Deactivate => {
+	// 						// Set node classification to Registered.
+	// 						node.classification.class = SubnetNodeClass::Registered;
+	// 						node.classification.start_epoch = current_epoch;
+	// 					}
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }
+
 	/// Registered: Subnet node registered, not included in consensus
 	/// Idle: Subnet node is activated as idle, unless subnet is registering, and automatically updates on the first successful consensus epoch
 	/// Included: Subnet node automatically updates to Included from Idle on the first successful consensus epoch after being Idle
 	/// Submittable: Subnet node updates to Submittble from Included on the first successful consensus epoch they are included in consensus data
 	/// Accountant:  Subnet node updates to Accountant after multiple successful validations
 	#[derive(Default, EnumIter, FromRepr, Copy, Encode, Decode, Clone, PartialOrd, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
-  pub enum SubetNodeClass {
+  pub enum SubnetNodeClass {
 		#[default] Registered,
     Idle,
     Included,
@@ -510,19 +622,12 @@ pub mod pallet {
 
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 	pub struct SubnetNodeClassification {
-		pub class: SubetNodeClass,
+		pub class: SubnetNodeClass,
 		pub start_epoch: u64,
 	}
 
 	impl<AccountId> SubnetNode<AccountId> {
-    pub fn dude(&self) -> bool {
-			self.initialized > 0
-    }
-		// pub fn has_classification(&self, required: &SubetNodeClass, epoch: u64) -> bool {
-		// 	self.classification.class >= *required && self.classification.start_epoch <= epoch && self.initialized > 0
-		// }
-
-		pub fn has_classification(&self, required: &SubetNodeClass, epoch: u64) -> bool {
+		pub fn has_classification(&self, required: &SubnetNodeClass, epoch: u64) -> bool {
 			self.classification.class >= *required && self.classification.start_epoch <= epoch
 		}
 	}
@@ -582,6 +687,13 @@ pub mod pallet {
 		pub registration_blocks: u64,
 	}
 	
+	/// Subnet data used before activation
+	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
+	pub struct RegisteredSubnetNodesData<AccountId> {
+		pub subnet_id: u32,
+		pub subnet_node: SubnetNode<AccountId>,
+	}
+
 	/// Data for subnet held to be compared when adding a subnet to the network
 	// This is the data from the democracy voting pallet
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
@@ -685,6 +797,25 @@ pub mod pallet {
 	pub fn DefaultSubnetNodeRegistrationEpochs() -> u64 {
 		16
 	}
+	// #[pallet::type_value]
+	// pub fn DefaultSubnetNodePendingActionsLedger<T: Config>() -> SubnetNodePendingActions<T> {
+	// 	// SubnetNodePendingActions::default()
+	// 	// return SubnetNodePendingActions {
+	// 	// 	actions: BTreeMap::new(),
+	// 	// }
+	// 	SubnetNodePendingActions::<T>::default()
+	// }
+
+
+	
+	// #[pallet::type_value]
+	// pub fn DefaultRegisteredSubnetNodeLedger() -> BTreeSet {
+	// 	BTreeSet::new()
+	// }
+	// #[pallet::type_value]
+	// pub fn DefaultDeregisteredSubnetNodeLedger() -> BTreeSet {
+	// 	BTreeSet::new()
+	// }
 	#[pallet::type_value]
 	pub fn DefaultSubnetNodesClasses<T: Config>() -> BTreeMap<T::AccountId, u64> {
 		BTreeMap::new()
@@ -702,7 +833,7 @@ pub mod pallet {
 			peer_id: PeerId(Vec::new()),
 			initialized: 0,
 			classification: SubnetNodeClassification {
-				class: SubetNodeClass::Registered,
+				class: SubnetNodeClass::Registered,
 				start_epoch: 0,
 			},
 			a: Vec::new(),
@@ -739,10 +870,6 @@ pub mod pallet {
 	#[pallet::type_value]
 	pub fn DefaultMinStakeBalance() -> u128 {
 		1000e+18 as u128
-	}
-	#[pallet::type_value]
-	pub fn DefaultSubnetNodeClassEpochs() -> u64 {
-		2
 	}
 	#[pallet::type_value]
 	pub fn DefaultMinSubnetDelegateStakePercentage() -> u128 {
@@ -837,7 +964,7 @@ pub mod pallet {
 	}
 	#[pallet::type_value]
 	pub fn DefaultTargetSubnetNodesMultiplier() -> u128 {
-		// 3333
+		// 1/3
 		333333333
 	}
 	#[pallet::type_value]
@@ -865,6 +992,10 @@ pub mod pallet {
 	pub fn DefaultMaxSubnetRegistrationBlocks() -> u64 {
 		// 21 days at 6s blocks
 		302_400
+	}
+	#[pallet::type_value]
+	pub fn DefaultMaxSubnetNodeRegistrationEpochs() -> u32 {
+		16
 	}
 	#[pallet::type_value]
 	pub fn DefaultSubnetActivationEnactmentPeriod() -> u64 {
@@ -936,6 +1067,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SubnetActivationEnactmentPeriod<T> = StorageValue<_, u64, ValueQuery, DefaultSubnetActivationEnactmentPeriod>;
 
+	/// Maximum epochs a subnet node can stay in registration period before being removed
+	#[pallet::storage]
+	pub type MaxSubnetNodeRegistrationEpochs<T> = StorageValue<_, u32, ValueQuery, DefaultMaxSubnetNodeRegistrationEpochs>;
+
 	// Minimum amount of peers required per subnet
 	// required for subnet activity
 	#[pallet::storage]
@@ -974,6 +1109,52 @@ pub mod pallet {
 	pub type TotalActiveSubnetNodes<T: Config> =
 		StorageMap<_, Blake2_128Concat, u32, u32, ValueQuery>;
 	
+	#[pallet::storage]
+	#[pallet::getter(fn pending_actions)]
+	pub type PendingActionsStorage<T: Config> = StorageValue<_, Option<PendingActions<T::AccountId>>, ValueQuery>;
+
+	// #[pallet::storage]
+	// pub type RegisteredSubnetNodeLedger<T: Config> = StorageValue<_, BTreeSet, ValueQuery, DefaultRegisteredSubnetNodeLedger>;
+	
+	// #[pallet::storage]
+	// pub type DeregisteredSubnetNodeLedger<T: Config> = StorageValue<_, BTreeSet, ValueQuery, DefaultDeregisteredSubnetNodeLedger>;
+
+	// struct SubnetNodeLedger {
+  //   nodes: HashMap<String, NodeState>,
+  //   start_epoch: u64, 
+	// }
+
+	// impl SubnetNodeLedger {
+  //   /// Creates a new ledger with a specified registration timeout.
+  //   fn new(registration_timeout: u64) -> Self {
+	// 		SubnetNodeLedger {
+	// 			nodes: HashMap::new(),
+	// 			registration_timeout,
+	// 		}
+  //   }
+	// }
+
+	
+	// #[pallet::storage]
+	// pub type SubnetNodePendingActionsLedger<T: Config> = 
+	// 	StorageValue<_, SubnetNodePendingActions<T>, ValueQuery>;
+	
+	// #[pallet::storage]
+	// #[pallet::getter(fn pending_actions)]
+	// pub type SubnetNodePendingActionsLedger<T: Config> = StorageValue<_, SubnetNodePendingActions<T::AccountId>, ValueQuery>;
+		
+	#[pallet::storage]
+	pub type DeactivateSubnetNodeLedger<T: Config> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		u32,
+		Identity,
+		T::AccountId,
+		SubnetNode<T::AccountId>,
+		ValueQuery,
+		DefaultSubnetNode<T>,
+	>;
+
 	/// Total epochs a subnet node can stay in registration phase. If surpassed, they are removed on the first successful
 	/// consensus epoch
 	#[pallet::storage]
@@ -1040,36 +1221,6 @@ pub mod pallet {
 		DefaultPeerId,
 	>;
 	
-	#[derive(Default, EnumIter, FromRepr, Copy, Encode, Decode, Clone, PartialOrd, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
-  pub enum SubnetNodeClass {
-    #[default] Idle,
-    Included,
-		Submittable,
-		Accountant
-  }
-
-	impl SubnetNodeClass {
-    pub fn index(&self) -> usize {
-			*self as usize
-    }
-		pub fn has_classification(&self, required: &SubnetNodeClass) -> bool {
-			self >= required
-		}
-	}
-
-	// How many epochs until an account can reach the next node class
-	// e.g. Idle 			2 epochs => account must be Idle for 2 epochs from their initialization epoch
-	//			Included	2 epochs => account must be Included for 2 epochs from their initialization epoch
-	// #[pallet::storage] // subnet => account_id
-	// pub type SubnetNodeClassEpochs<T: Config> = StorageMap<
-	// 	_,
-	// 	Blake2_128Concat,
-	// 	SubnetNodeClass,
-	// 	u64,
-	// 	ValueQuery,
-	// 	DefaultSubnetNodeClassEpochs
-	// >;
-
 	#[pallet::storage] // subnet_id -> class_id -> BTreeMap(account_id, block)
 	pub type SubnetNodesClasses<T: Config> = StorageDoubleMap<
 		_,
@@ -2212,7 +2363,7 @@ pub mod pallet {
 			let base_node_memory: u128 = BaseSubnetNodeMemoryMB::<T>::get();
 	
 			let min_subnet_nodes: u32 = Self::get_min_subnet_nodes(base_node_memory, subnet_data.memory_mb);
-			let target_subnet_nodes: u32 = Self::get_target_subnet_nodes(base_node_memory, min_subnet_nodes);
+			let target_subnet_nodes: u32 = Self::get_target_subnet_nodes(min_subnet_nodes);
 	
 			let subnet_data = SubnetData {
 				id: subnet_id,
@@ -2271,7 +2422,13 @@ pub mod pallet {
 			}
 
 			// --- Ensure minimum nodes are required
-			if TotalSubnetNodes::<T>::get(subnet_id) < subnet.min_nodes {
+			let epoch_length: u64 = T::EpochLength::get();
+			let epoch: u64 = block / epoch_length;
+			let subnet_node_accounts: Vec<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubnetNodeClass::Submittable, epoch);
+      let subnet_nodes_count: u32 = subnet_node_accounts.len() as u32;
+
+			if subnet_nodes_count < subnet.min_nodes {
+			// if TotalActiveSubnetNodes::<T>::get(subnet_id) < subnet.min_nodes {
 				return Self::deactivate_subnet(
 					subnet.path,
 					SubnetRemovalReason::MinSubnetNodes,
@@ -2458,7 +2615,7 @@ pub mod pallet {
 			// Insert peer into storage
 			// ========================
 			let classification: SubnetNodeClassification = SubnetNodeClassification {
-				class: SubetNodeClass::Registered,
+				class: SubnetNodeClass::Registered,
 				start_epoch: epoch,
 			};
 
@@ -2480,6 +2637,19 @@ pub mod pallet {
 
 			// Increase total subnet peers
 			TotalSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
+
+			// --- Add deregister action to ledger
+			// This will remove the node if they don't activate by the ``MaxSubnetNodeRegistrationEpochs``
+			let mut pending_actions = PendingActionsStorage::<T>::get().unwrap_or_else(|| PendingActions {
+				actions: BTreeMap::new(), // Manually initialize the actions field
+			});
+
+			// Add the new action
+			pending_actions.add_action(account_id.clone(), ActionType::Deregister, 10);
+
+			// Store the updated actions
+			PendingActionsStorage::<T>::put(Some(pending_actions));
+
 
 			Self::deposit_event(
 				Event::SubnetNodeAdded { 
@@ -2510,7 +2680,7 @@ pub mod pallet {
 
 			SubnetNodesData::<T>::try_mutate_exists(
 				subnet_id,
-				account_id,
+				account_id.clone(),
 				|maybe_params| -> DispatchResult {
 					let params = maybe_params.as_mut().ok_or(Error::<T>::SubnetNodeExist)?;	
 					ensure!(
@@ -2518,14 +2688,14 @@ pub mod pallet {
             Error::<T>::SubnetNodeAlreadyActivated
 					);
 					// --- If subnet activated, activate starting at `Idle`
-					let mut class = SubetNodeClass::Idle;
+					let mut class = SubnetNodeClass::Idle;
 					let mut epoch_increase = 0;
 					// --- If subnet in registration, activate starting at `Submittable` to start off subnet consensus
 					// --- Initial nodes before activation are entered as ``submittable`` nodes
 					// They initiate the first consensus epoch and are responsible for increasing classifications
 					// of other nodes that come in post activation
 					if subnet.activated == 0 {
-						class = SubetNodeClass::Submittable
+						class = SubnetNodeClass::Submittable
 					} else {
 						// --- Increase start epoch when `Idle` so they always start on a fresh epoch after a successful consensus epoch
 						epoch_increase += 1;
@@ -2566,19 +2736,78 @@ pub mod pallet {
 					);
 					params.initialized = 0;
 					params.classification = SubnetNodeClassification {
-						class: SubetNodeClass::Registered,
+						class: SubnetNodeClass::Registered,
 						start_epoch: epoch,
 					};
 					Ok(())
 				}
 			)?;
 
+			// --- Add deactivation action to ledger
+			// This will deactivate the node on the following epoch
+			let mut pending_actions = PendingActionsStorage::<T>::get().unwrap_or_else(|| PendingActions {
+				actions: BTreeMap::new(),
+			});
+
+			// Add the new action
+			pending_actions.add_action(account_id.clone(), ActionType::Deactivate, 10);
+
+			// Store the updated actions
+			PendingActionsStorage::<T>::put(Some(pending_actions));
+
 			TotalActiveSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| n.saturating_dec());
 
 			Ok(())
 		}
 
+		/// TODO: Implement, if you're reading this, it's not implemented yet but will be on the next version
+		fn execute_pending_actions(epoch: u64) -> DispatchResult {
+			let mut pending_actions = PendingActionsStorage::<T>::get().unwrap_or_else(|| PendingActions {
+				actions: BTreeMap::new(),
+			});
+
+			// Execute actions that have reached their target epoch
+			let mut to_remove = Vec::new(); // We will collect the actions to remove after execution
+
+			for (account_id, (action, target_epoch)) in pending_actions.actions.iter() {
+				if *target_epoch <= epoch {
+					// Perform the action
+					match action {
+						ActionType::Deregister => {
+							// Execute deregister action logic here
+							// For example, remove the node from active nodes or perform any necessary cleanup
+							// Self::deregister_node(account_id);
+						}
+						ActionType::Deactivate => {
+							// Execute deactivate action logic here
+							// For example, deactivate the node temporarily
+							// Self::deactivate_node(account_id);
+						}
+					}
+
+					// Mark the action for removal from the pending actions list
+					to_remove.push(account_id.clone());
+				}
+			}
+
+			// Remove executed actions from the pending actions storage
+			for account_id in to_remove {
+				pending_actions.actions.remove(&account_id);
+			}
+
+			// Save the updated pending actions back into storage
+			PendingActionsStorage::<T>::put(Some(pending_actions));
+
+			Ok(())
+		}
 	}
+
+	// impl<T: Config> SubnetNode<T::AccountId> {
+  //   pub fn register_node(account_id: T::AccountId, pending_actions: &mut SubnetNodePendingActions<T>, timeout_epoch: u64, current_epoch: u64) {
+  //       // Add a pending "Deregister" action if not activated within the timeout.
+  //       pending_actions.add_action(account_id, SubnetNodeActionType::Deregister, current_epoch + timeout_epoch);
+  //   }
+	// }
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -2657,41 +2886,38 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			// SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Idle, 2);
-			// SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Included, 4);
-			// SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Submittable, 6);
-			// SubnetNodeClassEpochs::<T>::insert(SubnetNodeClass::Accountant, 8);
+			// MinSubnetRegistrationBlocks::<T>::put(50);
+			
+			// let subnet_id = 1;
 
-			let subnet_id = 1;
+			// let base_node_memory: u128 = BaseSubnetNodeMemoryMB::<T>::get();
 
-			let base_node_memory: u128 = BaseSubnetNodeMemoryMB::<T>::get();
-
-			// --- Get min nodes based on default memory settings
-			let real_min_subnet_nodes: u128 = self.memory_mb.clone() / base_node_memory;
-			let mut min_subnet_nodes: u32 = MinSubnetNodes::<T>::get();
-			if real_min_subnet_nodes as u32 > min_subnet_nodes {
-				min_subnet_nodes = real_min_subnet_nodes as u32;
-			}
+			// // --- Get min nodes based on default memory settings
+			// let real_min_subnet_nodes: u128 = self.memory_mb.clone() / base_node_memory;
+			// let mut min_subnet_nodes: u32 = MinSubnetNodes::<T>::get();
+			// if real_min_subnet_nodes as u32 > min_subnet_nodes {
+			// 	min_subnet_nodes = real_min_subnet_nodes as u32;
+			// }
 				
-			let target_subnet_nodes: u32 = (min_subnet_nodes as u128).saturating_mul(TargetSubnetNodesMultiplier::<T>::get()).saturating_div(10000) as u32 + min_subnet_nodes;
+			// let target_subnet_nodes: u32 = (min_subnet_nodes as u128).saturating_mul(TargetSubnetNodesMultiplier::<T>::get()).saturating_div(1000000000) as u32 + min_subnet_nodes;
 
-			let subnet_data = SubnetData {
-				id: subnet_id,
-				path: self.subnet_path.clone(),
-				min_nodes: min_subnet_nodes,
-				target_nodes: target_subnet_nodes,
-				memory_mb: self.memory_mb.clone(),
-				registration_blocks: MinSubnetRegistrationBlocks::<T>::get(),
-				initialized: 0,
-				activated: 0,
-			};
+			// let subnet_data = SubnetData {
+			// 	id: subnet_id,
+			// 	path: self.subnet_path.clone(),
+			// 	min_nodes: min_subnet_nodes,
+			// 	target_nodes: target_subnet_nodes,
+			// 	memory_mb: self.memory_mb.clone(),
+			// 	registration_blocks: MinSubnetRegistrationBlocks::<T>::get(),
+			// 	initialized: 0,
+			// 	activated: 0,
+			// };
 
-			// Store unique path
-			SubnetPaths::<T>::insert(self.subnet_path.clone(), subnet_id);
-			// Store subnet data
-			SubnetsData::<T>::insert(subnet_id, subnet_data.clone());
-			// Increase total subnets count
-			TotalSubnets::<T>::mutate(|n: &mut u32| *n += 1);
+			// // Store unique path
+			// SubnetPaths::<T>::insert(self.subnet_path.clone(), subnet_id);
+			// // Store subnet data
+			// SubnetsData::<T>::insert(subnet_id, subnet_data.clone());
+			// // Increase total subnets count
+			// TotalSubnets::<T>::mutate(|n: &mut u32| *n += 1);
 
 
 
@@ -2749,7 +2975,7 @@ pub mod pallet {
 			// 	// Insert peer into storage
 			// 	// ========================
 			// 	let classification = SubnetNodeClassification {
-			// 		class: SubetNodeClass::Submittable,
+			// 		class: SubnetNodeClass::Submittable,
 			// 		start_epoch: 0,
 			// 	};
 
@@ -2881,8 +3107,7 @@ impl<T: Config> SubnetVote<OriginFor<T>, T::AccountId> for Pallet<T> {
 		Self::get_min_subnet_nodes(base_node_memory, memory_mb)
 	}
 	fn get_target_subnet_nodes(min_subnet_nodes: u32) -> u32 {
-		let base_node_memory: u128 = BaseSubnetNodeMemoryMB::<T>::get();
-		Self::get_target_subnet_nodes(base_node_memory, min_subnet_nodes)
+		Self::get_target_subnet_nodes(min_subnet_nodes)
 	}
 	fn get_stake_balance(account_id: T::AccountId) -> u128 {
 		Self::get_account_total_stake_balance(account_id)

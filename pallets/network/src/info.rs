@@ -10,7 +10,7 @@ impl<T: Config> Pallet<T> {
     let block: u64 = Self::get_current_block_as_u64();
     let epoch_length: u64 = T::EpochLength::get();
     let epoch: u64 = block / epoch_length;
-    Self::get_classified_subnet_nodes(subnet_id, &SubetNodeClass::Idle, epoch)
+    Self::get_classified_subnet_nodes(subnet_id, &SubnetNodeClass::Idle, epoch)
   }
 
   pub fn get_subnet_nodes_included(
@@ -22,7 +22,7 @@ impl<T: Config> Pallet<T> {
     let block: u64 = Self::get_current_block_as_u64();
     let epoch_length: u64 = T::EpochLength::get();
     let epoch: u64 = block / epoch_length;
-    Self::get_classified_subnet_nodes(subnet_id, &SubetNodeClass::Included, epoch)
+    Self::get_classified_subnet_nodes(subnet_id, &SubnetNodeClass::Included, epoch)
   }
 
   // pub fn get_subnet_nodes_submittable(
@@ -52,7 +52,7 @@ impl<T: Config> Pallet<T> {
     let block: u64 = Self::get_current_block_as_u64();
     let epoch_length: u64 = T::EpochLength::get();
     let epoch: u64 = block / epoch_length;
-    Self::get_classified_subnet_nodes(subnet_id, &SubetNodeClass::Submittable, epoch)
+    Self::get_classified_subnet_nodes(subnet_id, &SubnetNodeClass::Submittable, epoch)
   }
 
   pub fn get_subnet_nodes_subnet_unconfirmed_count(
@@ -98,8 +98,13 @@ impl<T: Config> Pallet<T> {
     Some(data)
   }
 
-  pub fn get_minimum_subnet_nodes(subnet_id: u32, memory_mb: u128) -> u32 {
+  pub fn get_minimum_subnet_nodes(memory_mb: u128) -> u32 {
     Self::get_min_subnet_nodes(BaseSubnetNodeMemoryMB::<T>::get(), memory_mb)
+  }
+
+  pub fn get_minimum_delegate_stake(memory_mb: u128) -> u128 {
+    let min_nodes = Self::get_min_subnet_nodes(BaseSubnetNodeMemoryMB::<T>::get(), memory_mb);
+    Self::get_min_subnet_delegate_stake_balance(min_nodes)
   }
 
   pub fn get_subnet_node_stake_by_peer_id(subnet_id: u32, peer_id: PeerId) -> u128 {

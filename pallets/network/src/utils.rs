@@ -128,7 +128,7 @@ impl<T: Config> Pallet<T> {
       let epoch_length: u64 = T::EpochLength::get();
 			let epoch: u64 = block / epoch_length;
 
-      let submittable_nodes: BTreeSet<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch);
+      let submittable_nodes: BTreeSet<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubnetNodeClass::Submittable, epoch);
 
       SubnetRewardsSubmission::<T>::try_mutate_exists(
         subnet_id,
@@ -244,7 +244,7 @@ impl<T: Config> Pallet<T> {
     min_subnet_nodes
   }
 
-  pub fn get_target_subnet_nodes(base_node_memory: u128, min_subnet_nodes: u32) -> u32 {
+  pub fn get_target_subnet_nodes(min_subnet_nodes: u32) -> u32 {
     Self::percent_mul(
       min_subnet_nodes.into(), 
       TargetSubnetNodesMultiplier::<T>::get()
@@ -338,14 +338,13 @@ impl<T: Config> Pallet<T> {
     let subnet_activation_enactment_period = SubnetActivationEnactmentPeriod::<T>::get();
 
     for (subnet_id, data) in SubnetsData::<T>::iter() {
-      let min_subnet_nodes = data.min_nodes;
-
       // --- Ensure subnet is active is able to submit consensus
-      // We check if the subnet is still in registration phase and not yet out of the enactment phase
-      if data.activated < block && block < data.initialized + data.registration_blocks + subnet_activation_enactment_period {
+      let max_registration_block = data.initialized + data.registration_blocks + subnet_activation_enactment_period;
+      if data.activated == 0 && block <= max_registration_block {
+        // We check if the subnet is still in registration phase and not yet out of the enactment phase
         continue
-      } else if data.activated == 0 && block > data.initialized + data.registration_blocks + subnet_activation_enactment_period {
-        // --- Ensure subnet is in registration period and hasn't passed enactmen period
+      } else if data.activated == 0 && block > max_registration_block {
+        // --- Ensure subnet is in registration period and hasn't passed enactment period
 				Self::deactivate_subnet(
 					data.path,
 					SubnetRemovalReason::EnactmentPeriod,
@@ -353,10 +352,8 @@ impl<T: Config> Pallet<T> {
         continue
 			}
 
-      // --- Get all possible validators
-      let subnet_node_accounts: Vec<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch as u64);
-
-      let subnet_nodes_count = subnet_node_accounts.len();
+      // --- All subnets are now activated and passed the registration period
+      let min_subnet_nodes = data.min_nodes;
 			let subnet_delegate_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);
 			let min_subnet_delegate_stake_balance = Self::get_min_subnet_delegate_stake_balance(min_subnet_nodes);
 
@@ -369,13 +366,16 @@ impl<T: Config> Pallet<T> {
         continue
       }
 
+      // --- Get all possible validators
+      let subnet_node_accounts: Vec<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubnetNodeClass::Submittable, epoch as u64);
+      let subnet_nodes_count = subnet_node_accounts.len();
+      
       // --- Ensure min nodes are active
       // Only choose validator if min nodes are present
       // The ``SubnetPenaltyCount`` when surpassed doesn't penalize anyone, only removes the subnet from the chain
       if (subnet_nodes_count as u32) < min_subnet_nodes {
         SubnetPenaltyCount::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
       }
-
 
       // --- Check penalties and remove subnet is threshold is breached
       let penalties = SubnetPenaltyCount::<T>::get(subnet_id);
@@ -449,7 +449,7 @@ impl<T: Config> Pallet<T> {
       }
 
       // let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
-      let subnet_nodes: BTreeSet<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch);
+      let subnet_nodes: BTreeSet<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubnetNodeClass::Submittable, epoch);
 
       // --- Ensure min subnet nodes that are submittable are at least the minimum required to include in subnet democracy
       if (subnet_nodes.len() as u32) < min_subnet_nodes {
@@ -526,7 +526,7 @@ impl<T: Config> Pallet<T> {
   }
 
   /// Get subnet nodes by classification
-  pub fn get_classified_subnet_nodes(subnet_id: u32, classification: &SubetNodeClass, epoch: u64) -> Vec<SubnetNode<T::AccountId>> {
+  pub fn get_classified_subnet_nodes(subnet_id: u32, classification: &SubnetNodeClass, epoch: u64) -> Vec<SubnetNode<T::AccountId>> {
     SubnetNodesData::<T>::iter_prefix_values(subnet_id)
       .filter(|subnet_node| subnet_node.has_classification(classification, epoch))
       .collect()
@@ -535,7 +535,7 @@ impl<T: Config> Pallet<T> {
   // Get subnet node ``account_ids`` by classification
   pub fn get_classified_accounts<C>(
     subnet_id: u32,
-    classification: &SubetNodeClass,
+    classification: &SubnetNodeClass,
     epoch: u64,
   ) -> C
   where

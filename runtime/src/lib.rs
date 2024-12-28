@@ -907,8 +907,12 @@ impl_runtime_apis! {
 			let result = Network::get_accountant_data(subnet_id, id);
 			result.encode()
 		}
-		fn get_minimum_subnet_nodes(subnet_id: u32, memory_mb: u128) -> u32 {
-			let result = Network::get_minimum_subnet_nodes(subnet_id, memory_mb);
+		fn get_minimum_subnet_nodes(memory_mb: u128) -> u32 {
+			let result = Network::get_minimum_subnet_nodes(memory_mb);
+			result
+		}
+		fn get_minimum_delegate_stake(memory_mb: u128) -> u128 {
+			let result = Network::get_minimum_delegate_stake(memory_mb);
 			result
 		}
 	}

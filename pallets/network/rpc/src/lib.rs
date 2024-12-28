@@ -34,7 +34,9 @@ pub trait NetworkCustomApi<BlockHash> {
 	#[method(name = "network_getAccountantData")]
 	fn get_accountant_data(&self, subnet_id: u32, id: u32, at: Option<BlockHash>) -> RpcResult<Vec<u8>>;
 	#[method(name = "network_getMinimumSubnetNodes")]
-	fn get_minimum_subnet_nodes(&self, subnet_id: u32, memory_mb: u128, at: Option<BlockHash>) -> RpcResult<u32>;
+	fn get_minimum_subnet_nodes(&self, memory_mb: u128, at: Option<BlockHash>) -> RpcResult<u32>;
+	#[method(name = "network_getMinimumDelegateStake")]
+	fn get_minimum_delegate_stake(&self, memory_mb: u128, at: Option<BlockHash>) -> RpcResult<u128>;
 }
 
 /// A struct that implements the `NetworkCustomApi`.
@@ -139,13 +141,21 @@ where
 			Error::RuntimeError(format!("Unable to get subnet nodes: {:?}", e)).into()
 		})
 	}
-	fn get_minimum_subnet_nodes(&self, subnet_id: u32, memory_mb: u128, at: Option<<Block as BlockT>::Hash>) -> RpcResult<u32> {
+	fn get_minimum_subnet_nodes(&self, memory_mb: u128, at: Option<<Block as BlockT>::Hash>) -> RpcResult<u32> {
 		let api = self.client.runtime_api();
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
-		api.get_minimum_subnet_nodes(at, subnet_id, memory_mb).map_err(|e| {
+		api.get_minimum_subnet_nodes(at, memory_mb).map_err(|e| {
 			Error::RuntimeError(format!("Unable to get minimum subnet nodes: {:?}", e)).into()
 		})
 	}
+	fn get_minimum_delegate_stake(&self, memory_mb: u128, at: Option<<Block as BlockT>::Hash>) -> RpcResult<u128> {
+		let api = self.client.runtime_api();
+		let at = at.unwrap_or_else(|| self.client.info().best_hash);
+		api.get_minimum_delegate_stake(at, memory_mb).map_err(|e| {
+			Error::RuntimeError(format!("Unable to get minimum subnet nodes: {:?}", e)).into()
+		})
+	}
+
 }
 
 // const RUNTIME_ERROR: i32 = 1;

@@ -170,7 +170,7 @@ fn build_existing_subnet(start: u32, end: u32) {
   System::set_block_number(starting_block + submit_epochs * epoch_length + 1);
 
   let epoch = System::block_number() / epoch_length;
-  let node_set = pallet_network::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch);
+  let node_set = pallet_network::get_classified_accounts(subnet_id, &SubnetNodeClass::Submittable, epoch);
 
   assert_eq!(node_set.len(), end as usize - start as usize);
 

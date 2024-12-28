@@ -94,7 +94,7 @@ impl<T: Config> Pallet<T> {
   //     subnet_id, 
   //     account_id.clone()
   //   ) {
-  //     Ok(subnet_node) => subnet_node.has_classification(&SubetNodeClass::Submittable, epoch as u64),
+  //     Ok(subnet_node) => subnet_node.has_classification(&SubnetNodeClass::Submittable, epoch as u64),
   //     Err(()) => return Err(Error::<T>::SubnetNodeNotExist.into()),
   //   };
   
@@ -127,7 +127,7 @@ impl<T: Config> Pallet<T> {
   //       Err(()) => continue,
   //     };
 
-  //     let subnet_node: Vec<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch as u64);
+  //     let subnet_node: Vec<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubnetNodeClass::Submittable, epoch as u64);
   //     let subnet_node_count = subnet_node.len() as u128;
 
   //     let attestations: u128 = accountant_data.attests.len() as u128;

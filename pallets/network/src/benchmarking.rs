@@ -159,8 +159,8 @@ fn build_activated_subnet<T: Config>(
     assert_eq!(subnet_node_data.peer_id, peer(n));
     assert_eq!(subnet_node_data.initialized, block_number);
     // --- Is ``Submittable`` if registered before subnet activation
-    assert_eq!(subnet_node_data.classification.class, SubetNodeClass::Submittable);
-    assert!(subnet_node_data.has_classification(&SubetNodeClass::Submittable, epoch));
+    assert_eq!(subnet_node_data.classification.class, SubnetNodeClass::Submittable);
+    assert!(subnet_node_data.has_classification(&SubnetNodeClass::Submittable, epoch));
 
     let subnet_node_account = SubnetNodeAccount::<T>::get(subnet_id, peer(n));
     assert_eq!(subnet_node_account, subnet_node_account.clone());
@@ -350,8 +350,8 @@ mod benchmarks {
 			assert_eq!(subnet_node_data.peer_id, peer(n));
 			assert_eq!(subnet_node_data.initialized, block_number);
 			// --- Is ``Submittable`` if registered before subnet activation
-			assert_eq!(subnet_node_data.classification.class, SubetNodeClass::Submittable);
-			assert!(subnet_node_data.has_classification(&SubetNodeClass::Submittable, epoch));
+			assert_eq!(subnet_node_data.classification.class, SubnetNodeClass::Submittable);
+			assert!(subnet_node_data.has_classification(&SubnetNodeClass::Submittable, epoch));
 	
 			let subnet_node_account = SubnetNodeAccount::<T>::get(subnet_id, peer(n));
 			assert_eq!(subnet_node_account, subnet_node_account.clone());
@@ -427,7 +427,7 @@ mod benchmarks {
 		assert_eq!(subnet_node_data.account_id, subnet_node_account.clone());
 		assert_eq!(subnet_node_data.peer_id, peer(end+1));
 		assert_eq!(subnet_node_data.initialized, current_block_number);
-		// assert_eq!(subnet_node_data.classification.class, SubetNodeClass::Submittable);
+		// assert_eq!(subnet_node_data.classification.class, SubnetNodeClass::Submittable);
 
 		let account_subnet_stake = Network::<T>::account_subnet_stake(subnet_node_account.clone(), subnet_id);
 		assert_eq!(account_subnet_stake, DEFAULT_SUBNET_NODE_STAKE);

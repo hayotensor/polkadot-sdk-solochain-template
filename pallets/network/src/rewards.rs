@@ -62,7 +62,7 @@ impl<T: Config> Pallet<T> {
         // --- Get subnet nodes count to check against attestation count
         // ``reward_subnuts`` is called before ``shift_node_classes`` so we can know how many nodes are submittable
         // while in this function that should have in the epoch the rewards are destined for
-        let subnet_node: Vec<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch as u64);
+        let subnet_node: Vec<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubnetNodeClass::Submittable, epoch as u64);
         let subnet_node_count = subnet_node.len() as u128;
 
         let attestations: u128 = submission.attests.len() as u128;
@@ -134,12 +134,12 @@ impl<T: Config> Pallet<T> {
           // --- (else if) Check if past Idle and can be included in validation data
           // Always continue if any of these are true
           // Note: Only ``included`` or above nodes can get emissions
-          if subnet_node.classification.class == SubetNodeClass::Registered {
+          if subnet_node.classification.class == SubnetNodeClass::Registered {
             if subnet_node.classification.start_epoch.saturating_add(subnet_node_registration_epochs) > epoch as u64 {
               Self::perform_remove_subnet_node(block, subnet_id, account_id);
             }
             continue
-          } else if subnet_node.classification.class == SubetNodeClass::Idle {
+          } else if subnet_node.classification.class == SubnetNodeClass::Idle {
             // If not, upgrade classification and continue
             // --- Upgrade to included
             SubnetNodesData::<T>::mutate(
@@ -147,7 +147,7 @@ impl<T: Config> Pallet<T> {
               account_id,
               |params: &mut SubnetNode<T::AccountId>| {
                 params.classification = SubnetNodeClassification {
-                  class: SubetNodeClass::Included,
+                  class: SubnetNodeClass::Included,
                   start_epoch: (epoch + 1) as u64,
                 };
               },
@@ -227,14 +227,14 @@ impl<T: Config> Pallet<T> {
           
           // --- Check if can be included in validation data
           // By this point, node is validated, update to submittable
-          if subnet_node.classification.class == SubetNodeClass::Included && penalties == 0 {
+          if subnet_node.classification.class == SubnetNodeClass::Included && penalties == 0 {
             // --- Upgrade to Submittable
             SubnetNodesData::<T>::mutate(
               subnet_id,
               account_id.clone(),
               |params: &mut SubnetNode<T::AccountId>| {
                 params.classification = SubnetNodeClassification {
-                  class: SubetNodeClass::Submittable,
+                  class: SubnetNodeClass::Submittable,
                   start_epoch: (epoch + 1) as u64, // in case rewards are called late, we add them to the next epoch, 2 from the consensus data
                 };
               },
@@ -306,8 +306,6 @@ impl<T: Config> Pallet<T> {
           SubnetRemovalReason::MaxPenalties,
         );
       }
-
-      // TODO: Check delegate stake amount is above minimum required
     }
 
     Ok(None.into())

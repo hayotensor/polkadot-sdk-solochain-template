@@ -38,7 +38,7 @@ impl<T: Config> Pallet<T> {
       subnet_id, 
       account_id.clone()
     ) {
-      Ok(subnet_node) => subnet_node.has_classification(&SubetNodeClass::Submittable, epoch as u64),
+      Ok(subnet_node) => subnet_node.has_classification(&SubnetNodeClass::Submittable, epoch as u64),
       Err(()) => return Err(Error::<T>::SubnetNotExist.into()),
     };
 
@@ -58,7 +58,7 @@ impl<T: Config> Pallet<T> {
     // --- Ensure the minimum required subnet peers exist
     // --- Only submittable can vote on proposals
     // --- Get all eligible voters from this block
-    let subnet_nodes: BTreeSet<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubetNodeClass::Submittable, epoch);
+    let subnet_nodes: BTreeSet<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubnetNodeClass::Submittable, epoch);
     let subnet_nodes_count = subnet_nodes.len();
 
     // There must always be the required minimum subnet peers for each vote
