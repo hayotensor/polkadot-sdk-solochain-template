@@ -915,6 +915,10 @@ impl_runtime_apis! {
 			let result = Network::get_minimum_delegate_stake(memory_mb);
 			result
 		}
+		fn get_subnet_node_info(subnet_id: u32) -> Vec<u8> {
+			let result = Network::get_subnet_node_info(subnet_id);
+			result.encode()
+		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

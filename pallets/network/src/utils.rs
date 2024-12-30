@@ -259,78 +259,6 @@ impl<T: Config> Pallet<T> {
     T::SubnetInitializationCost::get()
   }
 
-  // Shift up subnet nodes to new classifications
-  // This is used to know the len() of each class of subnet nodes instead of iterating through each time
-  // pub fn shift_node_classes(block: u64, epoch_length: u64) {
-  //   for (subnet_id, _) in SubnetsData::<T>::iter() {
-  //     let class_ids = SubnetNodeClass::iter();
-  //     let last_class_id = class_ids.clone().last().unwrap();
-  //     for mut class_id in class_ids {
-  //       // Can't increase user class after last so skip
-  //       if class_id == last_class_id {
-  //         continue;
-  //       }
-
-  //       let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(
-  //         subnet_id, 
-  //         class_id.clone()
-  //       );
-
-  //       // If initialized but empty, then skip
-  //       if node_sets.is_empty() {
-  //         continue;
-  //       }
-        
-  //       // --- Get next class to shift into
-  //       let class_index = class_id.index();
-
-  //       // --- Safe unwrap from `continue` from last
-  //       let next_class_id: SubnetNodeClass = SubnetNodeClass::from_repr(class_index + 1).unwrap();
-
-  //       // --- Copy the node sets for mutation
-  //       let mut node_sets_copy: BTreeMap<T::AccountId, u64> = node_sets.clone();
-        
-  //       // --- Get next node sets for mutation or initialize new BTreeMap
-  //       let mut next_node_sets: BTreeMap<T::AccountId, u64> = match SubnetNodesClasses::<T>::try_get(subnet_id, next_class_id) {
-  //         Ok(next_node_sets) => next_node_sets,
-  //         Err(_) => BTreeMap::new(),
-  //       };
-
-  //       // --- Get epochs required to be in class from the initialization block
-  //       let epochs = SubnetNodeClassEpochs::<T>::get(class_id.clone());
-
-  //       for node_set in node_sets.iter() {
-  //         let account_eligible: bool = Self::is_account_eligible(node_set.0.clone());
-
-  //         if !account_eligible {
-  //           next_node_sets.remove(&node_set.0.clone());
-  //           node_sets_copy.remove(&node_set.0.clone());
-  //           continue;
-  //         }
-
-  //         if let Ok(subnet_node_data) = SubnetNodesData::<T>::try_get(subnet_id, node_set.0.clone()) {
-  //           let initialized: u64 = subnet_node_data.initialized;
-  //           if Self::is_epoch_block_eligible(
-  //             block, 
-  //             epoch_length, 
-  //             epochs, 
-  //             initialized
-  //           ) {
-  //             // --- Insert to the next classification, will only insert if doesn't already exist
-  //             next_node_sets.insert(node_set.0.clone(), *node_set.1);
-  //           }  
-  //         } else {
-  //           // Remove the account from classification if they don't exist anymore
-  //           node_sets_copy.remove(&node_set.0.clone());
-  //         }
-  //       }
-  //       // --- Update classifications
-  //       SubnetNodesClasses::<T>::insert(subnet_id, class_id, node_sets_copy);
-  //       SubnetNodesClasses::<T>::insert(subnet_id, next_class_id, next_node_sets);
-  //     }
-  //   }
-  // }
-
   pub fn do_epoch_preliminaries(block: u64, epoch: u32, epoch_length: u64) {
     let min_required_subnet_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
     let target_accountants_len: u32 = TargetAccountantsLength::<T>::get();
@@ -345,6 +273,7 @@ impl<T: Config> Pallet<T> {
         continue
       } else if data.activated == 0 && block > max_registration_block {
         // --- Ensure subnet is in registration period and hasn't passed enactment period
+        // If subnet hasn't been activated after the enacement period, then remove subnet
 				Self::deactivate_subnet(
 					data.path,
 					SubnetRemovalReason::EnactmentPeriod,
@@ -353,6 +282,10 @@ impl<T: Config> Pallet<T> {
 			}
 
       // --- All subnets are now activated and passed the registration period
+      // Must have:
+      //  - Minimum nodes (increases penalties if less than)
+      //  - Minimum delegate stake balance (remove subnet if less than)
+
       let min_subnet_nodes = data.min_nodes;
 			let subnet_delegate_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);
 			let min_subnet_delegate_stake_balance = Self::get_min_subnet_delegate_stake_balance(min_subnet_nodes);
@@ -395,14 +328,14 @@ impl<T: Config> Pallet<T> {
         epoch,
       );
 
-      Self::choose_accountants(
-        block,
-        epoch,
-        subnet_id,
-        subnet_node_accounts,
-        min_subnet_nodes,
-        target_accountants_len,
-      );
+      // Self::choose_accountants(
+      //   block,
+      //   epoch,
+      //   subnet_id,
+      //   subnet_node_accounts,
+      //   min_subnet_nodes,
+      //   target_accountants_len,
+      // );
     }
   }
 
@@ -529,6 +462,19 @@ impl<T: Config> Pallet<T> {
   pub fn get_classified_subnet_nodes(subnet_id: u32, classification: &SubnetNodeClass, epoch: u64) -> Vec<SubnetNode<T::AccountId>> {
     SubnetNodesData::<T>::iter_prefix_values(subnet_id)
       .filter(|subnet_node| subnet_node.has_classification(classification, epoch))
+      .collect()
+  }
+
+  pub fn get_classified_subnet_node_info(subnet_id: u32, classification: &SubnetNodeClass, epoch: u64) -> Vec<SubnetNodeInfo<T::AccountId>> {
+    SubnetNodesData::<T>::iter_prefix_values(subnet_id)
+      .filter(|subnet_node| subnet_node.has_classification(classification, epoch))
+      .map(|subnet_node| {
+        SubnetNodeInfo {
+          account_id: subnet_node.account_id,
+          hotkey: subnet_node.hotkey,
+          peer_id: subnet_node.peer_id,
+        }
+      })
       .collect()
   }
 

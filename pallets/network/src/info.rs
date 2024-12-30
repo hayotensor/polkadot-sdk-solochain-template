@@ -55,6 +55,18 @@ impl<T: Config> Pallet<T> {
     Self::get_classified_subnet_nodes(subnet_id, &SubnetNodeClass::Submittable, epoch)
   }
 
+  pub fn get_subnet_node_info(
+    subnet_id: u32,
+  ) -> Vec<SubnetNodeInfo<T::AccountId>> {
+    if !SubnetsData::<T>::contains_key(subnet_id) {
+      return Vec::new();
+    }
+    let block: u64 = Self::get_current_block_as_u64();
+    let epoch_length: u64 = T::EpochLength::get();
+    let epoch: u64 = block / epoch_length;
+    Self::get_classified_subnet_node_info(subnet_id, &SubnetNodeClass::Submittable, epoch)
+  }
+
   pub fn get_subnet_nodes_subnet_unconfirmed_count(
     subnet_id: u32,
   ) -> u32 {

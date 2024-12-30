@@ -494,6 +494,13 @@ pub mod pallet {
 		pub c: Vec<u8>,
 	}
 
+	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
+	pub struct SubnetNodeInfo<AccountId> {
+		pub account_id: AccountId,
+		pub hotkey: AccountId,
+		pub peer_id: PeerId,
+	}
+
 	#[derive(Encode, Decode, scale_info::TypeInfo, Clone, PartialEq, Eq)]
 	pub enum ActionType {
 		Deregister,
@@ -986,7 +993,8 @@ pub mod pallet {
 	#[pallet::type_value]
 	pub fn DefaultMinSubnetRegistrationBlocks() -> u64 {
 		// 9 days at 6s blocks
-		129_600
+		// 129_600
+		11
 	}
 	#[pallet::type_value]
 	pub fn DefaultMaxSubnetRegistrationBlocks() -> u64 {
@@ -1171,19 +1179,6 @@ pub mod pallet {
 	#[pallet::storage] // subnet_id --> account_id --> data
 	#[pallet::getter(fn subnet_nodes)]
 	pub type SubnetNodesData<T: Config> = StorageDoubleMap<
-		_,
-		Blake2_128Concat,
-		u32,
-		Identity,
-		T::AccountId,
-		SubnetNode<T::AccountId>,
-		ValueQuery,
-		DefaultSubnetNode<T>,
-	>;
-	
-	#[pallet::storage] // subnet_id --> account_id --> data
-	#[pallet::getter(fn subnet_nodes_v2)]
-	pub type SubnetNodesDataV2<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
 		u32,
@@ -1756,12 +1751,7 @@ pub mod pallet {
 			origin: OriginFor<T>, 
 			subnet_id: u32,
 		) -> DispatchResult {
-			// let account_id: T::AccountId = ensure_signed(origin)?;
 			ensure_signed(origin)?;
-
-			// let account_id = match origin {
-			// 	Ok(ensure_signed(origin)) => account_id
-			// };
 
 			let subnet = match SubnetsData::<T>::try_get(subnet_id) {
         Ok(subnet) => subnet,
@@ -1773,6 +1763,7 @@ pub mod pallet {
 			// 		1. Subnet can be voted off
 			//		2. Subnet can reach max penalty
 			//		2.a. Subnet has min peers after initialization period (increases penalty score)
+			//		3. Subnet has less than required minimum delegate stake balance
 			// ----
 			
 			let min_required_subnet_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
@@ -1780,7 +1771,7 @@ pub mod pallet {
 
 			// --- Ensure the subnet has passed it's required period to begin consensus submissions
 			ensure!(
-				block > subnet.activated,
+				subnet.activated != 0,
 				Error::<T>::SubnetInitializing
 			);
 
@@ -1788,8 +1779,6 @@ pub mod pallet {
 
 			let subnet_delegate_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);
 			let min_subnet_delegate_stake_balance = Self::get_min_subnet_delegate_stake_balance(subnet.min_nodes);
-
-			// TODO: Check min nodes count against submittable nodes classification
 
 			if penalties > MaxSubnetPenaltyCount::<T>::get() {
 				// --- If the subnet has reached max penalty, remove it
@@ -1887,10 +1876,12 @@ pub mod pallet {
 			origin: OriginFor<T>, 
 			subnet_id: u32, 
 		) -> DispatchResult {
-			Self::do_deactivate_subnet_node(
-				origin,
-				subnet_id,
-			)
+			// --- TODO: feature not finished yet
+			// Self::do_deactivate_subnet_node(
+			// 	origin,
+			// 	subnet_id,
+			// )
+			Ok(())
 		}
 		
 		/// Remove your subnet peer
@@ -2618,6 +2609,7 @@ pub mod pallet {
 				class: SubnetNodeClass::Registered,
 				start_epoch: epoch,
 			};
+			log::error!("SubnetNodeClass::Registered {:?}", SubnetNodeClass::Registered);
 
 			let subnet_node: SubnetNode<T::AccountId> = SubnetNode {
 				account_id: account_id.clone(),
@@ -2743,6 +2735,8 @@ pub mod pallet {
 				}
 			)?;
 
+			TotalActiveSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| n.saturating_dec());
+
 			// --- Add deactivation action to ledger
 			// This will deactivate the node on the following epoch
 			let mut pending_actions = PendingActionsStorage::<T>::get().unwrap_or_else(|| PendingActions {
@@ -2754,8 +2748,6 @@ pub mod pallet {
 
 			// Store the updated actions
 			PendingActionsStorage::<T>::put(Some(pending_actions));
-
-			TotalActiveSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| n.saturating_dec());
 
 			Ok(())
 		}
@@ -2801,13 +2793,6 @@ pub mod pallet {
 			Ok(())
 		}
 	}
-
-	// impl<T: Config> SubnetNode<T::AccountId> {
-  //   pub fn register_node(account_id: T::AccountId, pending_actions: &mut SubnetNodePendingActions<T>, timeout_epoch: u64, current_epoch: u64) {
-  //       // Add a pending "Deregister" action if not activated within the timeout.
-  //       pending_actions.add_action(account_id, SubnetNodeActionType::Deregister, current_epoch + timeout_epoch);
-  //   }
-	// }
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {

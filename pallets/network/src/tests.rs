@@ -1752,86 +1752,86 @@ fn test_register_subnet_node_activate_subnet_node() {
   })
 }
 
-#[test]
-fn test_deactivate_subnet_node() {
-  new_test_ext().execute_with(|| {
-    let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
+// #[test]
+// fn test_deactivate_subnet_node() {
+//   new_test_ext().execute_with(|| {
+//     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
     
-    let deposit_amount: u128 = 10000000000000000000000;
-    let amount: u128 = 1000000000000000000000;
+//     let deposit_amount: u128 = 10000000000000000000000;
+//     let amount: u128 = 1000000000000000000000;
 
-    build_activated_subnet(subnet_path.clone(), 0, 0, deposit_amount, amount);
+//     build_activated_subnet(subnet_path.clone(), 0, 0, deposit_amount, amount);
 
-    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
-    let total_subnet_nodes = TotalSubnetNodes::<Test>::get(subnet_id);
-    let total_active_subnet_nodes = TotalActiveSubnetNodes::<Test>::get(subnet_id);
+//     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+//     let total_subnet_nodes = TotalSubnetNodes::<Test>::get(subnet_id);
+//     let total_active_subnet_nodes = TotalActiveSubnetNodes::<Test>::get(subnet_id);
 
-    let _ = Balances::deposit_creating(&account(total_subnet_nodes+1), deposit_amount);
+//     let _ = Balances::deposit_creating(&account(total_subnet_nodes+1), deposit_amount);
 
-    assert_ok!(
-      Network::register_subnet_node(
-        RuntimeOrigin::signed(account(total_subnet_nodes+1)),
-        subnet_id,
-        peer(total_subnet_nodes+1),
-        amount,
-        None,
-        None,
-        None,
-      )
-    );
+//     assert_ok!(
+//       Network::register_subnet_node(
+//         RuntimeOrigin::signed(account(total_subnet_nodes+1)),
+//         subnet_id,
+//         peer(total_subnet_nodes+1),
+//         amount,
+//         None,
+//         None,
+//         None,
+//       )
+//     );
 
-    let new_total_subnet_nodes = TotalSubnetNodes::<Test>::get(subnet_id);
-    assert_eq!(new_total_subnet_nodes, total_subnet_nodes + 1);
+//     let new_total_subnet_nodes = TotalSubnetNodes::<Test>::get(subnet_id);
+//     assert_eq!(new_total_subnet_nodes, total_subnet_nodes + 1);
 
-    let new_total_active_subnet_nodes = TotalActiveSubnetNodes::<Test>::get(subnet_id);
-    assert_eq!(new_total_active_subnet_nodes, total_active_subnet_nodes);
+//     let new_total_active_subnet_nodes = TotalActiveSubnetNodes::<Test>::get(subnet_id);
+//     assert_eq!(new_total_active_subnet_nodes, total_active_subnet_nodes);
 
-    let subnet_node = SubnetNodesData::<Test>::get(subnet_id, account(total_subnet_nodes+1));
-    assert_eq!(subnet_node.account_id, account(total_subnet_nodes+1));
-    assert_eq!(subnet_node.hotkey, account(total_subnet_nodes+1));
-    assert_eq!(subnet_node.peer_id, peer(total_subnet_nodes+1));
-    assert_eq!(subnet_node.initialized, 0);
-    assert_eq!(subnet_node.classification.class, SubnetNodeClass::Registered);
+//     let subnet_node = SubnetNodesData::<Test>::get(subnet_id, account(total_subnet_nodes+1));
+//     assert_eq!(subnet_node.account_id, account(total_subnet_nodes+1));
+//     assert_eq!(subnet_node.hotkey, account(total_subnet_nodes+1));
+//     assert_eq!(subnet_node.peer_id, peer(total_subnet_nodes+1));
+//     assert_eq!(subnet_node.initialized, 0);
+//     assert_eq!(subnet_node.classification.class, SubnetNodeClass::Registered);
 
-    let subnet_node_account = SubnetNodeAccount::<Test>::get(subnet_id, peer(total_subnet_nodes+1));
-    assert_eq!(subnet_node_account, account(total_subnet_nodes+1));
+//     let subnet_node_account = SubnetNodeAccount::<Test>::get(subnet_id, peer(total_subnet_nodes+1));
+//     assert_eq!(subnet_node_account, account(total_subnet_nodes+1));
 
-    let account_subnet_stake = AccountSubnetStake::<Test>::get(account(total_subnet_nodes+1), subnet_id);
-    assert_eq!(account_subnet_stake, amount);
+//     let account_subnet_stake = AccountSubnetStake::<Test>::get(account(total_subnet_nodes+1), subnet_id);
+//     assert_eq!(account_subnet_stake, amount);
 
-    let epoch_length = EpochLength::get();
-    let block_number = System::block_number();
-    let epoch = System::block_number() / epoch_length;
+//     let epoch_length = EpochLength::get();
+//     let block_number = System::block_number();
+//     let epoch = System::block_number() / epoch_length;
 
-    assert_ok!(
-      Network::activate_subnet_node(
-        RuntimeOrigin::signed(account(total_subnet_nodes+1)),
-        subnet_id,
-      )
-    );
+//     assert_ok!(
+//       Network::activate_subnet_node(
+//         RuntimeOrigin::signed(account(total_subnet_nodes+1)),
+//         subnet_id,
+//       )
+//     );
 
-    let new_new_total_active_subnet_nodes = TotalActiveSubnetNodes::<Test>::get(subnet_id);
-    assert_eq!(new_new_total_active_subnet_nodes, new_total_active_subnet_nodes + 1);
+//     let new_new_total_active_subnet_nodes = TotalActiveSubnetNodes::<Test>::get(subnet_id);
+//     assert_eq!(new_new_total_active_subnet_nodes, new_total_active_subnet_nodes + 1);
 
-    let subnet_node = SubnetNodesData::<Test>::get(subnet_id, account(total_subnet_nodes+1));
+//     let subnet_node = SubnetNodesData::<Test>::get(subnet_id, account(total_subnet_nodes+1));
 
-    assert_eq!(subnet_node.initialized, block_number);
-    assert_eq!(subnet_node.classification.class, SubnetNodeClass::Idle);
-    assert_eq!(subnet_node.classification.start_epoch, epoch + 1);
+//     assert_eq!(subnet_node.initialized, block_number);
+//     assert_eq!(subnet_node.classification.class, SubnetNodeClass::Idle);
+//     assert_eq!(subnet_node.classification.start_epoch, epoch + 1);
 
 
-    assert_ok!(
-      Network::deactivate_subnet_node(
-        RuntimeOrigin::signed(account(total_subnet_nodes+1)),
-        subnet_id,
-      )
-    );
+//     assert_ok!(
+//       Network::deactivate_subnet_node(
+//         RuntimeOrigin::signed(account(total_subnet_nodes+1)),
+//         subnet_id,
+//       )
+//     );
 
-    let new_new_new_total_active_subnet_nodes = TotalActiveSubnetNodes::<Test>::get(subnet_id);
-    assert_eq!(new_new_new_total_active_subnet_nodes, new_new_total_active_subnet_nodes - 1);
+//     let new_new_new_total_active_subnet_nodes = TotalActiveSubnetNodes::<Test>::get(subnet_id);
+//     assert_eq!(new_new_new_total_active_subnet_nodes, new_new_total_active_subnet_nodes - 1);
 
-  })
-}
+//   })
+// }
 
 #[test]
 fn test_add_subnet_node_subnet_err() {
