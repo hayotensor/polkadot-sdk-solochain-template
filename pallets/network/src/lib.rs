@@ -180,13 +180,15 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		// Subnets
-		SubnetAdded { activator: T::AccountId, subnet_id: u32, subnet_path: Vec<u8>, block: u64 },
-		SubnetRemoved { subnet_id: u32, subnet_path: Vec<u8>, reason: SubnetRemovalReason },
+		SubnetRegistered { account_id: T::AccountId, path: Vec<u8>, subnet_id: u32 },
+		SubnetActivated { subnet_id: u32 },
+		SubnetDeactivated { subnet_id: u32, reason: SubnetRemovalReason },
 
 		// Subnet Nodes
-		SubnetNodeAdded { subnet_id: u32, account_id: T::AccountId, peer_id: PeerId, block: u64 },
-		SubnetNodeUpdated { subnet_id: u32, account_id: T::AccountId, peer_id: PeerId, block: u64 },
-		SubnetNodeRemoved { subnet_id: u32, account_id: T::AccountId, peer_id: PeerId, block: u64 },
+		SubnetNodeRegistered { subnet_id: u32, account_id: T::AccountId, peer_id: PeerId, block: u64 },
+		SubnetNodeActivated { subnet_id: u32, account_id: T::AccountId },
+		SubnetNodeDeactivated { subnet_id: u32, account_id: T::AccountId },
+		SubnetNodeRemoved { subnet_id: u32, account_id: T::AccountId },
 
 		// Stake
 		StakeAdded(u32, T::AccountId, u128),
@@ -246,6 +248,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Errors should have helpful documentation associated with them.
 
+		/// Subnet must be registering or activated, this error usually occurs during the enactment period
+		SubnetMustBeRegisteringOrActivated,
 		/// Node hasn't been initialized for required epochs to submit consensus
 		NodeConsensusSubmitEpochNotReached,
 		/// Node hasn't been initialized for required epochs to be an accountant
@@ -2374,11 +2378,10 @@ pub mod pallet {
 			// Increase total subnets. This is used for unique Subnet IDs
 			TotalSubnets::<T>::mutate(|n: &mut u32| *n += 1);
 
-			Self::deposit_event(Event::SubnetAdded { 
-				activator: activator,
-				subnet_id: subnet_id, 
-				subnet_path: subnet_data.path,
-				block: block
+			Self::deposit_event(Event::SubnetRegistered { 
+				account_id: activator, 
+				path: subnet_data.path, 
+				subnet_id: subnet_id 
 			});
 
 			Ok(())
@@ -2452,11 +2455,7 @@ pub mod pallet {
 				}
 			)?;
 
-      // Self::deposit_event(Event::SubnetActivated { 
-      //   subnet_id: subnet_id, 
-      //   validator: validator,
-      //   block: block
-      // });
+      Self::deposit_event(Event::SubnetActivated { subnet_id: subnet_id });
 	
 			Ok(())
 		}
@@ -2501,11 +2500,7 @@ pub mod pallet {
 			// Remove proposals
 			let _ = Proposals::<T>::clear_prefix(subnet_id, u32::MAX, None);
 	
-			Self::deposit_event(Event::SubnetRemoved { 
-				subnet_id: subnet_id, 
-				subnet_path: path,
-				reason: reason,
-			});
+			Self::deposit_event(Event::SubnetDeactivated { subnet_id: subnet_id, reason: reason });
 
 			Ok(())
 		}
@@ -2540,7 +2535,18 @@ pub mod pallet {
         Ok(subnet) => subnet,
         Err(()) => return Err(Error::<T>::SubnetNotExist.into()),
 			};
-			
+
+			let block: u64 = Self::get_current_block_as_u64();
+
+			if subnet.activated == 0 {
+				// --- Nodes can only register if within registration period or if it's activated
+				// --- Ensure the subnet is within the enactment period
+				ensure!(
+					block <= subnet.initialized + subnet.registration_blocks,
+					Error::<T>::SubnetMustBeRegisteringOrActivated
+				);
+			}
+
 			// Ensure max peers isn't surpassed
 			let total_subnet_nodes: u32 = TotalSubnetNodes::<T>::get(subnet_id);
 			let max_subnet_nodes: u32 = MaxSubnetNodes::<T>::get();
@@ -2599,7 +2605,6 @@ pub mod pallet {
 			// This ensures others cannot claim to own a PeerId they are not the owner of
 			// Self::validate_signature(&Encode::encode(&peer_id), &signature, &signer)?;
 			let epoch_length: u64 = T::EpochLength::get();
-			let block: u64 = Self::get_current_block_as_u64();
 			let epoch: u64 = block / epoch_length;
 
 			// ========================
@@ -2644,10 +2649,10 @@ pub mod pallet {
 
 
 			Self::deposit_event(
-				Event::SubnetNodeAdded { 
+				Event::SubnetNodeRegistered { 
 					subnet_id: subnet_id, 
-					account_id: account_id, 
-					peer_id: peer_id,
+					account_id: account_id.clone(), 
+					peer_id: peer_id.clone(),
 					block: block
 				}
 			);
@@ -2669,6 +2674,15 @@ pub mod pallet {
         Ok(subnet) => subnet,
         Err(()) => return Err(Error::<T>::SubnetNotExist.into()),
 			};
+
+			if subnet.activated == 0 {
+				// --- Nodes can only activate if within registration period or if it's activated
+				// --- Ensure the subnet is within the enactment period
+				ensure!(
+					block <= subnet.initialized + subnet.registration_blocks,
+					Error::<T>::SubnetMustBeRegisteringOrActivated
+				);
+			}
 
 			SubnetNodesData::<T>::try_mutate_exists(
 				subnet_id,
@@ -2703,6 +2717,13 @@ pub mod pallet {
 
 			TotalActiveSubnetNodes::<T>::mutate(subnet_id, |n: &mut u32| *n += 1);
 	
+			Self::deposit_event(
+				Event::SubnetNodeActivated { 
+					subnet_id: subnet_id, 
+					account_id: account_id, 
+				}
+			);
+
 			Ok(())
 		}
 
@@ -2748,6 +2769,13 @@ pub mod pallet {
 
 			// Store the updated actions
 			PendingActionsStorage::<T>::put(Some(pending_actions));
+
+			Self::deposit_event(
+				Event::SubnetNodeDeactivated { 
+					subnet_id: subnet_id, 
+					account_id: account_id, 
+				}
+			);
 
 			Ok(())
 		}

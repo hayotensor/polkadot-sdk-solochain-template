@@ -1033,9 +1033,8 @@ fn test_activate_subnet_enactment_period_remove_subnet() {
 
     assert_eq!(
 			*network_events().last().unwrap(),
-			Event::SubnetRemoved {
+			Event::SubnetDeactivated {
         subnet_id: subnet_id, 
-        subnet_path: subnet_path.clone().into(), 
         reason: SubnetRemovalReason::EnactmentPeriod
       }
 		);
@@ -1174,9 +1173,8 @@ fn test_activate_subnet_min_subnet_nodes_remove_subnet() {
 
     assert_eq!(
 			*network_events().last().unwrap(),
-			Event::SubnetRemoved {
+			Event::SubnetDeactivated {
         subnet_id: subnet_id, 
-        subnet_path: subnet_path.clone().into(), 
         reason: SubnetRemovalReason::MinSubnetNodes
       }
 		);
@@ -1253,9 +1251,8 @@ fn test_activate_subnet_min_delegate_balance_remove_subnet() {
 
     assert_eq!(
 			*network_events().last().unwrap(),
-			Event::SubnetRemoved {
+			Event::SubnetDeactivated {
         subnet_id: subnet_id, 
-        subnet_path: subnet_path.clone().into(), 
         reason: SubnetRemovalReason::MinSubnetDelegateStake
       }
 		);
@@ -1682,6 +1679,106 @@ fn test_register_subnet_node() {
     assert_eq!(account_subnet_stake, amount);
   })
 }
+
+#[test]
+fn test_register_subnet_node_subnet_registering_or_activated_error() {
+  new_test_ext().execute_with(|| {
+
+    let deposit_amount: u128 = 10000000000000000000000;
+    let amount: u128 = 1000000000000000000000;
+
+    let cost = Network::get_subnet_initialization_cost(0);
+    let _ = Balances::deposit_creating(&account(0), cost+1000);
+  
+    let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
+
+    let add_subnet_data = RegistrationSubnetData {
+      path: subnet_path.clone().into(),
+      memory_mb: DEFAULT_MEM_MB,
+      registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
+    };
+  
+    // --- Register subnet for activation
+    assert_ok!(
+      Network::register_subnet(
+        RuntimeOrigin::signed(account(0)),
+        add_subnet_data,
+      )
+    );
+  
+    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+    let subnet = SubnetsData::<Test>::get(subnet_id).unwrap();
+  
+    System::set_block_number(System::block_number() + DEFAULT_REGISTRATION_BLOCKS + 1);
+  
+    assert_err!(
+      Network::register_subnet_node(
+        RuntimeOrigin::signed(account(0)),
+        subnet_id,
+        peer(0),
+        amount,
+        None,
+        None,
+        None,
+      ),
+      Error::<Test>::SubnetMustBeRegisteringOrActivated
+    );
+  })
+}
+
+#[test]
+fn test_activate_subnet_node_subnet_registering_or_activated_error() {
+  new_test_ext().execute_with(|| {
+
+    let deposit_amount: u128 = 10000000000000000000000;
+    let amount: u128 = 1000000000000000000000;
+
+    let cost = Network::get_subnet_initialization_cost(0);
+    let _ = Balances::deposit_creating(&account(0), cost+1000+deposit_amount);
+  
+    let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
+
+    let add_subnet_data = RegistrationSubnetData {
+      path: subnet_path.clone().into(),
+      memory_mb: DEFAULT_MEM_MB,
+      registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
+    };
+  
+    // --- Register subnet for activation
+    assert_ok!(
+      Network::register_subnet(
+        RuntimeOrigin::signed(account(0)),
+        add_subnet_data,
+      )
+    );
+  
+    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+    let subnet = SubnetsData::<Test>::get(subnet_id).unwrap();
+  
+    assert_ok!(
+      Network::register_subnet_node(
+        RuntimeOrigin::signed(account(0)),
+        subnet_id,
+        peer(0),
+        amount,
+        None,
+        None,
+        None,
+      )
+    );
+
+    System::set_block_number(System::block_number() + DEFAULT_REGISTRATION_BLOCKS + 1);
+
+    assert_err!(
+      Network::activate_subnet_node(
+        RuntimeOrigin::signed(account(0)),
+        subnet_id,
+      ),
+      Error::<Test>::SubnetMustBeRegisteringOrActivated
+    );
+  })
+}
+
 
 #[test]
 fn test_register_subnet_node_activate_subnet_node() {
@@ -4778,9 +4875,8 @@ fn test_do_epoch_preliminaries_deactivate_subnet_enactment_period() {
       if block_number > max_registration_block + subnet_activation_enactment_period {
         assert_eq!(
           *network_events().last().unwrap(),
-          Event::SubnetRemoved {
+          Event::SubnetDeactivated {
             subnet_id: subnet_id, 
-            subnet_path: subnet_path.clone().into(), 
             reason: SubnetRemovalReason::EnactmentPeriod
           }
         );
@@ -4829,9 +4925,8 @@ fn test_do_epoch_preliminaries_deactivate_min_subnet_delegate_stake() {
     Network::do_epoch_preliminaries(block_number, epoch as u32, epoch_length);
     assert_eq!(
       *network_events().last().unwrap(),
-      Event::SubnetRemoved {
+      Event::SubnetDeactivated {
         subnet_id: subnet_id, 
-        subnet_path: subnet_path.clone().into(), 
         reason: SubnetRemovalReason::MinSubnetDelegateStake
       }
     ); 
@@ -4864,9 +4959,8 @@ fn test_do_epoch_preliminaries_deactivate_max_penalties() {
     Network::do_epoch_preliminaries(block_number, epoch as u32, epoch_length);
     assert_eq!(
       *network_events().last().unwrap(),
-      Event::SubnetRemoved {
+      Event::SubnetDeactivated {
         subnet_id: subnet_id, 
-        subnet_path: subnet_path.clone().into(), 
         reason: SubnetRemovalReason::MaxPenalties
       }
     ); 
