@@ -63,7 +63,7 @@ impl<T: Config> Pallet<T> {
   }
 
   pub fn set_overall_max_subnet_memory_mb(value: u128) -> DispatchResult {
-    TotalMaxSubnetMemoryMB::<T>::put(value);
+    MaxTotalSubnetMemoryMB::<T>::put(value);
     Ok(())
   }
 

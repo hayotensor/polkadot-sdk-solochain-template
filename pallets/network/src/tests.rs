@@ -42,8 +42,8 @@ use crate::{
   SubnetNodePenalties, RegistrationSubnetData,
   CurrentAccountants, TargetAccountantsLength, MinRequiredSubnetConsensusSubmitEpochs, BaseRewardPerMB,
   DelegateStakeUnbondingLedger, SubnetRemovalReason, ProposalBidAmount, BaseSubnetNodeMemoryMB,
-  MinSubnetDelegateStakePercentage, MaxSubnetPenaltyCount,
-  TotalAccountStake, MaxSubnetMemoryMB, SubnetStakeUnbondingLedger,
+  MinSubnetDelegateStakePercentage, MaxSubnetPenaltyCount, 
+  TotalAccountStake, MaxSubnetMemoryMB, SubnetStakeUnbondingLedger, TotalSubnetMemoryMB,MaxTotalSubnetMemoryMB,
   TotalSubnetStake, MinSubnetRegistrationBlocks, MaxSubnetRegistrationBlocks, SubnetActivationEnactmentPeriod,
 };
 use frame_support::BoundedVec;
@@ -698,6 +698,53 @@ fn test_register_subnet_max_subnet_mem_err() {
       ),
       Error::<Test>::MaxSubnetMemory
     );
+  })
+}
+
+#[test]
+fn test_register_subnet_max_total_subnet_mem_err() {
+  new_test_ext().execute_with(|| {
+    let cost = Network::get_subnet_initialization_cost(0);
+  
+    let max_total_subnet_memory_mb = MaxTotalSubnetMemoryMB::<Test>::get();
+    let total_subnet_memory_mb = TotalSubnetMemoryMB::<Test>::get();
+
+    // Limit while loop to 10 ierations
+    let iterations = 11;
+    let subnet_mem_mb = max_total_subnet_memory_mb / (iterations-1);
+
+    let mut current_total_subnet_memory_mb = total_subnet_memory_mb;
+
+    for n in 0..iterations {
+      let _ = Balances::deposit_creating(&account(0), cost+1000);
+
+      let path: Vec<u8> = format!("model-name-{n}").into(); 
+
+      let add_subnet_data = RegistrationSubnetData {
+        path: path,
+        memory_mb: subnet_mem_mb,
+        registration_blocks: DEFAULT_REGISTRATION_BLOCKS,
+      };
+
+      let next_subnet_total_memory_mb = TotalSubnetMemoryMB::<Test>::get() + subnet_mem_mb;
+
+      if next_subnet_total_memory_mb <= max_total_subnet_memory_mb {
+        assert_ok!(
+          Network::register_subnet(
+            RuntimeOrigin::signed(account(0)),
+            add_subnet_data,
+          )
+        );
+      } else {
+        assert_err!(
+          Network::register_subnet(
+            RuntimeOrigin::signed(account(0)),
+            add_subnet_data,
+          ),
+          Error::<Test>::MaxTotalSubnetMemory
+        );
+      }
+    }
   })
 }
 

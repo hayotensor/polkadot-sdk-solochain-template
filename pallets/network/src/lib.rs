@@ -270,6 +270,8 @@ pub mod pallet {
 		SubnetNodeNotExist,
 		/// Subnet already exists
 		SubnetExist,
+		/// Max total subnet memory exceeded
+		MaxTotalSubnetMemory,
 		/// Max subnet memory size exceeded
 		MaxSubnetMemory,
 		/// Invalid registration block
@@ -986,8 +988,8 @@ pub mod pallet {
 		1_000_000
 	}
 	#[pallet::type_value]
-	pub fn DefaultTotalMaxSubnetMemoryMB() -> u128 {
-		1_000_000
+	pub fn DefaultMaxTotalSubnetMemoryMB() -> u128 {
+		10_000_000
 	}
 	#[pallet::type_value]
 	pub fn DefaultMinSubnetNodes() -> u32 {
@@ -1054,6 +1056,14 @@ pub mod pallet {
 	#[pallet::storage] // subnet_id => data struct
 	pub type SubnetsData<T: Config> = StorageMap<_, Blake2_128Concat, u32, SubnetData>;
 
+	/// Maximum subnet memory per subnet
+	#[pallet::storage]
+	pub type MaxSubnetMemoryMB<T> = StorageValue<_, u128, ValueQuery, DefaultMaxSubnetMemoryMB>;
+
+	/// Total sum of subnet memory available in the network
+	#[pallet::storage]
+	pub type MaxTotalSubnetMemoryMB<T> = StorageValue<_, u128, ValueQuery, DefaultMaxTotalSubnetMemoryMB>;
+	
 	/// Total subnet memory across all subnets
 	#[pallet::storage]
 	pub type TotalSubnetMemoryMB<T: Config> = StorageValue<_, u128, ValueQuery, DefaultTotalSubnetMemoryMB>;
@@ -1265,14 +1275,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BaseSubnetNodeMemoryMB<T> = StorageValue<_, u128, ValueQuery, DefaultBaseSubnetNodeMemoryMB>;
 
-	/// Maximum subnet memory per subnet
-	#[pallet::storage]
-	pub type MaxSubnetMemoryMB<T> = StorageValue<_, u128, ValueQuery, DefaultMaxSubnetMemoryMB>;
-
-	/// Total sum of subnet memory available in the network
-	#[pallet::storage]
-	pub type TotalMaxSubnetMemoryMB<T> = StorageValue<_, u128, ValueQuery, DefaultTotalMaxSubnetMemoryMB>;
-
 	#[pallet::storage]
 	pub type TargetSubnetNodesMultiplier<T> = StorageValue<_, u128, ValueQuery, DefaultTargetSubnetNodesMultiplier>;
 
@@ -1324,10 +1326,16 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type BaseValidatorReward<T> = StorageValue<_, u128, ValueQuery, DefaultBaseValidatorReward>;
 
-	// Base reward per MB per epoch based on 4,380 MB per year
+	/// Base reward per MB per epoch based on 4,380 MB per year
 	#[pallet::storage]
 	pub type BaseRewardPerMB<T> = StorageValue<_, u128, ValueQuery, DefaultBaseRewardPerMB>;
 
+	/// Assumed cost per MB for each epoch
+	// TODO: (not included in logic yet)
+	// This will help determine inflation for each epoch on the cost to run a subnet node
+	#[pallet::storage]
+	pub type ServerCostPerMB<T> = StorageValue<_, u128, ValueQuery, DefaultBaseRewardPerMB>;
+	
 	#[pallet::storage]
 	pub type SlashPercentage<T> = StorageValue<_, u128, ValueQuery, DefaultSlashPercentage>;
 
@@ -2313,6 +2321,12 @@ pub mod pallet {
 				Error::<T>::SubnetExist
 			);
 
+			// --- Ensure total network memory isn't exceeded
+			ensure!(
+				TotalSubnetMemoryMB::<T>::get() + subnet_data.memory_mb <= MaxTotalSubnetMemoryMB::<T>::get(),
+				Error::<T>::MaxTotalSubnetMemory
+			);
+
 			// Ensure max subnets not reached
 			// Get total live subnets
 			let total_subnets: u32 = (SubnetsData::<T>::iter().count()).try_into().unwrap();
@@ -2381,6 +2395,8 @@ pub mod pallet {
 				activated: 0,
 			};
 
+			// Increase total subnet memory
+			TotalSubnetMemoryMB::<T>::mutate(|n: &mut u128| *n += subnet_data.memory_mb);
 			// Store unique path
 			SubnetPaths::<T>::insert(subnet_data.clone().path, subnet_id);
 			// Store subnet data
@@ -2488,6 +2504,8 @@ pub mod pallet {
 			SubnetPaths::<T>::remove(path.clone());
 			// Remove subnet data
 			SubnetsData::<T>::remove(subnet_id);
+			// Decrease total subnet memory
+			TotalSubnetMemoryMB::<T>::mutate(|n: &mut u128| n.saturating_reduce(subnet.memory_mb));
 
 			// We don't subtract TotalSubnets since it's used for ids
 

@@ -252,7 +252,10 @@ impl<T: Config> Pallet<T> {
   }
 
   pub fn get_subnet_rewards(memory_mb: u128, base_reward_per_mb: u128) -> u128 {
-    Self::percent_mul(base_reward_per_mb, memory_mb)
+    Self::percent_mul(
+      Self::percent_mul(base_reward_per_mb, memory_mb), 
+      TargetSubnetNodesMultiplier::<T>::get()
+    )
   }
 
   pub fn get_subnet_initialization_cost(block: u64) -> u128 {
