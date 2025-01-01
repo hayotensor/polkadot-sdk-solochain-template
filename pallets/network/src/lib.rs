@@ -306,7 +306,6 @@ pub mod pallet {
 		InvalidEpoch,
 		SubnetRewardsSubmissionComplete,
 		InvalidSubnetId,
-		SubnetAlreadyActivated,
 
 		DelegateStakeTransferPeriodExceeded,
 
@@ -2289,6 +2288,17 @@ pub mod pallet {
 				proposal_id,
 			)
 		}
+
+		#[pallet::call_index(25)]
+		#[pallet::weight({0})]
+		pub fn clear_subnet(
+			origin: OriginFor<T>, 
+			subnet_id: u32,
+	) -> DispatchResult {
+			ensure_signed(origin)?;
+			Ok(())
+		}
+
 	}
 
 	impl<T: Config> Pallet<T> {
@@ -2387,6 +2397,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Activate subnet or remove registering subnet if doesn't meet requirements
 		pub fn do_activate_subnet(subnet_id: u32) -> DispatchResult {
 			let subnet = match SubnetsData::<T>::try_get(subnet_id) {
         Ok(subnet) => subnet,
@@ -2415,14 +2426,13 @@ pub mod pallet {
 				)
 			}
 
-			// --- Ensure minimum nodes are required
+			// --- Ensure minimum nodes are activated
 			let epoch_length: u64 = T::EpochLength::get();
 			let epoch: u64 = block / epoch_length;
 			let subnet_node_accounts: Vec<T::AccountId> = Self::get_classified_accounts(subnet_id, &SubnetNodeClass::Submittable, epoch);
       let subnet_nodes_count: u32 = subnet_node_accounts.len() as u32;
 
 			if subnet_nodes_count < subnet.min_nodes {
-			// if TotalActiveSubnetNodes::<T>::get(subnet_id) < subnet.min_nodes {
 				return Self::deactivate_subnet(
 					subnet.path,
 					SubnetRemovalReason::MinSubnetNodes,
@@ -2441,15 +2451,13 @@ pub mod pallet {
 				)
 			}
 
+			// --- Gauntlet passed
+
 			// --- Activate subnet
 			SubnetsData::<T>::try_mutate(
 				subnet_id,
 				|maybe_params| -> DispatchResult {
 					let params = maybe_params.as_mut().ok_or(Error::<T>::InvalidSubnetId)?;
-					ensure!(
-						params.activated == 0,
-						Error::<T>::SubnetAlreadyActivated
-					);
 					params.activated = block;
 					Ok(())
 				}
@@ -2538,14 +2546,21 @@ pub mod pallet {
 
 			let block: u64 = Self::get_current_block_as_u64();
 
-			if subnet.activated == 0 {
-				// --- Nodes can only register if within registration period or if it's activated
-				// --- Ensure the subnet is within the enactment period
-				ensure!(
-					block <= subnet.initialized + subnet.registration_blocks,
-					Error::<T>::SubnetMustBeRegisteringOrActivated
-				);
-			}
+			// if subnet.activated == 0 {
+			// 	// --- Subnet nodes can only register if within registration period or if it's activated
+			// 	// --- Ensure the subnet outside of the enactment period or still registering
+			// 	ensure!(
+			// 		block <= subnet.initialized + subnet.registration_blocks,
+			// 		Error::<T>::SubnetMustBeRegisteringOrActivated
+			// 	);
+			// }
+
+			// --- Subnet nodes can only register if within registration period or if it's activated
+			// --- Ensure the subnet outside of the enactment period or still registering
+			ensure!(
+				subnet.activated != 0 || subnet.activated == 0 && block <= subnet.initialized + subnet.registration_blocks,
+				Error::<T>::SubnetMustBeRegisteringOrActivated
+			);
 
 			// Ensure max peers isn't surpassed
 			let total_subnet_nodes: u32 = TotalSubnetNodes::<T>::get(subnet_id);
@@ -2614,7 +2629,6 @@ pub mod pallet {
 				class: SubnetNodeClass::Registered,
 				start_epoch: epoch,
 			};
-			log::error!("SubnetNodeClass::Registered {:?}", SubnetNodeClass::Registered);
 
 			let subnet_node: SubnetNode<T::AccountId> = SubnetNode {
 				account_id: account_id.clone(),
@@ -2675,14 +2689,21 @@ pub mod pallet {
         Err(()) => return Err(Error::<T>::SubnetNotExist.into()),
 			};
 
-			if subnet.activated == 0 {
-				// --- Nodes can only activate if within registration period or if it's activated
-				// --- Ensure the subnet is within the enactment period
-				ensure!(
-					block <= subnet.initialized + subnet.registration_blocks,
-					Error::<T>::SubnetMustBeRegisteringOrActivated
-				);
-			}
+			// if subnet.activated == 0 {
+			// 	// --- Subnet nodes can only activate if within registration period or if it's activated
+			// 	// --- Ensure the subnet outside of the enactment period or still registering
+			// 	ensure!(
+			// 		block <= subnet.initialized + subnet.registration_blocks,
+			// 		Error::<T>::SubnetMustBeRegisteringOrActivated
+			// 	);
+			// }
+
+			// --- Subnet nodes can only register if within registration period or if it's activated
+			// --- Ensure the subnet outside of the enactment period or still registering
+			ensure!(
+				subnet.activated != 0 || subnet.activated == 0 && block <= subnet.initialized + subnet.registration_blocks,
+				Error::<T>::SubnetMustBeRegisteringOrActivated
+			);
 
 			SubnetNodesData::<T>::try_mutate_exists(
 				subnet_id,

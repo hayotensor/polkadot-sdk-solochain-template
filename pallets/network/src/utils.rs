@@ -180,6 +180,13 @@ impl<T: Config> Pallet<T> {
     }
   }
 
+
+  pub fn do_clear_subnet(
+    subnet_id: u32,
+  ) {
+
+  }
+
   pub fn get_min_subnet_nodes(base_node_memory: u128, memory_mb: u128) -> u32 {
     // --- DEFAULT
     // --- Get min nodes based on default memory settings

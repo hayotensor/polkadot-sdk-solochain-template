@@ -122,6 +122,8 @@ const DEFAULT_REGISTRATION_BLOCKS: u64 = 130_000;
 // }
 
 fn build_activated_subnet(subnet_path: Vec<u8>, start: u32, mut end: u32, deposit_amount: u128, amount: u128) {
+  System::set_block_number(System::block_number() + 1);
+
   let cost = Network::get_subnet_initialization_cost(0);
   let _ = Balances::deposit_creating(&account(0), cost+1000);
 
@@ -1708,9 +1710,15 @@ fn test_register_subnet_node_subnet_registering_or_activated_error() {
   
     let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
     let subnet = SubnetsData::<Test>::get(subnet_id).unwrap();
+    
+    log::error!("subnet.activated {:?}",subnet.activated );
+    log::error!("subnet.initialized {:?}",subnet.initialized );
+    log::error!("subnet.registration_blocks {:?}",subnet.registration_blocks );
+
+    System::set_block_number(System::block_number() + subnet.initialized + subnet.registration_blocks + 1);
   
-    System::set_block_number(System::block_number() + DEFAULT_REGISTRATION_BLOCKS + 1);
-  
+    log::error!("subnet block_number {:?}", System::block_number() );
+
     assert_err!(
       Network::register_subnet_node(
         RuntimeOrigin::signed(account(0)),
