@@ -27,6 +27,7 @@ impl<T: Config> Pallet<T> {
     epoch_length: u64,
     epoch: u32,
     mut data: Vec<SubnetNodeData>,
+    args: Option<BoundedVec<u8, DefaultValidatorArgsLimit>>,
   ) -> DispatchResultWithPostInfo {
     // TODO: Add parameter for params data in case a validator has a reason behind why they left
     //       a specific node(s) out of the consensus data for the other subnet nodes to verify
@@ -70,31 +71,21 @@ impl<T: Config> Pallet<T> {
     let included_nodes_count = included_nodes.len();
 
     // --- Ensure data isn't greater than current registered subnet peers
+    // Redundant because of ``retain``
     ensure!(
       data.len() as u32 <= included_nodes_count as u32,
       Error::<T>::InvalidRewardsDataLength
     );
     
-    // --- Sum of all entries scores
-    // Each score is then used against the sum(scores) for emissions
-    // We don't check data accuracy here because that's the job of attesters
-    let scores_sum = data.iter().fold(0, |acc, x| acc + x.score);
-
-    let submittable_nodes = Self::get_classified_subnet_nodes(subnet_id, &SubnetNodeClass::Submittable, epoch as u64);
-    let submittable_nodes_count = submittable_nodes.len();
-
-    // If data.len() is 0 then the validator is deeming the epoch as invalid
-
     // --- Validator auto-attests the epoch
     let mut attests: BTreeMap<T::AccountId, u64> = BTreeMap::new();
     attests.insert(account_id.clone(), block);
 
     let rewards_data: RewardsData<T::AccountId> = RewardsData {
       validator: account_id.clone(),
-      sum: scores_sum,
       attests: attests,
       data: data,
-      complete: false,
+      args: args,
     };
 
     SubnetRewardsSubmission::<T>::insert(subnet_id, epoch, rewards_data);

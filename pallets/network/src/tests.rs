@@ -4069,7 +4069,8 @@ fn test_validate() {
       Network::validate(
         RuntimeOrigin::signed(account(0)), 
         subnet_id,
-        subnet_node_data_vec.clone()
+        subnet_node_data_vec.clone(),
+        None,
       )
     );
 
@@ -4077,14 +4078,16 @@ fn test_validate() {
 
     assert_eq!(submission.validator, account(0), "Err: validator");
     assert_eq!(submission.data.len(), subnet_node_data_vec.len(), "Err: data len");
-    assert_eq!(submission.sum, DEFAULT_SCORE * total_subnet_nodes as u128, "Err: sum");
+    let sum = submission.data.iter().fold(0, |acc, x| acc + x.score);
+    assert_eq!(sum, DEFAULT_SCORE * total_subnet_nodes as u128, "Err: sum");
     assert_eq!(submission.attests.len(), 1, "Err: attests"); // validator auto-attests
 
     assert_err!(
       Network::validate(
         RuntimeOrigin::signed(account(0)), 
         subnet_id,
-        subnet_node_data_vec.clone()
+        subnet_node_data_vec.clone(),
+        None,
       ),
       Error::<Test>::SubnetRewardsAlreadySubmitted
     );
@@ -4121,7 +4124,8 @@ fn test_validate_invalid_validator() {
       Network::validate(
         RuntimeOrigin::signed(validator.clone().unwrap()), 
         subnet_id,
-        subnet_node_data_vec
+        subnet_node_data_vec,
+        None,
       ),
       Error::<Test>::InvalidValidator
     );
@@ -4158,7 +4162,8 @@ fn test_attest() {
       Network::validate(
         RuntimeOrigin::signed(validator.clone().unwrap()), 
         subnet_id,
-        subnet_node_data_vec.clone()
+        subnet_node_data_vec.clone(),
+        None,
       )
     );
 
@@ -4220,7 +4225,8 @@ fn test_attest_remove_exiting_attester() {
       Network::validate(
         RuntimeOrigin::signed(account(0)), 
         subnet_id,
-        subnet_node_data_vec.clone()
+        subnet_node_data_vec.clone(),
+        None,
       )
     );
 
@@ -4330,7 +4336,8 @@ fn test_attest_already_attested_err() {
       Network::validate(
         RuntimeOrigin::signed(validator.clone().unwrap()), 
         subnet_id,
-        subnet_node_data_vec.clone()
+        subnet_node_data_vec.clone(),
+        None,
       )
     );
 
@@ -4351,7 +4358,8 @@ fn test_attest_already_attested_err() {
 
     assert_eq!(submission.validator, account(0));
     assert_eq!(submission.data.len(), subnet_node_data_vec.len());
-    // assert_eq!(submission.sum, DEFAULT_SCORE * total_subnet_nodes as u128);
+    let sum = submission.data.iter().fold(0, |acc, x| acc + x.score);
+    assert_eq!(sum, DEFAULT_SCORE * total_subnet_nodes as u128);
     assert_eq!(submission.attests.len(), total_subnet_nodes as usize);
 
     for n in 0..total_subnet_nodes {
@@ -4423,7 +4431,8 @@ fn test_reward_subnets() {
       Network::validate(
         RuntimeOrigin::signed(validator.clone().unwrap()), 
         subnet_id,
-        subnet_node_data_vec.clone()
+        subnet_node_data_vec.clone(),
+        None,
       )
     );
 
@@ -4478,7 +4487,8 @@ fn test_reward_subnets_remove_subnet_node() {
         Network::validate(
           RuntimeOrigin::signed(account(0)), 
           subnet_id,
-          subnet_node_data_vec.clone()
+          subnet_node_data_vec.clone(),
+          None,
         )
       );
   
@@ -4522,8 +4532,10 @@ fn test_reward_subnets_remove_subnet_node() {
       let overall_subnet_reward: u128 = Network::percent_mul(base_reward_per_mb, DEFAULT_MEM_MB);
       let delegate_stake_reward: u128 = Network::percent_mul(overall_subnet_reward, delegate_stake_rewards_percentage);
       let subnet_reward: u128 = overall_subnet_reward.saturating_sub(delegate_stake_reward);
-  
-      let reward_ratio: u128 = Network::percent_div(DEFAULT_SCORE, submission.sum);
+      
+      let sum = submission.data.iter().fold(0, |acc, x| acc + x.score);
+
+      let reward_ratio: u128 = Network::percent_div(DEFAULT_SCORE, sum);
       let account_reward: u128 = Network::percent_mul(reward_ratio, subnet_reward);
   
       let base_reward = BaseValidatorReward::<Test>::get();
@@ -4680,7 +4692,8 @@ fn test_reward_subnets_check_balances() {
       Network::validate(
         RuntimeOrigin::signed(account(0)), 
         subnet_id,
-        subnet_node_data_vec.clone()
+        subnet_node_data_vec.clone(),
+        None,
       )
     );
 
@@ -4713,7 +4726,8 @@ fn test_reward_subnets_check_balances() {
     let delegate_stake_reward: u128 = Network::percent_mul(overall_subnet_reward, delegate_stake_rewards_percentage);
     let subnet_reward: u128 = overall_subnet_reward.saturating_sub(delegate_stake_reward);
 
-    let reward_ratio: u128 = Network::percent_div(DEFAULT_SCORE, submission.sum);
+    let sum = submission.data.iter().fold(0, |acc, x| acc + x.score);
+    let reward_ratio: u128 = Network::percent_div(DEFAULT_SCORE, sum);
     let account_reward: u128 = Network::percent_mul(reward_ratio, subnet_reward);
 
     let base_reward = BaseValidatorReward::<Test>::get();
@@ -4766,7 +4780,8 @@ fn test_reward_subnets_validator_slash() {
       Network::validate(
         RuntimeOrigin::signed(validator.clone().unwrap()), 
         subnet_id,
-        subnet_node_data_vec.clone()
+        subnet_node_data_vec.clone(),
+        None,
       )
     );
 
@@ -4809,7 +4824,8 @@ fn test_reward_subnets_subnet_penalty_count() {
       Network::validate(
         RuntimeOrigin::signed(account(0)), 
         subnet_id,
-        Vec::new()
+        Vec::new(),
+        None,
       )
     );
 
@@ -4862,7 +4878,8 @@ fn test_reward_subnets_account_penalty_count() {
       Network::validate(
         RuntimeOrigin::signed(account(0)), 
         subnet_id,
-        Vec::new()
+        Vec::new(),
+        None,
       )
     );
 

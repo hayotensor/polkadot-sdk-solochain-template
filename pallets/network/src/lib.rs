@@ -671,10 +671,9 @@ pub mod pallet {
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 	pub struct RewardsData<AccountId> {
 		pub validator: AccountId, // Chosen validator of the epoch
-		pub sum: u128, // Sum of the data scores
 		pub attests: Attests<AccountId>, // Count of attestations of the submitted data
 		pub data: Vec<SubnetNodeData>, // Data submitted by chosen validator
-		pub complete: bool, // Data submitted by chosen validator
+		pub args: Option<BoundedVec<u8, DefaultValidatorArgsLimit>>, // Optional arguements to pass for subnet to validate
 	}
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
@@ -1040,6 +1039,10 @@ pub mod pallet {
 	#[pallet::type_value]
 	pub fn DefaultSubnetNodeParamLimit() -> u32 {
 		2024
+	}
+	#[pallet::type_value]
+	pub fn DefaultValidatorArgsLimit() -> u32 {
+		4096
 	}
 
 	/// Count of subnets
@@ -2155,6 +2158,7 @@ pub mod pallet {
 			origin: OriginFor<T>, 
 			subnet_id: u32,
 			data: Vec<SubnetNodeData>,
+			args: Option<BoundedVec<u8, DefaultValidatorArgsLimit>>,
 		) -> DispatchResultWithPostInfo {
 			let account_id: T::AccountId = ensure_signed(origin)?;
 
@@ -2169,6 +2173,7 @@ pub mod pallet {
 				epoch_length,
 				epoch as u32,
 				data,
+				args,
 			)
 		}
 
