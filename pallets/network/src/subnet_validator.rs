@@ -28,19 +28,8 @@ impl<T: Config> Pallet<T> {
     epoch: u32,
     mut data: Vec<SubnetNodeData>,
   ) -> DispatchResultWithPostInfo {
-    // TODO: Track how many nodes leave AFTER the validator submits their consensus data
-    // This allows us to measure the delta between attestation percentage versus validator data
-    // e.g. If there are 1000 validators and 100 leave on the block following, we know the max
-    // attestation percentage will only be 90%. We can alter the attestation percentage up to 100% based on
-    // the amount of nodes that left during the epoch following the validators entry.
-    //
-    // Each attestor will be able to track this to get an accurate measurement of the validators
-    // consensus data before attesting.
-    // e.g. If 1000 validators and 10 leaves, the attestors measurement of the validators consensus data will be
-    // accurate up to a maximum of 99.0%, we can calculate the delta between consensus datas accuracy at the current
-    // space in time, versus the accuracy including the validators that left afterwards. If 1 left, we can increase the
-    // attestation percentage up to 100% based on the amount of nodes that left during the epoch following the validators entry.
-    // We can also track not only the count, but who left for the greatest accuracy
+    // TODO: Add parameter for params data in case a validator has a reason behind why they left
+    //       a specific node(s) out of the consensus data for the other subnet nodes to verify
 
     // --- Ensure current subnet validator 
     let validator = SubnetRewardsValidator::<T>::get(subnet_id, epoch).ok_or(Error::<T>::InvalidValidator)?;
