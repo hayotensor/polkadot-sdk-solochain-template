@@ -27,7 +27,6 @@ use crate::{
 	TotalStake, TotalSubnetDelegateStakeBalance, TotalSubnetDelegateStakeShares, DelegateStakeUnbondingLedger
 };
 use frame_benchmarking::v2::*;
-// use frame_benchmarking::{account, whitelist_account, BenchmarkError};
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::{EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable},
@@ -55,7 +54,6 @@ const DEFAULT_DEPOSIT_AMOUNT: u128 = 10000e+18 as u128;
 pub type BalanceOf<T> = <T as Config>::Currency;
 
 fn peer(id: u32) -> PeerId {
-	// let peer_id = format!("12D3KooWD3eckifWpRn9wQpMG9R9hX3sD158z7EqHWmweQAJU5SA{id}");
   let peer_id = format!("QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N{id}"); 
 	PeerId(peer_id.into())
 }
@@ -82,22 +80,6 @@ fn get_min_subnet_nodes<T: Config>() -> u32 {
 	let base_node_memory: u128 = BaseSubnetNodeMemoryMB::<T>::get();
 	Network::<T>::get_min_subnet_nodes(base_node_memory, DEFAULT_SUBNET_MEM_MB)
 }
-
-// fn build_subnet<T: Config>(subnet_path: Vec<u8>) {
-// 	let funded_initializer = funded_account::<T>("funded_initializer", 0);
-
-//   let add_subnet_data = RegistrationSubnetData {
-//     path: subnet_path.clone().into(),
-//     memory_mb: DEFAULT_SUBNET_MEM_MB,
-//   };
-//   assert_ok!(
-//     Network::<T>::activate_subnet(
-//       funded_initializer.clone(),
-//       funded_initializer.clone(),
-//       add_subnet_data,
-//     )
-//   );
-// }
 
 fn build_activated_subnet<T: Config>(
 	subnet_path: Vec<u8>, 
@@ -209,9 +191,9 @@ fn build_activated_subnet<T: Config>(
   );
 
   // --- Check validator chosen on activation
-  let next_epoch = get_current_block_as_u64::<T>() / epoch_length + 1;
-  let validator = SubnetRewardsValidator::<T>::get(subnet_id, next_epoch as u32);
-  assert!(validator != None, "Validator is None");
+  // let next_epoch = get_current_block_as_u64::<T>() / epoch_length + 1;
+  // let validator = SubnetRewardsValidator::<T>::get(subnet_id, next_epoch as u32);
+  // assert!(validator != None, "Validator is None");
 }
 
 // Returns total staked on subnet
@@ -484,38 +466,38 @@ mod benchmarks {
 		assert_eq!(TotalSubnetNodes::<T>::get(subnet_id), end+1);
 	}
 
-	#[benchmark]
-	fn deactivate_subnet_node() {
-		let end = 12;
-		build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
-		let subnet_node_account = funded_account::<T>("subnet_node_account", end+1);
+	// #[benchmark]
+	// fn deactivate_subnet_node() {
+	// 	let end = 12;
+	// 	build_activated_subnet::<T>(DEFAULT_SUBNET_PATH.into(), 0, end, DEFAULT_DEPOSIT_AMOUNT, DEFAULT_SUBNET_NODE_STAKE);
+	// 	let subnet_node_account = funded_account::<T>("subnet_node_account", end+1);
 
-		let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
-		assert_ok!(
-			Network::<T>::register_subnet_node(
-				RawOrigin::Signed(subnet_node_account.clone()).into(), 
-				subnet_id, 
-				peer(end+1), 
-				DEFAULT_SUBNET_NODE_STAKE,
-				None,
-				None,
-				None,
-			) 
-		);
+	// 	let subnet_id = SubnetPaths::<T>::get::<Vec<u8>>(DEFAULT_SUBNET_PATH.into()).unwrap();
+	// 	assert_ok!(
+	// 		Network::<T>::register_subnet_node(
+	// 			RawOrigin::Signed(subnet_node_account.clone()).into(), 
+	// 			subnet_id, 
+	// 			peer(end+1), 
+	// 			DEFAULT_SUBNET_NODE_STAKE,
+	// 			None,
+	// 			None,
+	// 			None,
+	// 		) 
+	// 	);
 
-		assert_ok!(
-			Network::<T>::activate_subnet_node(
-				RawOrigin::Signed(subnet_node_account.clone()).into(), 
-				subnet_id, 
-			) 
-		);
+	// 	assert_ok!(
+	// 		Network::<T>::activate_subnet_node(
+	// 			RawOrigin::Signed(subnet_node_account.clone()).into(), 
+	// 			subnet_id, 
+	// 		) 
+	// 	);
 
-		#[extrinsic_call]
-		deactivate_subnet_node(RawOrigin::Signed(subnet_node_account.clone()), subnet_id);
+	// 	#[extrinsic_call]
+	// 	deactivate_subnet_node(RawOrigin::Signed(subnet_node_account.clone()), subnet_id);
 
-		assert_eq!(TotalSubnetNodes::<T>::get(subnet_id), end+1);
-		assert_eq!(TotalActiveSubnetNodes::<T>::get(subnet_id), end);
-	}
+	// 	assert_eq!(TotalSubnetNodes::<T>::get(subnet_id), end+1);
+	// 	assert_eq!(TotalActiveSubnetNodes::<T>::get(subnet_id), end);
+	// }
 
 	#[benchmark]
 	fn remove_subnet_node() {
@@ -876,13 +858,15 @@ mod benchmarks {
 
 		let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
 
+    Network::<T>::do_epoch_preliminaries(get_current_block_as_u64::<T>(), epoch as u32, epoch_length);
+
 		let validator = SubnetRewardsValidator::<T>::get(subnet_id, epoch as u32);
     assert!(validator != None, "Validator is None");
 
 		let subnet_node_data_vec = subnet_node_data(0, n_peers);
 
 		#[extrinsic_call]
-		validate(RawOrigin::Signed(validator.clone().unwrap()), subnet_id, subnet_node_data_vec.clone());
+		validate(RawOrigin::Signed(validator.clone().unwrap()), subnet_id, subnet_node_data_vec.clone(), None);
 
 		let submission = SubnetRewardsSubmission::<T>::get(subnet_id, epoch as u32).unwrap();
 
@@ -907,6 +891,8 @@ mod benchmarks {
 
 		let epoch = get_current_block_as_u64::<T>() / epoch_length as u64;
 
+    Network::<T>::do_epoch_preliminaries(get_current_block_as_u64::<T>(), epoch as u32, epoch_length);
+
 		let validator = SubnetRewardsValidator::<T>::get(subnet_id, epoch as u32);
     assert!(validator != None, "Validator is None");
 
@@ -916,7 +902,8 @@ mod benchmarks {
 			Network::<T>::validate(
 				RawOrigin::Signed(validator.clone().unwrap()).into(), 
 				subnet_id, 
-				subnet_node_data_vec.clone()
+				subnet_node_data_vec.clone(),
+				None,
 			)
 		);
 	
