@@ -23,9 +23,14 @@ use super::*;
 impl<T: Config> Pallet<T> {
   // Percentages are defined by default with 2 decimals of precision (100.00). 
 	// The precision is indicated by PERCENTAGE_FACTOR
-	pub const PERCENTAGE_FACTOR: u128 = 10000;
-  pub const HALF_PERCENT: u128 = Self::PERCENTAGE_FACTOR / 2;
+	// pub const PERCENTAGE_FACTOR: u128 = 10000;
+  // pub const HALF_PERCENT: u128 = Self::PERCENTAGE_FACTOR / 2;
   
+  
+  pub const PERCENTAGE_FACTOR: u128 = 1000000000;
+  pub const TWO_HUNDRED_PERCENT_FACTOR: u128 = Self::PERCENTAGE_FACTOR * 2;
+  pub const HALF_PERCENT: u128 = Self::PERCENTAGE_FACTOR / 2;
+
   /// Percentage Math
   // Inspired by Aave PercentageMath
 
@@ -81,7 +86,7 @@ impl<T: Config> Pallet<T> {
       return 0
     }
 
-    x.saturating_mul(Self::PERCENTAGE_FACTOR).saturating_div(y).saturating_add(u128::from(x % y != 0))
+    x.saturating_mul(Self::PERCENTAGE_FACTOR).saturating_div(y).saturating_add(u128::from(x % y == 0))
   }
 
   pub const PERCENTAGE_FACTOR_V2: u128 = 1e+18 as u128;

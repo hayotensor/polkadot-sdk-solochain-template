@@ -28,8 +28,10 @@ use frame_support::{
   weights::Weight,
   pallet_prelude::DispatchResult,
   ensure,
+  traits::EnsureOrigin,
 };
 use sp_std::vec::Vec;
+use pallet_network::{MinNodesCurveParametersSet};
 
 #[cfg(test)]
 mod mock;
@@ -45,45 +47,31 @@ pub mod pallet {
   use super::*;
   use frame_support::pallet_prelude::*;
   use pallet_network::AdminInterface as NetworkAdminInterface;
-  use pallet_subnet_democracy::AdminInterface as SubnetDemocracyAdminInterface;
-
+  
   #[pallet::config]
-  pub trait Config: frame_system::Config {
-    /// `rewards` events
+  pub trait Config: frame_system::Config + Sized {
     type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-    type NetworkAdminInterface: NetworkAdminInterface;
-
-    type SubnetDemocracyAdminInterface: SubnetDemocracyAdminInterface;
-
-    // type WeightInfo: WeightInfo;
+    type CollectiveOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+    
+    type NetworkAdminInterface: NetworkAdminInterface<Self::AccountId>; 
   }
 
   /// Pallet rewards for issuing rewards to block producers.
   #[pallet::pallet]
   pub struct Pallet<T>(_);
 
-  /// `pallet-rewards` events
   #[pallet::event]
   #[pallet::generate_deposit(pub(super) fn deposit_event)]
   pub enum Event<T: Config> {
-    SetVoteSubnetIn(Vec<u8>),
-    SetVoteSubnetOut(Vec<u8>),
-    SetMaxSubnets(u32),
-    SetMinSubnetNodes(u32),
-    SetMaxSubnetNodes(u32),
-    SetMinStakeBalance(u128),
-    SetTxRateLimit(u64),
-    SetMaxZeroConsensusEpochs(u32),
-    SetMinRequiredSubnetConsensusSubmitEpochs(u64),
-    SetMinRequiredNodeConsensusSubmitEpochs(u64),
-    SetMinRequiredNodeConsensusEpochs(u64),
-    SetMaximumOutlierDeltaPercent(u8),
-    SetSubnetNodeConsensusSubmitPercentRequirement(u128),
-    SetConsensusBlocksInterval(u64),
-    SetNodeRemovalThreshold(u8),
-    SetMaxSubnetRewardsWeight(u16),
   }
+
+  /// A storage item for this pallet.
+	///
+	/// In this template, we are declaring a storage item called `Something` that stores a single
+	/// `u32` value. Learn more about runtime storage here: <https://docs.substrate.io/build/runtime-storage/>
+	#[pallet::storage]
+	pub type Something<T> = StorageValue<_, u32>;
 
   //
   // All conditional logic takes place in the callee pallets themselves
@@ -92,23 +80,23 @@ pub mod pallet {
   impl<T: Config> Pallet<T> {
     #[pallet::call_index(0)]
     #[pallet::weight(0)]
-    pub fn set_vote_model_in(origin: OriginFor<T>, value: Vec<u8>, memory_mb: u128) -> DispatchResult {
+    pub fn set_vote_subnet_in(origin: OriginFor<T>, value: Vec<u8>, memory_mb: u128) -> DispatchResult {
       ensure_root(origin)?;
-      T::NetworkAdminInterface::set_vote_model_in(value, memory_mb)
+      T::NetworkAdminInterface::set_vote_subnet_in(value, memory_mb)
     }
 
     #[pallet::call_index(1)]
     #[pallet::weight(0)]
-    pub fn set_vote_model_out(origin: OriginFor<T>, value: Vec<u8>) -> DispatchResult {
+    pub fn set_vote_subnet_out(origin: OriginFor<T>, value: Vec<u8>) -> DispatchResult {
       ensure_root(origin)?;
-      T::NetworkAdminInterface::set_vote_model_out(value)
+      T::NetworkAdminInterface::set_vote_subnet_out(value)
     }
 
     #[pallet::call_index(2)]
     #[pallet::weight(0)]
-    pub fn set_max_models(origin: OriginFor<T>, value: u32) -> DispatchResult {
+    pub fn set_max_subnets(origin: OriginFor<T>, value: u32) -> DispatchResult {
       ensure_root(origin)?;
-      T::NetworkAdminInterface::set_max_models(value)
+      T::NetworkAdminInterface::set_max_subnets(value)
     }
 
     #[pallet::call_index(3)]
@@ -152,9 +140,9 @@ pub mod pallet {
 
     #[pallet::call_index(8)]
     #[pallet::weight(0)]
-    pub fn set_min_required_model_consensus_submit_epochs(origin: OriginFor<T>, value: u64) -> DispatchResult {
+    pub fn set_min_required_subnet_consensus_submit_epochs(origin: OriginFor<T>, value: u64) -> DispatchResult {
       ensure_root(origin)?;
-      // T::NetworkAdminInterface::set_min_required_model_consensus_submit_epochs(value)
+      // T::NetworkAdminInterface::set_min_required_subnet_consensus_submit_epochs(value)
       // Update
       Ok(())
     }
@@ -224,9 +212,9 @@ pub mod pallet {
 
     #[pallet::call_index(16)]
     #[pallet::weight(0)]
-    pub fn set_max_model_rewards_weight(origin: OriginFor<T>, value: u128) -> DispatchResult {
+    pub fn set_max_subnet_rewards_weight(origin: OriginFor<T>, value: u128) -> DispatchResult {
       ensure_root(origin)?;
-      // T::NetworkAdminInterface::set_max_model_rewards_weight(value)
+      // T::NetworkAdminInterface::set_max_subnet_rewards_weight(value)
       // Update
       Ok(())
     }
@@ -242,18 +230,18 @@ pub mod pallet {
 
     #[pallet::call_index(18)]
     #[pallet::weight(0)]
-    pub fn set_model_per_peer_init_cost(origin: OriginFor<T>, value: u128) -> DispatchResult {
+    pub fn set_subnet_per_peer_init_cost(origin: OriginFor<T>, value: u128) -> DispatchResult {
       ensure_root(origin)?;
-      // T::NetworkAdminInterface::set_model_per_peer_init_cost(value)
+      // T::NetworkAdminInterface::set_subnet_per_peer_init_cost(value)
       // Update
       Ok(())
     }
 
     #[pallet::call_index(19)]
     #[pallet::weight(0)]
-    pub fn set_model_consensus_unconfirmed_threshold(origin: OriginFor<T>, value: u128) -> DispatchResult {
+    pub fn set_subnet_consensus_unconfirmed_threshold(origin: OriginFor<T>, value: u128) -> DispatchResult {
       ensure_root(origin)?;
-      // T::NetworkAdminInterface::set_model_consensus_unconfirmed_threshold(value)
+      // T::NetworkAdminInterface::set_subnet_consensus_unconfirmed_threshold(value)
       // Update
       Ok(())
     }
@@ -269,10 +257,13 @@ pub mod pallet {
 
     #[pallet::call_index(21)]
     #[pallet::weight(0)]
-    pub fn set_peer_vote_premium(origin: OriginFor<T>, value: u128) -> DispatchResult {
-      ensure_root(origin)?;
-      // T::SubnetDemocracyAdminInterface::set_peer_vote_premium(value)
-      // Update
+    pub fn set_peer_vote_premium(origin: OriginFor<T>, value: u32) -> DispatchResult {
+      // let account_id: T::AccountId = ensure_signed(origin)?;
+      T::CollectiveOrigin::ensure_origin(origin)?;
+
+      // log::error!("account_id set_peer_vote_premium {:?}", account_id);
+      Something::<T>::put(value);
+      // ensure_root(origin)?;
       Ok(())
     }
 
@@ -280,8 +271,23 @@ pub mod pallet {
     #[pallet::weight(0)]
     pub fn set_quorum(origin: OriginFor<T>, value: u128) -> DispatchResult {
       ensure_root(origin)?;
-      // T::SubnetDemocracyAdminInterface::set_quorum(value)
       // Update
+      Ok(())
+    }
+
+    #[pallet::call_index(23)]
+    #[pallet::weight(0)]
+    pub fn remove_subnet(origin: OriginFor<T>, path: Vec<u8>) -> DispatchResult {
+      T::CollectiveOrigin::ensure_origin(origin)?;
+      T::NetworkAdminInterface::council_remove_subnet(path);
+      Ok(())
+    }
+
+    #[pallet::call_index(24)]
+    #[pallet::weight(0)]
+    pub fn set_min_nodes_slope_parameters(origin: OriginFor<T>, params: MinNodesCurveParametersSet) -> DispatchResult {
+      T::CollectiveOrigin::ensure_origin(origin)?;
+      T::NetworkAdminInterface::set_min_nodes_slope_parameters(params);
       Ok(())
     }
   }

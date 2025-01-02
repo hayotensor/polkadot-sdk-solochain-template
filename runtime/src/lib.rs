@@ -15,8 +15,9 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, One, Verify},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, MultiSignature,
+	RuntimeDebug
 };
-use codec::Encode;
+use codec::{Encode, Decode, MaxEncodedLen};
 
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
@@ -25,8 +26,14 @@ use sp_version::RuntimeVersion;
 pub use frame_support::{
 	construct_runtime, derive_impl, parameter_types,
 	traits::{
+		fungible::HoldConsideration,
 		ConstBool, ConstU128, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem,
 		StorageInfo,
+		InstanceFilter,
+		VariantCountOf,
+		EitherOfDiverse,
+		EqualPrivilegeOnly,
+		LinearStoragePrice,
 	},
 	weights::{
 		constants::{
@@ -34,15 +41,14 @@ pub use frame_support::{
 		},
 		IdentityFee, Weight,
 	},
+	dispatch::DispatchClass,
 	StorageValue,
 	PalletId,
-};
-use frame_support::{
 	genesis_builder_helper::{build_state, get_preset},
-	traits::VariantCountOf,
 };
-pub use frame_system::Call as SystemCall;
+pub use frame_system::EnsureRoot;
 pub use pallet_balances::Call as BalancesCall;
+pub use frame_system::Call as SystemCall;
 pub use pallet_timestamp::Call as TimestampCall;
 use pallet_transaction_payment::{ConstFeeMultiplier, FungibleAdapter, Multiplier};
 #[cfg(any(feature = "std", test))]
@@ -50,7 +56,7 @@ pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
 pub use pallet_network;
-pub use pallet_subnet_democracy;
+// pub use pallet_subnet_democracy;
 pub use pallet_admin;
 pub use pallet_rewards;
 
@@ -223,8 +229,8 @@ impl pallet_timestamp::Config for Runtime {
 pub const EXISTENTIAL_DEPOSIT: u128 = 500;
 
 impl pallet_balances::Config for Runtime {
-	type MaxLocks = ConstU32<50>;
-	type MaxReserves = ();
+	type MaxLocks = ConstU32<128>;
+	type MaxReserves = ConstU32<128>;
 	type ReserveIdentifier = [u8; 8];
 	/// The type for recording an account's balance.
 	type Balance = Balance;
@@ -235,7 +241,8 @@ impl pallet_balances::Config for Runtime {
 	type AccountStore = System;
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 	type FreezeIdentifier = RuntimeFreezeReason;
-	type MaxFreezes = VariantCountOf<RuntimeFreezeReason>;
+	// type MaxFreezes = VariantCountOf<RuntimeFreezeReason>;
+	type MaxFreezes = ConstU32<50>;
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type RuntimeFreezeReason = RuntimeHoldReason;
 }
@@ -279,11 +286,200 @@ impl pallet_multisig::Config for Runtime {
 
 impl pallet_insecure_randomness_collective_flip::Config for Runtime {}
 
+impl pallet_utility::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type PalletsOrigin = OriginCaller;
+	type WeightInfo = pallet_utility::weights::SubstrateWeight<Runtime>;
+}
+
+pub const fn deposit(items: u32, bytes: u32) -> Balance {
+	pub const ITEMS_FEE: Balance = 2_000 * 10_000;
+	pub const BYTES_FEE: Balance = 100 * 10_000;
+	(items as Balance)
+			.saturating_mul(ITEMS_FEE)
+			.saturating_add((bytes as Balance).saturating_mul(BYTES_FEE))
+}
+
+parameter_types! {
+	// One storage item; key size 32, value size 8; .
+	pub const ProxyDepositBase: Balance = deposit(1, 8);
+	// Additional storage item size of 33 bytes.
+	pub const ProxyDepositFactor: Balance = deposit(0, 33);
+	pub const AnnouncementDepositBase: Balance = deposit(1, 8);
+	pub const AnnouncementDepositFactor: Balance = deposit(0, 66);
+}
+
+/// The type used to represent the kinds of proxying allowed.
+#[derive(
+	Copy,
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	MaxEncodedLen,
+	scale_info::TypeInfo,
+)]
+pub enum ProxyType {
+	Any,
+	DelegateStaking,
+	NonTransfer,
+	// Governance,
+	// Staking,
+}
+impl Default for ProxyType {
+	fn default() -> Self {
+		Self::Any
+	}
+}
+impl InstanceFilter<RuntimeCall> for ProxyType {
+	fn filter(&self, c: &RuntimeCall) -> bool {
+		match self {
+			ProxyType::Any => true,
+			ProxyType::NonTransfer => !matches!(
+				c,
+				RuntimeCall::Balances(..)
+			),
+			ProxyType::DelegateStaking => matches!(
+				c,
+				RuntimeCall::Network(pallet_network::Call::add_to_delegate_stake { .. })
+				| RuntimeCall::Network(pallet_network::Call::transfer_delegate_stake { .. })
+				| RuntimeCall::Network(pallet_network::Call::remove_delegate_stake { .. })
+				| RuntimeCall::Network(pallet_network::Call::claim_delegate_stake_unbondings { .. })
+			),
+			// ProxyType::NonTransfer => !matches!(
+			// 	c,
+			// 	RuntimeCall::Balances(..) | 
+			// 	RuntimeCall::Network(pallet_network::Call::add_to_delegate_stake { .. })  |
+			// 	RuntimeCall::Network(pallet_network::Call::remove_delegate_stake { .. })  |
+			// 	RuntimeCall::Network(pallet_network::Call::transfer_delegate_stake { .. })
+			// ),
+			// ProxyType::Governance => matches!(
+			// 	c,
+			// 	RuntimeCall::Democracy(..) |
+			// 		RuntimeCall::Council(..) |
+			// 		RuntimeCall::Society(..) |
+			// 		RuntimeCall::TechnicalCommittee(..) |
+			// 		RuntimeCall::Elections(..) |
+			// 		RuntimeCall::Treasury(..)
+			// ),
+			// ProxyType::Staking => matches!(
+			// 	c,
+			// 	RuntimeCall::Network(pallet_network::Call::add_to_delegate_stake { .. })  |
+			// 	RuntimeCall::Network(pallet_network::Call::remove_delegate_stake { .. })  |
+			// 	RuntimeCall::Network(pallet_network::Call::transfer_delegate_stake { .. })
+			// ),
+			// ProxyType::Staking => {
+			// 	matches!(c, RuntimeCall::Staking(..) | RuntimeCall::FastUnstake(..))
+			// },
+		}
+	}
+	fn is_superset(&self, o: &Self) -> bool {
+		match (self, o) {
+			(x, y) if x == y => true,
+			(ProxyType::Any, _) => true,
+			(_, ProxyType::Any) => false,
+			// (ProxyType::NonTransfer, _) => true,
+			_ => false,
+		}
+	}
+}
+
+impl pallet_proxy::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type Currency = Balances;
+	type ProxyType = ProxyType;
+	type ProxyDepositBase = ProxyDepositBase;
+	type ProxyDepositFactor = ProxyDepositFactor;
+	type MaxProxies = ConstU32<32>;
+	type WeightInfo = pallet_proxy::weights::SubstrateWeight<Runtime>;
+	type MaxPending = ConstU32<32>;
+	type CallHasher = BlakeTwo256;
+	type AnnouncementDepositBase = AnnouncementDepositBase;
+	type AnnouncementDepositFactor = AnnouncementDepositFactor;
+}
+
+parameter_types! {
+	pub const PreimageBaseDeposit: Balance = deposit(2, 64);
+	pub const PreimageByteDeposit: Balance = deposit(0, 1);
+	pub const PreimageHoldReason: RuntimeHoldReason = RuntimeHoldReason::Preimage(pallet_preimage::HoldReason::Preimage);
+}
+
+impl pallet_preimage::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = pallet_preimage::weights::SubstrateWeight<Runtime>;
+	type Currency = Balances;
+	type ManagerOrigin = EnsureRoot<AccountId>;
+	type Consideration = HoldConsideration<
+		AccountId,
+		Balances,
+		PreimageHoldReason,
+		LinearStoragePrice<PreimageBaseDeposit, PreimageByteDeposit, Balance>,
+	>;
+}
+
+parameter_types! {
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) *
+		BlockWeights::get().max_block;
+}
+
+impl pallet_scheduler::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeOrigin = RuntimeOrigin;
+	type PalletsOrigin = OriginCaller;
+	type RuntimeCall = RuntimeCall;
+	type MaximumWeight = MaximumSchedulerWeight;
+	type ScheduleOrigin = EnsureRoot<AccountId>;
+	type MaxScheduledPerBlock = ConstU32<100>;
+	type WeightInfo = pallet_scheduler::weights::SubstrateWeight<Runtime>;
+	type OriginPrivilegeCmp = EqualPrivilegeOnly;
+	type Preimages = Preimage;
+}
+
+// /// We assume that ~10% of the block weight is consumed by `on_initialize` handlers.
+// /// This is used to limit the maximal weight of a single extrinsic.
+// const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
+// /// We allow for 2 seconds of compute with a 6 second average block time, with maximum proof size.
+// const MAXIMUM_BLOCK_WEIGHT: Weight =
+// 	Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND.saturating_mul(2), u64::MAX);
+
+parameter_types! {
+	pub const CouncilMotionDuration: BlockNumber = 5 * DAYS;
+	pub const CouncilMaxProposals: u32 = 100;
+	pub const CouncilMaxMembers: u32 = 100;
+	pub MaxCollectivesProposalWeight: Weight = Perbill::from_percent(50) * BlockWeights::get().max_block;
+}
+
+type CouncilCollective = pallet_collective::Instance1;
+impl pallet_collective::Config<CouncilCollective> for Runtime {
+	type RuntimeOrigin = RuntimeOrigin;
+	type Proposal = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
+	type MotionDuration = CouncilMotionDuration;
+	type MaxProposals = CouncilMaxProposals;
+	type MaxMembers = CouncilMaxMembers;
+	type DefaultVote = pallet_collective::PrimeDefaultVote;
+	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
+	type SetMembersOrigin = EnsureRoot<AccountId>;
+	type MaxProposalWeight = MaxCollectivesProposalWeight;
+}
+
 parameter_types! {
 	pub const InitialTxRateLimit: u64 = 0;
 	pub const EpochLength: u64 = 10;
 	pub const NetworkPalletId: PalletId = PalletId(*b"/network");
 	pub const SubnetInitializationCost: u128 = 100_000_000_000_000_000_000;
+	pub const MinProposalStake: u128 = 1_000_000_000_000_000_000; // 1 * 1e18
+	pub const DelegateStakeCooldownEpochs: u64 = 100;
+	pub const StakeCooldownEpochs: u64 = 100;
+	pub const DelegateStakeEpochsRemovalWindow: u64 = 10;
+	pub const MaxDelegateStakeUnlockings: u32 = 32;
+	pub const MaxStakeUnlockings: u32 = 32;
 }
 
 impl pallet_network::Config for Runtime {
@@ -299,7 +495,13 @@ impl pallet_network::Config for Runtime {
 // 	type OffchainPublic = AccountPublic;
 	type PalletId = NetworkPalletId;
 	type SubnetInitializationCost = SubnetInitializationCost;
+  type DelegateStakeCooldownEpochs = DelegateStakeCooldownEpochs;
+	type DelegateStakeEpochsRemovalWindow = DelegateStakeEpochsRemovalWindow;
+	type MaxDelegateStakeUnlockings = MaxDelegateStakeUnlockings;
+	type MaxStakeUnlockings = MaxStakeUnlockings;
+	type StakeCooldownEpochs = StakeCooldownEpochs;
 	type Randomness = InsecureRandomnessCollectiveFlip;
+	type MinProposalStake = MinProposalStake;
 }
 
 parameter_types! {
@@ -308,28 +510,35 @@ parameter_types! {
 	// pub const EnactmentPeriod: BlockNumber = DAYS * 7;
 
 	// Testnet
-	pub const VotingPeriod: BlockNumber = DAYS * 9;
+	pub const VotingPeriod: BlockNumber = DAYS * 13;
 	pub const EnactmentPeriod: BlockNumber = DAYS * 12;
-
+	pub const VerifyPeriod: BlockNumber = DAYS * 4;
+	pub const MinProposerStake: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
+	pub const Quorum: u128 = 10_000_000_000_000_000_000_000; // 10,000 * 1e18
+	pub const CancelSlashPercent: u8 = 5;
+	pub const QuorumVotingPowerPercentage: u8 = 40;
 	// Local
 	// pub const VotingPeriod: BlockNumber = 50; // ~5 minutes
 	// pub const EnactmentPeriod: BlockNumber = 600; // ~60 minutes
 
-	pub const MinProposalStake: u128 = 100_000_000_000_000_000_000; // 100 * 1e18
 }
 
-impl pallet_subnet_democracy::Config for Runtime {
-	type WeightInfo = ();
-	type RuntimeEvent = RuntimeEvent;
-	type SubnetVote = Network;
-	type Currency = Balances;
-	type MaxActivateProposals = ConstU32<1>;
-	type MaxDeactivateProposals = ConstU32<32>;
-	type MaxProposals = ConstU32<32>;
-	type VotingPeriod = VotingPeriod;
-	type EnactmentPeriod = EnactmentPeriod;
-	type MinProposalStake = MinProposalStake;
-}
+// impl pallet_subnet_democracy::Config for Runtime {
+// 	type WeightInfo = ();
+// 	type RuntimeEvent = RuntimeEvent;
+// 	type SubnetVote = Network;
+// 	type Currency = Balances;
+// 	type MaxActivateProposals = ConstU32<1>;
+// 	type MaxDeactivateProposals = ConstU32<32>;
+// 	type MaxProposals = ConstU32<32>;
+// 	type VotingPeriod = VotingPeriod;
+// 	type EnactmentPeriod = EnactmentPeriod;
+// 	type VerifyPeriod = VerifyPeriod;
+// 	type MinProposerStake = MinProposerStake;
+// 	type Quorum = Quorum;
+// 	type CancelSlashPercent = CancelSlashPercent;
+// 	type QuorumVotingPowerPercentage = QuorumVotingPowerPercentage;
+// }
 
 pub struct AuraAccountAdapter;
 impl frame_support::traits::FindAuthor<AccountId> for AuraAccountAdapter {
@@ -363,8 +572,15 @@ impl pallet_rewards::Config for Runtime {
 
 impl pallet_admin::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type CollectiveOrigin = pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 2, 3>;
 	type NetworkAdminInterface = Network;
-	type SubnetDemocracyAdminInterface = SubnetDemocracy;
+	// type SubnetDemocracyAdminInterface = SubnetDemocracy;
+}
+
+impl pallet_atomic_swap::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type SwapAction = pallet_atomic_swap::BalanceSwapAction<AccountId, Balances>;
+	type ProofLimit = ConstU32<1024>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -417,14 +633,32 @@ mod runtime {
 	#[runtime::pallet_index(10)]
 	pub type Network = pallet_network;
 
-	#[runtime::pallet_index(11)]
-	pub type SubnetDemocracy = pallet_subnet_democracy;
+	// #[runtime::pallet_index(11)]
+	// pub type SubnetDemocracy = pallet_subnet_democracy;
 
-	#[runtime::pallet_index(12)]
+	#[runtime::pallet_index(11)]
 	pub type Rewards = pallet_rewards;
 
-	#[runtime::pallet_index(13)]
+	#[runtime::pallet_index(12)]
 	pub type Admin = pallet_admin;
+
+	#[runtime::pallet_index(13)]
+	pub type Utility = pallet_utility;
+
+	#[runtime::pallet_index(14)]
+	pub type Proxy = pallet_proxy;
+
+	#[runtime::pallet_index(15)]
+	pub type Preimage = pallet_preimage;
+
+	#[runtime::pallet_index(16)]
+	pub type Scheduler = pallet_scheduler;
+
+	#[runtime::pallet_index(17)]
+	pub type Collective = pallet_collective::Pallet<Runtime, Instance1>;
+
+	#[runtime::pallet_index(18)]
+	pub type AtomicSwap = pallet_atomic_swap;
 }
 
 /// The address format for describing accounts.
@@ -475,7 +709,8 @@ mod benches {
 		[pallet_timestamp, Timestamp]
 		[pallet_sudo, Sudo]
 		[pallet_network, Network]
-		[pallet_subnet_democracy, SubnetDemocracy]
+		[pallet_collective, Collective]
+		// [pallet_subnet_democracy, SubnetDemocracy]
 	);
 }
 
@@ -648,34 +883,41 @@ impl_runtime_apis! {
 	}
 
 	impl network_custom_rpc_runtime_api::NetworkRuntimeApi<Block> for Runtime {
-		fn get_subnet_nodes(model_id: u32) -> Vec<u8> {
-			let result = Network::get_subnet_nodes(model_id);
+		fn get_subnet_nodes(subnet_id: u32) -> Vec<u8> {
+			let result = Network::get_subnet_nodes(subnet_id);
 			result.encode()
 		}
-		fn get_subnet_nodes_included(model_id: u32) -> Vec<u8> {
-			let result = Network::get_subnet_nodes_included(model_id);
+		fn get_subnet_nodes_included(subnet_id: u32) -> Vec<u8> {
+			let result = Network::get_subnet_nodes_included(subnet_id);
 			result.encode()
 		}
-		fn get_subnet_nodes_submittable(model_id: u32) -> Vec<u8> {
-			let result = Network::get_subnet_nodes_submittable(model_id);
+		fn get_subnet_nodes_submittable(subnet_id: u32) -> Vec<u8> {
+			let result = Network::get_subnet_nodes_submittable(subnet_id);
 			result.encode()
 		}
-		fn get_subnet_nodes_model_unconfirmed_count(model_id: u32) -> u32 {
-			let result = Network::get_subnet_nodes_model_unconfirmed_count(model_id);
+		fn get_subnet_nodes_subnet_unconfirmed_count(subnet_id: u32) -> u32 {
+			let result = Network::get_subnet_nodes_subnet_unconfirmed_count(subnet_id);
 			result
-			// result.encode()
 		}
-		fn get_consensus_data(model_id: u32, epoch: u32) -> Vec<u8> {
-			let result = Network::get_consensus_data(model_id, epoch);
+		fn get_consensus_data(subnet_id: u32, epoch: u32) -> Vec<u8> {
+			let result = Network::get_consensus_data(subnet_id, epoch);
 			result.encode()
 		}
-		fn get_accountant_data(model_id: u32, id: u32) -> Vec<u8> {
-			let result = Network::get_accountant_data(model_id, id);
+		fn get_accountant_data(subnet_id: u32, id: u32) -> Vec<u8> {
+			let result = Network::get_accountant_data(subnet_id, id);
 			result.encode()
 		}
-		fn get_minimum_subnet_nodes(subnet_id: u32, memory_mb: u128) -> u32 {
-			let result = Network::get_minimum_subnet_nodes(subnet_id, memory_mb);
+		fn get_minimum_subnet_nodes(memory_mb: u128) -> u32 {
+			let result = Network::get_minimum_subnet_nodes(memory_mb);
 			result
+		}
+		fn get_minimum_delegate_stake(memory_mb: u128) -> u128 {
+			let result = Network::get_minimum_delegate_stake(memory_mb);
+			result
+		}
+		fn get_subnet_node_info(subnet_id: u32) -> Vec<u8> {
+			let result = Network::get_subnet_node_info(subnet_id);
+			result.encode()
 		}
 	}
 

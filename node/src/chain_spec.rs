@@ -2,9 +2,11 @@ use sc_service::ChainType;
 use solochain_template_runtime::{AccountId, Signature, WASM_BINARY};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
-use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
-use sp_core::crypto::Ss58Codec;
+use sp_core::{
+	sr25519, Pair, Public, OpaquePeerId,
+	crypto::Ss58Codec
+};
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -73,6 +75,12 @@ pub fn get_testnet_faucets() -> Vec<AccountId> {
 		AccountId::from_ss58check("5FWa18zzvnACNpM7WmwZqhtBKeeG3e6XvKvoFjxY1QHp4HwY").unwrap()
 	];
 	faucets
+}
+
+// generate predictable peer ids
+fn peer(id: u8) -> OpaquePeerId {
+	let peer_id = format!("12D{id}KooWGFuUunX1AzAzjs3CgyqTXtPWX3AqRhJFbesGPGYHJQTP"); 
+	OpaquePeerId(peer_id.into())
 }
 
 pub fn development_config() -> Result<ChainSpec, String> {
@@ -175,6 +183,8 @@ fn testnet_genesis(
 	endowed_accounts: Vec<AccountId>,
 	_enable_println: bool,
 ) -> serde_json::Value {
+	let subnet_path: Vec<u8> = "bigscience/bloom-560m".into();
+	let mut peer_index: u8 = 0;
 	serde_json::json!({
 		"balances": {
 			// Configure endowed accounts with initial balance of 1 << 60.
@@ -189,6 +199,17 @@ fn testnet_genesis(
 		"sudo": {
 			// Assign network admin rights.
 			"key": Some(root_key),
+		},
+		"network": {
+			"subnetPath": subnet_path,
+			"memoryMb": 560,
+			"subnetNodes": endowed_accounts.iter().cloned().map(|k| {
+				peer_index += 1;
+				(
+					k, 
+					peer(peer_index),
+				)
+			}).collect::<Vec<_>>(),
 		},
 	})
 }

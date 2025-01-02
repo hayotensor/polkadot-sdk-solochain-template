@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use super::*;
-use sp_runtime::Saturating;
 
 impl<T: Config> Pallet<T> {
   pub fn do_add_stake(
@@ -82,7 +81,7 @@ impl<T: Config> Pallet<T> {
     origin: T::RuntimeOrigin, 
     subnet_id: u32,
     hotkey: T::AccountId,
-    is_subnet_node: bool,
+    is_peer: bool,
     stake_to_be_removed: u128,
   ) -> DispatchResult {
     let account_id: T::AccountId = ensure_signed(origin)?;
@@ -101,15 +100,15 @@ impl<T: Config> Pallet<T> {
       Error::<T>::NotEnoughStakeToWithdraw
     );
     
-    // if user is still a subnet node they must keep the required minimum balance
-    if is_subnet_node {
+    // if user is still a peer in consensus they must keep the required minimum balance
+    if is_peer {
       ensure!(
         account_stake_balance.saturating_sub(stake_to_be_removed) >= MinStakeBalance::<T>::get(),
         Error::<T>::MinStakeNotReached
       );  
     }
   
-    // --- Ensure that we can convert this u128 to a balance.
+    // --- Ensure that we can conver this u128 to a balance.
     let stake_to_be_removed_as_currency = Self::u128_to_balance(stake_to_be_removed);
     ensure!(
       stake_to_be_removed_as_currency.is_some(),
@@ -125,12 +124,18 @@ impl<T: Config> Pallet<T> {
     // --- 7. We remove the balance from the hotkey.
     Self::decrease_account_stake(&account_id, subnet_id, stake_to_be_removed);
 
-    // let remaining_account_stake_balance: u128 = AccountSubnetStake::<T>::get(&account_id, subnet_id);
+    let remaining_account_stake_balance: u128 = AccountSubnetStake::<T>::get(&account_id, subnet_id);
+    
+    // --- 8. If subnet stake balance is zero, remove from SubnetAccount
+    if remaining_account_stake_balance == 0 {
+      let mut subnet_accounts = SubnetAccount::<T>::get(subnet_id);
+      subnet_accounts.remove(&account_id);
+      SubnetAccount::<T>::insert(subnet_id, subnet_accounts);
+    }
 
     // --- 9. We add the balancer to the account_id.  If the above fails we will not credit this account_id.
-    // Self::add_balance_to_coldkey_account(&account_id, stake_to_be_removed_as_currency.unwrap());
-    Self::add_balance_to_stake_unbonding_ledger(&account_id, subnet_id, stake_to_be_removed, block).map_err(|e| e)?;
-
+    Self::add_balance_to_coldkey_account(&account_id, stake_to_be_removed_as_currency.unwrap());
+    
     // Set last block for rate limiting
     Self::set_last_tx_block(&account_id, block);
 
@@ -139,93 +144,26 @@ impl<T: Config> Pallet<T> {
     Ok(())
   }
 
-  pub fn add_balance_to_stake_unbonding_ledger(
-    account_id: &T::AccountId,
-    subnet_id: u32, 
-    amount: u128,
-    block: u64,
-  ) -> DispatchResult {
-    let epoch_length: u64 = T::EpochLength::get();
-    let epoch: u64 = block / epoch_length;
-
-    let unbondings = SubnetStakeUnbondingLedger::<T>::get(account_id.clone(), subnet_id);
-
-    // One unlocking per epoch
-    ensure!(
-      unbondings.get(&epoch) == None,
-      Error::<T>::MaxUnlockingsPerEpochReached
-    );
-
-    // --- Ensure we don't surpass max unlockings by attempting to unlock unbondings
-    if unbondings.len() as u32 == T::MaxStakeUnlockings::get() {
-      Self::do_claim_stake_unbondings(&account_id, subnet_id);
-    }
-
-    // --- Get updated unbondings after claiming unbondings
-    let mut unbondings = SubnetStakeUnbondingLedger::<T>::get(account_id.clone(), subnet_id);
-
-    // We're about to add another unbonding to the ledger - it must be n-1
-    ensure!(
-      unbondings.len() < T::MaxStakeUnlockings::get() as usize,
-      Error::<T>::MaxUnlockingsReached
-    );
-
-    unbondings.insert(epoch, amount);
-    SubnetStakeUnbondingLedger::<T>::insert(account_id.clone(), subnet_id, unbondings);
-
-    Ok(())
-  }
-
-  // Infallible
-  pub fn do_claim_stake_unbondings(account_id: &T::AccountId, subnet_id: u32) -> u32 {
-    let block: u64 = Self::get_current_block_as_u64();
-    let epoch_length: u64 = T::EpochLength::get();
-    let epoch: u64 = block / epoch_length;
-    let unbondings = SubnetStakeUnbondingLedger::<T>::get(account_id.clone(), subnet_id);
-    let mut unbondings_copy = unbondings.clone();
-
-    // let mut successful_unbondings = BTreeMap::new();
-    let mut successful_unbondings = 0;
-
-    for (unbonding_epoch, amount) in unbondings.iter() {
-      if epoch <= unbonding_epoch + T::StakeCooldownEpochs::get() {
-        continue
-      }
-
-      let stake_to_be_added_as_currency = Self::u128_to_balance(*amount);
-      if !stake_to_be_added_as_currency.is_some() {
-        // Redundant
-        unbondings_copy.remove(&unbonding_epoch);
-        continue
-      }
-      
-      unbondings_copy.remove(&unbonding_epoch);
-      Self::add_balance_to_coldkey_account(&account_id, stake_to_be_added_as_currency.unwrap());
-      successful_unbondings += 1;
-    }
-
-    if unbondings.len() != unbondings_copy.len() {
-      SubnetStakeUnbondingLedger::<T>::insert(account_id.clone(), subnet_id, unbondings_copy);
-    }
-    successful_unbondings
-  }
-
   pub fn increase_account_stake(
     account_id: &T::AccountId,
     subnet_id: u32, 
     amount: u128,
   ) {
     // -- increase account subnet staking balance
-    AccountSubnetStake::<T>::mutate(account_id, subnet_id, |mut n| n.saturating_accrue(amount));
+    AccountSubnetStake::<T>::insert(
+      account_id,
+      subnet_id,
+      AccountSubnetStake::<T>::get(account_id, subnet_id).saturating_add(amount),
+    );
 
     // -- increase account_id total stake
-    TotalAccountStake::<T>::mutate(account_id, |mut n| n.saturating_accrue(amount));
+    TotalAccountStake::<T>::mutate(account_id, |mut n| *n += amount);
 
     // -- increase total subnet stake
-    TotalSubnetStake::<T>::mutate(subnet_id, |mut n| n.saturating_accrue(amount));
+    TotalSubnetStake::<T>::mutate(subnet_id, |mut n| *n += amount);
 
     // -- increase total stake overall
-    TotalStake::<T>::mutate(|mut n| n.saturating_accrue(amount));
+    TotalStake::<T>::mutate(|mut n| *n += amount);
   }
   
   pub fn decrease_account_stake(
@@ -234,16 +172,20 @@ impl<T: Config> Pallet<T> {
     amount: u128,
   ) {
     // -- decrease account subnet staking balance
-    AccountSubnetStake::<T>::mutate(account_id, subnet_id, |mut n| n.saturating_reduce(amount));
+    AccountSubnetStake::<T>::insert(
+      account_id,
+      subnet_id,
+      AccountSubnetStake::<T>::get(account_id, subnet_id).saturating_sub(amount),
+    );
 
     // -- decrease account_id total stake
-    TotalAccountStake::<T>::mutate(account_id, |mut n| n.saturating_reduce(amount));
-
-    // -- decrease total subnet stake
-    TotalSubnetStake::<T>::mutate(subnet_id, |mut n| n.saturating_reduce(amount));
+    TotalAccountStake::<T>::mutate(account_id, |mut n| *n -= amount);
 
     // -- decrease total stake overall
-    TotalStake::<T>::mutate(|mut n| n.saturating_reduce(amount));
+    TotalStake::<T>::mutate(|mut n| *n -= amount);
+
+    // -- decrease total subnet stake
+    TotalSubnetStake::<T>::mutate(subnet_id, |mut n| *n -= amount);
   }
 
   pub fn can_remove_balance_from_coldkey_account(

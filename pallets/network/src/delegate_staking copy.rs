@@ -16,7 +16,6 @@
 // Enables accounts to delegate stake to subnets for a portion of emissions
 
 use super::*;
-use sp_runtime::Saturating;
 
 impl<T: Config> Pallet<T> {
   pub fn do_add_delegate_stake(
@@ -83,7 +82,6 @@ impl<T: Config> Pallet<T> {
 
     // --- Mitigate inflation attack
     if total_subnet_delegated_stake_shares == 0 {
-      // no need for saturation here
       TotalSubnetDelegateStakeShares::<T>::mutate(subnet_id, |mut n| *n += 1000);
       delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
     }
@@ -154,13 +152,15 @@ impl<T: Config> Pallet<T> {
       Error::<T>::TxRateLimitExceeded
     );
 
-    // --- We remove the shares from the account and balance from the pool
-    Self::decrease_account_delegate_stake_shares(&account_id, subnet_id, delegate_stake_to_be_removed, delegate_stake_shares_to_be_removed);
+    // --- We remove the shares from the account.
+    // Self::decrease_account_delegate_stake_shares(&account_id, subnet_id, delegate_stake_to_be_removed, delegate_stake_shares_to_be_removed);
 
     // let remaining_account_delegate_stake_shares: u128 = AccountSubnetDelegateStakeShares::<T>::get(&account_id, subnet_id);
     
     // --- We add the balancer to the account_id.  If the above fails we will not credit this account_id.
-    Self::add_balance_to_delegate_stake_unbonding_ledger(&account_id, subnet_id,  delegate_stake_to_be_removed, block).map_err(|e| e)?;
+    // Self::add_balance_to_delegate_stake_unbonding_ledger(&account_id, subnet_id,  delegate_stake_to_be_removed, block);
+    // Self::add_balance_to_delegate_stake_unbonding_ledger(&account_id, subnet_id,  delegate_stake_to_be_removed, block).map_err(|e| e)?;
+    Self::add_balance_to_delegate_stake_unbonding_ledger(&account_id, subnet_id,  delegate_stake_shares_to_be_removed, block).map_err(|e| e)?;
 
     // Set last block for rate limiting
     Self::set_last_tx_block(&account_id, block);
@@ -177,14 +177,6 @@ impl<T: Config> Pallet<T> {
     delegate_stake_shares_to_be_switched: u128,
   ) -> DispatchResult {
     let account_id: T::AccountId = ensure_signed(origin)?;
-
-    let block: u64 = Self::get_current_block_as_u64();
-    ensure!(
-      block - LastDelegateStakeTransfer::<T>::get(account_id.clone()) > DelegateStakeTransferPeriod::<T>::get(),
-      Error::<T>::DelegateStakeTransferPeriodExceeded
-    );
-
-    LastDelegateStakeTransfer::<T>::insert(account_id.clone(), block);
 
     // --- Remove
 
@@ -220,7 +212,7 @@ impl<T: Config> Pallet<T> {
       Error::<T>::CouldNotConvertToBalance
     );
 
-    // --- We remove the shares from the account and balance from the pool
+    // --- We remove the shares from the account.
     Self::decrease_account_delegate_stake_shares(&account_id, from_subnet_id, delegate_stake_to_be_transferred, delegate_stake_shares_to_be_switched);
 
 
@@ -246,6 +238,7 @@ impl<T: Config> Pallet<T> {
   
     // to-do: add AddStakeRateLimit instead of universal rate limiter
     //        this allows peers to come in freely
+    let block: u64 = Self::get_current_block_as_u64();
     ensure!(
       !Self::exceeds_tx_rate_limit(Self::get_last_tx_block(&account_id), block),
       Error::<T>::TxRateLimitExceeded
@@ -260,7 +253,6 @@ impl<T: Config> Pallet<T> {
 
     // --- Mitigate inflation attack
     if total_to_subnet_delegated_stake_shares == 0 {
-      // no need for saturation here
       TotalSubnetDelegateStakeShares::<T>::mutate(to_subnet_id, |mut n| *n += 1000);
       delegate_stake_to_be_added_as_shares = delegate_stake_to_be_added_as_shares.saturating_sub(1000);
     }
@@ -289,7 +281,7 @@ impl<T: Config> Pallet<T> {
   pub fn add_balance_to_delegate_stake_unbonding_ledger(
     account_id: &T::AccountId,
     subnet_id: u32, 
-    balance: u128,
+    shares: u128,
     block: u64,
   ) -> DispatchResult {
     let epoch_length: u64 = T::EpochLength::get();
@@ -318,7 +310,7 @@ impl<T: Config> Pallet<T> {
       Error::<T>::MaxUnlockingsReached
     );
 
-    unbondings.insert(epoch, balance);
+    unbondings.insert(epoch, shares);
     DelegateStakeUnbondingLedger::<T>::insert(account_id.clone(), subnet_id, unbondings);
 
     Ok(())
@@ -332,21 +324,35 @@ impl<T: Config> Pallet<T> {
     let unbondings = DelegateStakeUnbondingLedger::<T>::get(account_id.clone(), subnet_id);
     let mut unbondings_copy = unbondings.clone();
 
-    // --- Count the unbondings so the user knows if it was unsuccessful
     let mut successful_unbondings = 0;
 
-    for (unbonding_epoch, balance) in unbondings.iter() {
+    for (unbonding_epoch, shares) in unbondings.iter() {
       if epoch <= unbonding_epoch + T::DelegateStakeCooldownEpochs::get() {
         continue
       }
+
+      let total_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<T>::get(subnet_id);
+      let total_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(subnet_id);
   
-      let delegate_stake_to_be_added_as_currency = Self::u128_to_balance(*balance);
+      // --- Get accounts current balance
+      let balance = Self::convert_to_balance(
+        *shares,
+        total_subnet_delegated_stake_shares,
+        total_subnet_delegated_stake_balance
+      );
+
+      log::error!("do_claim_delegate_stake_unbondings shares {:?}", shares);
+      log::error!("do_claim_delegate_stake_unbondings balance {:?}", balance);
+  
+      let delegate_stake_to_be_added_as_currency = Self::u128_to_balance(balance);
       if !delegate_stake_to_be_added_as_currency.is_some() {
         // Redundant
         unbondings_copy.remove(&unbonding_epoch);
         continue
       }
       
+      Self::decrease_account_delegate_stake_shares(&account_id, subnet_id, balance, *shares);
+
       unbondings_copy.remove(&unbonding_epoch);
       Self::add_balance_to_coldkey_account(&account_id, delegate_stake_to_be_added_as_currency.unwrap());
       successful_unbondings += 1;
@@ -414,13 +420,17 @@ impl<T: Config> Pallet<T> {
     shares: u128,
   ) {
     // -- increase account subnet staking shares balance
-    AccountSubnetDelegateStakeShares::<T>::mutate(account_id, subnet_id, |mut n| n.saturating_accrue(shares));
+    AccountSubnetDelegateStakeShares::<T>::insert(
+      account_id,
+      subnet_id,
+      AccountSubnetDelegateStakeShares::<T>::get(account_id, subnet_id).saturating_add(shares),
+    );
 
     // -- increase total subnet delegate stake balance
-    TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| n.saturating_accrue(amount));
+    TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| *n += amount);
 
     // -- increase total subnet delegate stake shares
-    TotalSubnetDelegateStakeShares::<T>::mutate(subnet_id, |mut n| n.saturating_accrue(shares));
+    TotalSubnetDelegateStakeShares::<T>::mutate(subnet_id, |mut n| *n += shares);
   }
   
   pub fn decrease_account_delegate_stake_shares(
@@ -430,13 +440,20 @@ impl<T: Config> Pallet<T> {
     shares: u128,
   ) {
     // -- decrease account subnet staking shares balance
-    AccountSubnetDelegateStakeShares::<T>::mutate(account_id, subnet_id, |mut n| n.saturating_reduce(shares));
+    AccountSubnetDelegateStakeShares::<T>::insert(
+      account_id,
+      subnet_id,
+      AccountSubnetDelegateStakeShares::<T>::get(account_id, subnet_id).saturating_sub(shares),
+    );
 
-    // -- decrease total subnet delegate stake balance
-    TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| n.saturating_reduce(amount));
+    // -- increase total subnet delegate stake balance
+    TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| *n += amount);
 
     // -- decrease total subnet delegate stake shares
-    TotalSubnetDelegateStakeShares::<T>::mutate(subnet_id, |mut n| n.saturating_reduce(shares));
+    TotalSubnetDelegateStakeShares::<T>::mutate(subnet_id, |mut n| *n -= shares);
+
+    // -- decrease total stake overall
+    // TotalDelegateStake::<T>::mutate(|mut n| *n -= amount);
   }
 
   /// Rewards are deposited here from the ``rewards.rs`` or by donations
@@ -445,7 +462,7 @@ impl<T: Config> Pallet<T> {
     amount: u128,
   ) {
     // -- increase total subnet delegate stake 
-    TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| n.saturating_accrue(amount));
+    TotalSubnetDelegateStakeBalance::<T>::mutate(subnet_id, |mut n| *n += amount);
   }
 
   // pub fn get_delegate_stake_balance(
@@ -489,7 +506,7 @@ impl<T: Config> Pallet<T> {
     if total_shares == 0 {
       return shares;
     }
-    shares * (total_balance * Self::PERCENTAGE_FACTOR / (total_shares + 1)) / Self::PERCENTAGE_FACTOR
+    shares.saturating_mul(total_balance.saturating_div(total_shares))
   }
 
   pub fn convert_to_shares(
@@ -500,6 +517,6 @@ impl<T: Config> Pallet<T> {
     if total_shares == 0 {
       return balance;
     }
-    balance * (total_shares * Self::PERCENTAGE_FACTOR / (total_balance + 1)) / Self::PERCENTAGE_FACTOR
+    balance.saturating_mul(total_shares.saturating_div(total_balance))
   }
 }

@@ -34,6 +34,7 @@ pallet-insecure-randomness-collective-flip.workspace = true
 sp-std.workspace = true
 sp-core = { features = ["serde"], workspace = true }
 sp-runtime = { workspace = true }
+libm.workspace = true
 
 [dev-dependencies]
 sp-io = { default-features = true, workspace = true }

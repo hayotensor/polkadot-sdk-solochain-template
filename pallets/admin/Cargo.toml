@@ -26,8 +26,8 @@ log.workspace = true
 pallet-sudo.workspace = true
 pallet-balances.workspace = true
 
+pallet-collective = { version = "37.0.0", default-features = false, path = "../collective" }
 pallet-network = { version = "4.0.0-dev", default-features = false, path = "../network" }
-pallet-subnet-democracy = { version = "4.0.0-dev", default-features = false, path = "../subnet-democracy" }
 
 pallet-insecure-randomness-collective-flip.workspace = true
 sp-std.workspace = true
@@ -46,7 +46,6 @@ std = [
 	"frame-system/std",
 	"scale-info/std",
 	"pallet-network/std",
-	"pallet-subnet-democracy/std",
 	"pallet-sudo/std",
 	"pallet-insecure-randomness-collective-flip/std",
 ]

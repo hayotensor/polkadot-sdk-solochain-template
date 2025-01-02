@@ -188,6 +188,12 @@ parameter_types! {
 	pub const EpochLength: u64 = 100;
   pub const NetworkPalletId: PalletId = PalletId(*b"/network");
   pub const SubnetInitializationCost: u128 = 100_000_000_000_000_000_000;
+  pub const MinProposalStake: u128 = 1_000_000_000_000_000_000;
+  pub const DelegateStakeCooldownEpochs: u64 = 100;
+  pub const StakeCooldownEpochs: u64 = 100;
+	pub const DelegateStakeEpochsRemovalWindow: u64 = 10;
+  pub const MaxDelegateStakeUnlockings: u32 = 32;
+  pub const MaxStakeUnlockings: u32 = 32;
 }
 
 impl Config for Test {
@@ -204,6 +210,12 @@ impl Config for Test {
   type Randomness = InsecureRandomnessCollectiveFlip;
 	type PalletId = NetworkPalletId;
   type SubnetInitializationCost = SubnetInitializationCost;
+  type DelegateStakeCooldownEpochs = DelegateStakeCooldownEpochs;
+  type StakeCooldownEpochs = DelegateStakeCooldownEpochs;
+	type DelegateStakeEpochsRemovalWindow = DelegateStakeEpochsRemovalWindow;
+  type MaxDelegateStakeUnlockings = MaxDelegateStakeUnlockings;
+  type MaxStakeUnlockings = MaxStakeUnlockings;
+  type MinProposalStake = MinProposalStake;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -211,4 +223,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		.build_storage()
 		.unwrap()
 		.into()
+}
+
+pub(crate) fn network_events() -> Vec<crate::Event<Test>> {
+	System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let RuntimeEvent::Network(inner) = e { Some(inner) } else { None })
+		.collect()
 }

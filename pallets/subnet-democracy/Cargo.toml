@@ -32,8 +32,11 @@ pallet-network = { version = "4.0.0-dev", default-features = false, path = "../n
 sp-core = { features = ["serde"], workspace = true }
 sp-io = { default-features = false, workspace = true }
 sp-runtime = { features = ["serde"], workspace = true }
+sp-std.workspace = true
 
 pallet-insecure-randomness-collective-flip.workspace = true
+strum = { version = "0.26.3", features = ["derive"], default-features = false }
+strum_macros = { version = "0.26.3", default-features = false }
 
 [features]
 default = ["std"]
@@ -48,6 +51,7 @@ std = [
 	"sp-runtime/std",
 	"sp-io/std",
 	"sp-core/std",
+	"sp-std/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

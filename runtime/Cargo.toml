@@ -31,6 +31,11 @@ pallet-sudo.workspace = true
 pallet-timestamp.workspace = true
 pallet-transaction-payment.workspace = true
 pallet-authorship.workspace = true
+pallet-utility.workspace = true
+pallet-proxy.workspace = true
+pallet-preimage.workspace = true
+pallet-scheduler.workspace = true
+
 sp-api.workspace = true
 sp-block-builder.workspace = true
 sp-consensus-aura = { features = ["serde"], workspace = true }
@@ -54,10 +59,10 @@ pallet-network = { version = "4.0.0-dev", default-features = false, path = "../p
 pallet-insecure-randomness-collective-flip.workspace = true
 pallet-multisig.workspace = true
 network-custom-rpc-runtime-api = { version = "0.0.1", default-features = false, path = "../pallets/network/runtime-api" }
-pallet-subnet-democracy = { version = "4.0.0-dev", default-features = false, path = "../pallets/subnet-democracy" }
 pallet-admin = { version = "4.0.0-dev", default-features = false, path = "../pallets/admin" }
 pallet-rewards = { version = "4.0.0-dev", default-features = false, path = "../pallets/rewards" }
-
+pallet-collective = { version = "37.0.0", default-features = false, path = "../pallets/collective" }
+pallet-atomic-swap = { version = "37.0.0", default-features = false, path = "../pallets/atomic-swap" }
 serde.workspace = true
 serde_json.workspace = true
 
@@ -90,10 +95,15 @@ std = [
 	"pallet-multisig/std",
 	"network-custom-rpc-runtime-api/std",
 	"pallet-network/std",
-	"pallet-subnet-democracy/std",
 	"pallet-authorship/std",
 	"pallet-rewards/std",
 	"pallet-admin/std",
+	"pallet-utility/std",
+	"pallet-proxy/std",
+	"pallet-preimage/std",
+	"pallet-scheduler/std",
+	"pallet-collective/std",
+	"pallet-atomic-swap/std",
 
 	"sp-api/std",
 	"sp-block-builder/std",
@@ -124,7 +134,9 @@ runtime-benchmarks = [
 	"pallet-grandpa/runtime-benchmarks",
 	"pallet-sudo/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
-	"pallet-subnet-democracy/runtime-benchmarks",
+	"pallet-network/runtime-benchmarks",
+	"pallet-proxy/runtime-benchmarks",
+	"pallet-collective/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 ]
 
@@ -143,4 +155,6 @@ try-runtime = [
 	"pallet-insecure-randomness-collective-flip/try-runtime",
 	"pallet-network/try-runtime",
 	"pallet-multisig/try-runtime",
+	"pallet-proxy/try-runtime",
+	"pallet-collective/try-runtime",
 ]
