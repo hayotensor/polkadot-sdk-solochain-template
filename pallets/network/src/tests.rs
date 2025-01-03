@@ -228,6 +228,76 @@ fn build_activated_subnet(subnet_path: Vec<u8>, start: u32, mut end: u32, deposi
   // assert!(validator != None, "Validator is None");
 }
 
+#[test]
+fn test_validator_performance_tracking() {
+    new_test_ext().execute_with(|| {
+        let subnet_id = 1;
+        let account_id = account(1);
+        let current_epoch = 10;
+
+        // Initial score should be 0
+        let initial_score = Network::calculate_validator_score(subnet_id, &account_id, current_epoch);
+        assert_eq!(initial_score, 0);
+
+        // Update with successful validation
+        Network::update_validator_performance(subnet_id, account_id.clone(), true, current_epoch);
+        
+        let score_after_success = Network::calculate_validator_score(subnet_id, &account_id, current_epoch);
+        assert_eq!(score_after_success, Network::PERCENTAGE_FACTOR);
+
+        // Record a slash
+        Network::record_validator_slash(subnet_id, account_id.clone(), current_epoch);
+        
+        let score_after_slash = Network::calculate_validator_score(subnet_id, &account_id, current_epoch);
+        assert!(score_after_slash < Network::PERCENTAGE_FACTOR / 2);
+    });
+}
+
+#[test]
+fn test_weighted_validator_selection() {
+    new_test_ext().execute_with(|| {
+        let subnet_id = 1;
+        let current_epoch = 10;
+        
+        // Create candidates with different performance histories
+        let good_validator = account(1);
+        let bad_validator = account(2);
+        let neutral_validator = account(3);
+
+        // Set up performance histories
+        Network::update_validator_performance(subnet_id, good_validator.clone(), true, current_epoch);
+        Network::update_validator_performance(subnet_id, good_validator.clone(), true, current_epoch);
+        
+        Network::record_validator_slash(subnet_id, bad_validator.clone(), current_epoch);
+        
+        Network::update_validator_performance(subnet_id, neutral_validator.clone(), true, current_epoch);
+        Network::update_validator_performance(subnet_id, neutral_validator.clone(), false, current_epoch);
+
+        // Test selection over multiple iterations
+        let mut good_selected = 0;
+        let mut bad_selected = 0;
+        let mut neutral_selected = 0;
+
+        let candidates = vec![good_validator.clone(), bad_validator.clone(), neutral_validator.clone()];
+        
+        for _ in 0..100 {
+            if let Some(selected) = Network::select_validator_weighted(subnet_id, candidates.clone(), current_epoch) {
+                if selected == good_validator {
+                    good_selected += 1;
+                } else if selected == bad_validator {
+                    bad_selected += 1;
+                } else if selected == neutral_validator {
+                    neutral_selected += 1;
+                }
+            }
+        }
+
+        // Good validator should be selected more often than bad validator
+        assert!(good_selected > bad_selected);
+        assert!(neutral_selected > bad_selected);
+    });
+}
+
 // Returns total staked on subnet
 fn build_subnet_nodes(subnet_id: u32, start: u32, end: u32, deposit_amount: u128, amount: u128) -> u128 {
   let mut amount_staked = 0;
