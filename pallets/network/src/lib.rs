@@ -992,18 +992,24 @@ pub mod pallet {
 	}
 	#[pallet::type_value]
 	pub fn DefaultMinSubnetNodes() -> u32 {
+		// testnet is 5
 		5
 	}
 	#[pallet::type_value]
 	pub fn DefaultMinSubnetRegistrationBlocks() -> u64 {
 		// 9 days at 6s blocks
 		// 129_600
-		11
+
+		// Testnet 1 day
+		14400
 	}
 	#[pallet::type_value]
 	pub fn DefaultMaxSubnetRegistrationBlocks() -> u64 {
 		// 21 days at 6s blocks
-		302_400
+		// 302_400
+
+		// Testnet 3 days
+		43200
 	}
 	#[pallet::type_value]
 	pub fn DefaultMaxSubnetNodeRegistrationEpochs() -> u32 {
@@ -2945,36 +2951,36 @@ pub mod pallet {
 		fn build(&self) {
 			// MinSubnetRegistrationBlocks::<T>::put(50);
 			
-			// let subnet_id = 1;
+			let subnet_id = 1;
 
-			// let base_node_memory: u128 = BaseSubnetNodeMemoryMB::<T>::get();
+			let base_node_memory: u128 = BaseSubnetNodeMemoryMB::<T>::get();
 
-			// // --- Get min nodes based on default memory settings
-			// let real_min_subnet_nodes: u128 = self.memory_mb.clone() / base_node_memory;
-			// let mut min_subnet_nodes: u32 = MinSubnetNodes::<T>::get();
-			// if real_min_subnet_nodes as u32 > min_subnet_nodes {
-			// 	min_subnet_nodes = real_min_subnet_nodes as u32;
-			// }
+			// --- Get min nodes based on default memory settings
+			let real_min_subnet_nodes: u128 = self.memory_mb.clone() / base_node_memory;
+			let mut min_subnet_nodes: u32 = MinSubnetNodes::<T>::get();
+			if real_min_subnet_nodes as u32 > min_subnet_nodes {
+				min_subnet_nodes = real_min_subnet_nodes as u32;
+			}
 				
-			// let target_subnet_nodes: u32 = (min_subnet_nodes as u128).saturating_mul(TargetSubnetNodesMultiplier::<T>::get()).saturating_div(1000000000) as u32 + min_subnet_nodes;
+			let target_subnet_nodes: u32 = (min_subnet_nodes as u128).saturating_mul(TargetSubnetNodesMultiplier::<T>::get()).saturating_div(1000000000) as u32 + min_subnet_nodes;
 
-			// let subnet_data = SubnetData {
-			// 	id: subnet_id,
-			// 	path: self.subnet_path.clone(),
-			// 	min_nodes: min_subnet_nodes,
-			// 	target_nodes: target_subnet_nodes,
-			// 	memory_mb: self.memory_mb.clone(),
-			// 	registration_blocks: MinSubnetRegistrationBlocks::<T>::get(),
-			// 	initialized: 0,
-			// 	activated: 0,
-			// };
+			let subnet_data = SubnetData {
+				id: subnet_id,
+				path: self.subnet_path.clone(),
+				min_nodes: min_subnet_nodes,
+				target_nodes: target_subnet_nodes,
+				memory_mb: self.memory_mb.clone(),
+				registration_blocks: MinSubnetRegistrationBlocks::<T>::get(),
+				initialized: 1,
+				activated: 1,
+			};
 
-			// // Store unique path
-			// SubnetPaths::<T>::insert(self.subnet_path.clone(), subnet_id);
-			// // Store subnet data
-			// SubnetsData::<T>::insert(subnet_id, subnet_data.clone());
-			// // Increase total subnets count
-			// TotalSubnets::<T>::mutate(|n: &mut u32| *n += 1);
+			// Store unique path
+			SubnetPaths::<T>::insert(self.subnet_path.clone(), subnet_id);
+			// Store subnet data
+			SubnetsData::<T>::insert(subnet_id, subnet_data.clone());
+			// Increase total subnets count
+			TotalSubnets::<T>::mutate(|n: &mut u32| *n += 1);
 
 
 

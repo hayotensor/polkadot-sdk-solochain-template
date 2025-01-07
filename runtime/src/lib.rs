@@ -471,7 +471,7 @@ impl pallet_collective::Config<CouncilCollective> for Runtime {
 
 parameter_types! {
 	pub const InitialTxRateLimit: u64 = 0;
-	pub const EpochLength: u64 = 10;
+	pub const EpochLength: u64 = 690; // Testnet 690 blocks per erpoch / 69 mins per epoch
 	pub const NetworkPalletId: PalletId = PalletId(*b"/network");
 	pub const SubnetInitializationCost: u128 = 100_000_000_000_000_000_000;
 	pub const MinProposalStake: u128 = 1_000_000_000_000_000_000; // 1 * 1e18
@@ -489,8 +489,6 @@ impl pallet_network::Config for Runtime {
 	type EpochLength = EpochLength;
 	type StringLimit = ConstU32<12288>;
 	type InitialTxRateLimit = InitialTxRateLimit;
-// 	type SecsPerBlock = ConstU64<{ MILLISECS_PER_BLOCK as u64 }>; // not in use, remove
-// 	type Year = ConstU64<{ DAYS as u64 }>; // not in use, remove
 // 	type OffchainSignature = Signature;
 // 	type OffchainPublic = AccountPublic;
 	type PalletId = NetworkPalletId;
@@ -919,6 +917,10 @@ impl_runtime_apis! {
 			let result = Network::get_subnet_node_info(subnet_id);
 			result.encode()
 		}
+		fn is_subnet_node_by_peer_id(subnet_id: u32, peer_id: Vec<u8>) -> bool {
+			let result = Network::is_subnet_node_by_peer_id(subnet_id, peer_id);
+			result
+		}	
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
