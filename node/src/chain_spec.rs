@@ -183,7 +183,7 @@ fn testnet_genesis(
 	endowed_accounts: Vec<AccountId>,
 	_enable_println: bool,
 ) -> serde_json::Value {
-	let subnet_path: Vec<u8> = "bigscience/bloom-560m".into();
+	let subnet_path: Vec<u8> = "Orenguteng/Llama-3.1-8B-Lexi-Uncensored-V2".into();
 	let mut peer_index: u8 = 0;
 	serde_json::json!({
 		"balances": {
@@ -202,7 +202,7 @@ fn testnet_genesis(
 		},
 		"network": {
 			"subnetPath": subnet_path,
-			"memoryMb": 560,
+			"memoryMb": 10000,
 			"subnetNodes": endowed_accounts.iter().cloned().map(|k| {
 				peer_index += 1;
 				(

@@ -31,5 +31,6 @@ sp_api::decl_runtime_apis! {
     fn get_minimum_subnet_nodes(memory_mb: u128) -> u32;
     fn get_minimum_delegate_stake(memory_mb: u128) -> u128;
     fn get_subnet_node_info(subnet_id: u32) -> Vec<u8>;
+    fn is_subnet_node_by_peer_id(subnet_id: u32, peer_id: Vec<u8>) -> bool;
   }
 }

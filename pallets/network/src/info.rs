@@ -128,8 +128,8 @@ impl<T: Config> Pallet<T> {
     }
   }
 
-  pub fn is_subnet_node_by_peer_id(subnet_id: u32, peer_id: PeerId) -> bool {
-    match SubnetNodeAccount::<T>::try_get(subnet_id, peer_id.clone()) {
+  pub fn is_subnet_node_by_peer_id(subnet_id: u32, peer_id: Vec<u8>) -> bool {
+    match SubnetNodeAccount::<T>::try_get(subnet_id, PeerId(peer_id)) {
       Ok(account_id) => true,
       Err(()) => false,
     }
