@@ -2972,9 +2972,11 @@ pub mod pallet {
 				memory_mb: self.memory_mb.clone(),
 				registration_blocks: MinSubnetRegistrationBlocks::<T>::get(),
 				initialized: 1,
-				activated: 1,
+				activated: 0,
 			};
 
+			// Increase total subnet memory
+			TotalSubnetMemoryMB::<T>::mutate(|n: &mut u128| *n += subnet_data.memory_mb);			
 			// Store unique path
 			SubnetPaths::<T>::insert(self.subnet_path.clone(), subnet_id);
 			// Store subnet data
@@ -2982,8 +2984,21 @@ pub mod pallet {
 			// Increase total subnets count
 			TotalSubnets::<T>::mutate(|n: &mut u32| *n += 1);
 
+			// Increase delegate stake to allow activation of subnet model
+			let min_stake_balance = MinStakeBalance::<T>::get();
+			// --- Get minimum subnet stake balance
+			let min_subnet_stake_balance = min_stake_balance * min_subnet_nodes as u128;
+			// --- Get required delegate stake balance for a subnet to have to stay live
+			let mut min_subnet_delegate_stake_balance = (min_subnet_stake_balance as u128).saturating_mul(MinSubnetDelegateStakePercentage::<T>::get()).saturating_div(1000000000);
 
-
+			// --- Get absolute minimum required subnet delegate stake balance
+			let min_subnet_delegate_stake = MinSubnetDelegateStake::<T>::get();
+			// --- Return here if the absolute minimum required subnet delegate stake balance is greater
+			//     than the calculated minimum requirement
+			if min_subnet_delegate_stake > min_subnet_delegate_stake_balance {
+				min_subnet_delegate_stake_balance = min_subnet_delegate_stake
+			}	
+			TotalSubnetDelegateStakeBalance::<T>::insert(subnet_id, min_subnet_delegate_stake_balance);
 			
 			// --- Initialize subnet nodes
 			// Only initialize to test using subnet nodes
