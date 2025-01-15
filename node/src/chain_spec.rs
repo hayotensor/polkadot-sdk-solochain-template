@@ -202,7 +202,7 @@ fn testnet_genesis(
 		},
 		"network": {
 			"subnetPath": subnet_path,
-			"memoryMb": 10000,
+			"memoryMb": 2000,
 			"subnetNodes": endowed_accounts.iter().cloned().map(|k| {
 				peer_index += 1;
 				(

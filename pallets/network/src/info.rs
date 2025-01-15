@@ -25,24 +25,6 @@ impl<T: Config> Pallet<T> {
     Self::get_classified_subnet_nodes(subnet_id, &SubnetNodeClass::Included, epoch)
   }
 
-  // pub fn get_subnet_nodes_submittable(
-  //   subnet_id: u32,
-  // ) -> Vec<SubnetNode<T::AccountId>> {
-  //   if !SubnetsData::<T>::contains_key(subnet_id) {
-  //     return Vec::new();
-  //   }
-
-  //   // let node_sets: BTreeMap<T::AccountId, u64> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable);
-
-  //   let subnet_nodes: Vec<T::AccountId> = SubnetNodesClasses::<T>::get(subnet_id, SubnetNodeClass::Submittable).iter()
-  //     .map(|x| { 
-  //       *x.0
-  //      } )
-  //     .collect();
-
-  //   subnet_nodes
-  // }
-
   pub fn get_subnet_nodes_submittable(
     subnet_id: u32,
   ) -> Vec<SubnetNode<T::AccountId>> {
@@ -128,6 +110,7 @@ impl<T: Config> Pallet<T> {
     }
   }
 
+  // TODO: Make this only return true is Submittable subnet node
   pub fn is_subnet_node_by_peer_id(subnet_id: u32, peer_id: Vec<u8>) -> bool {
     match SubnetNodeAccount::<T>::try_get(subnet_id, PeerId(peer_id)) {
       Ok(account_id) => true,

@@ -178,22 +178,11 @@ impl<T: Config> Pallet<T> {
   ) -> DispatchResult {
     let account_id: T::AccountId = ensure_signed(origin)?;
 
-    let block: u64 = Self::get_current_block_as_u64();
-    ensure!(
-      block - LastDelegateStakeTransfer::<T>::get(account_id.clone()) > DelegateStakeTransferPeriod::<T>::get(),
-      Error::<T>::DelegateStakeTransferPeriodExceeded
-    );
-
-    LastDelegateStakeTransfer::<T>::insert(account_id.clone(), block);
-
-    // --- Remove
-
     // --- Ensure that the delegate_stake amount to be removed is above zero.
     ensure!(
       delegate_stake_shares_to_be_switched > 0,
       Error::<T>::NotEnoughStakeToWithdraw
     );
-
     let from_account_delegate_stake_shares: u128 = AccountSubnetDelegateStakeShares::<T>::get(&account_id.clone(), from_subnet_id);
 
     // --- Ensure that the account has enough delegate_stake to withdraw.
@@ -201,7 +190,17 @@ impl<T: Config> Pallet<T> {
       from_account_delegate_stake_shares >= delegate_stake_shares_to_be_switched,
       Error::<T>::NotEnoughStakeToWithdraw
     );
-      
+    
+    let block: u64 = Self::get_current_block_as_u64();
+
+    // --- Logic
+    ensure!(
+      block - LastDelegateStakeTransfer::<T>::get(account_id.clone()) > DelegateStakeTransferPeriod::<T>::get(),
+      Error::<T>::DelegateStakeTransferPeriodExceeded
+    );
+
+    LastDelegateStakeTransfer::<T>::insert(account_id.clone(), block);
+
     let total_from_subnet_delegated_stake_shares = TotalSubnetDelegateStakeShares::<T>::get(from_subnet_id);
     let total_from_subnet_delegated_stake_balance = TotalSubnetDelegateStakeBalance::<T>::get(from_subnet_id);
 

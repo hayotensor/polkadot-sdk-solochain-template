@@ -1810,6 +1810,95 @@ fn test_register_subnet_node_subnet_registering_or_activated_error() {
 }
 
 #[test]
+fn test_register_subnet_node_then_activate() {
+  new_test_ext().execute_with(|| {
+
+    let deposit_amount: u128 = 10000000000000000000000;
+    let amount: u128 = 1000000000000000000000;
+
+    let cost = Network::get_subnet_initialization_cost(0);
+    let _ = Balances::deposit_creating(&account(0), cost+deposit_amount);
+  
+    let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
+
+    let registration_blocks = MinSubnetRegistrationBlocks::<Test>::get();
+
+    let add_subnet_data = RegistrationSubnetData {
+      path: subnet_path.clone().into(),
+      memory_mb: DEFAULT_MEM_MB,
+      registration_blocks: registration_blocks,
+    };
+  
+    // --- Register subnet for activation
+    assert_ok!(
+      Network::register_subnet(
+        RuntimeOrigin::signed(account(0)),
+        add_subnet_data,
+      )
+    );
+  
+    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+    let subnet = SubnetsData::<Test>::get(subnet_id).unwrap();
+      
+    assert_ok!(
+      Network::register_subnet_node(
+        RuntimeOrigin::signed(account(0)),
+        subnet_id,
+        peer(0),
+        amount,
+        None,
+        None,
+        None,
+      ),
+    );
+
+    assert_ok!(
+      Network::activate_subnet_node(
+        RuntimeOrigin::signed(account(0)),
+        subnet_id,
+      ),
+    );
+  })
+}
+
+#[test]
+fn test_activate_subnet_then_register_subnet_node_then_activate() {
+  new_test_ext().execute_with(|| {
+    let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
+    
+    let deposit_amount: u128 = 10000000000000000000000;
+    let amount: u128 = 1000000000000000000000;
+
+    build_activated_subnet(subnet_path.clone(), 0, 0, deposit_amount, amount);
+
+    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+    let total_subnet_nodes = TotalSubnetNodes::<Test>::get(subnet_id);
+    let n_account = total_subnet_nodes + 1;
+       
+    let _ = Balances::deposit_creating(&account(n_account), deposit_amount);
+
+    assert_ok!(
+      Network::register_subnet_node(
+        RuntimeOrigin::signed(account(n_account)),
+        subnet_id,
+        peer(n_account),
+        amount,
+        None,
+        None,
+        None,
+      ),
+    );
+
+    assert_ok!(
+      Network::activate_subnet_node(
+        RuntimeOrigin::signed(account(n_account)),
+        subnet_id,
+      ),
+    );
+  })
+}
+
+#[test]
 fn test_activate_subnet_node_subnet_registering_or_activated_error() {
   new_test_ext().execute_with(|| {
 
