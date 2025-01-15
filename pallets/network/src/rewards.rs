@@ -135,7 +135,7 @@ impl<T: Config> Pallet<T> {
           // Always continue if any of these are true
           // Note: Only ``included`` or above nodes can get emissions
           if subnet_node.classification.class == SubnetNodeClass::Registered {
-            if subnet_node.classification.start_epoch.saturating_add(subnet_node_registration_epochs) > epoch as u64 {
+            if epoch as u64 > subnet_node.classification.start_epoch.saturating_add(subnet_node_registration_epochs) {
               Self::perform_remove_subnet_node(block, subnet_id, account_id);
             }
             continue

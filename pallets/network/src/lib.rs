@@ -310,7 +310,7 @@ pub mod pallet {
 		InvalidSubnetId,
 
 		DelegateStakeTransferPeriodExceeded,
-
+		MustUnstakeToRegister,
 		// Admin
 		/// Consensus block epoch_length invalid, must reach minimum
 		InvalidEpochLengthsInterval,
@@ -739,7 +739,6 @@ pub mod pallet {
 		pub block: u64,
 		pub epoch: u32,
 		pub data: Vec<AccountantDataNodeParams>,
-		// pub attests: Attests<AccountId>,
 	}
 
 	#[derive(Default, Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
@@ -1000,8 +999,11 @@ pub mod pallet {
 		// 9 days at 6s blocks
 		// 129_600
 
-		// Testnet 1 day
-		14400
+		// Testnet 1 hour
+		// 600
+
+		// Local 24 blocks
+		50
 	}
 	#[pallet::type_value]
 	pub fn DefaultMaxSubnetRegistrationBlocks() -> u64 {
@@ -1786,9 +1788,6 @@ pub mod pallet {
 			//		3. Subnet has less than required minimum delegate stake balance
 			// ----
 			
-			let min_required_subnet_consensus_submit_epochs = MinRequiredSubnetConsensusSubmitEpochs::<T>::get();
-			let block: u64 = Self::get_current_block_as_u64();
-
 			// --- Ensure the subnet has passed it's required period to begin consensus submissions
 			ensure!(
 				subnet.activated != 0,
@@ -1889,7 +1888,6 @@ pub mod pallet {
 			)
 		}	
 
-		/// Update a subnet peer
 		#[pallet::call_index(6)]
 		#[pallet::weight({0})]
 		pub fn deactivate_subnet_node(
@@ -2632,7 +2630,7 @@ pub mod pallet {
 			// If a subnet node deregisters, then they must fully unstake its stake balance to register again using that same balance
 			ensure!(
 				AccountSubnetStake::<T>::get(account_id.clone(), subnet_id) == 0,
-				Error::<T>::InvalidSubnetRegistrationCooldown
+				Error::<T>::MustUnstakeToRegister
 			);
 
 			// ====================
@@ -2717,6 +2715,11 @@ pub mod pallet {
         Ok(subnet) => subnet,
         Err(()) => return Err(Error::<T>::SubnetNotExist.into()),
 			};
+
+			// ensure!(
+			// 	SubnetNodesData::<T>::contains_key(subnet_id, account_id.clone()),
+			// 	Error::<T>::SubnetNotExist
+			// );
 
 			// if subnet.activated == 0 {
 			// 	// --- Subnet nodes can only activate if within registration period or if it's activated

@@ -471,7 +471,7 @@ impl pallet_collective::Config<CouncilCollective> for Runtime {
 
 parameter_types! {
 	pub const InitialTxRateLimit: u64 = 0;
-	pub const EpochLength: u64 = 690; // Testnet 690 blocks per erpoch / 69 mins per epoch
+	pub const EpochLength: u64 = 10; // Testnet 690 blocks per erpoch / 69 mins per epoch, Local 10
 	pub const NetworkPalletId: PalletId = PalletId(*b"/network");
 	pub const SubnetInitializationCost: u128 = 100_000_000_000_000_000_000;
 	pub const MinProposalStake: u128 = 1_000_000_000_000_000_000; // 1 * 1e18
@@ -572,7 +572,6 @@ impl pallet_admin::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type CollectiveOrigin = pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 2, 3>;
 	type NetworkAdminInterface = Network;
-	// type SubnetDemocracyAdminInterface = SubnetDemocracy;
 }
 
 impl pallet_atomic_swap::Config for Runtime {
