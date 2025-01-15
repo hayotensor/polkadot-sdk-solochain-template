@@ -2716,11 +2716,6 @@ pub mod pallet {
         Err(()) => return Err(Error::<T>::SubnetNotExist.into()),
 			};
 
-			// ensure!(
-			// 	SubnetNodesData::<T>::contains_key(subnet_id, account_id.clone()),
-			// 	Error::<T>::SubnetNotExist
-			// );
-
 			// if subnet.activated == 0 {
 			// 	// --- Subnet nodes can only activate if within registration period or if it's activated
 			// 	// --- Ensure the subnet outside of the enactment period or still registering

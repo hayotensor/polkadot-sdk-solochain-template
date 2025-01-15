@@ -2465,7 +2465,7 @@ fn test_add_subnet_node_remove_readd_must_unstake_error() {
         None,
         None,
       ),
-      Error::<Test>::InvalidSubnetRegistrationCooldown
+      Error::<Test>::MustUnstakeToRegister
     );
   });
 }
