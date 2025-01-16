@@ -190,6 +190,8 @@ impl<T: Config> Pallet<T> {
               // If subnet validators want to remove and slash a node, they can use the proposals mechanism
 
               // --- Ensure maximum sequential removal consensus threshold is reached
+              // We make sure the super majority are in agreeance to remove someone
+              // TODO: Check the size of subnet and scale it from there
               if penalties + 1 > max_subnet_node_penalties {
                 // --- Increase account penalty count
                 // AccountPenaltyCount::<T>::mutate(account_id.clone(), |n: &mut u32| *n += 1);
