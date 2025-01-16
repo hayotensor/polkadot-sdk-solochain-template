@@ -19,7 +19,7 @@ use frame_support::pallet_prelude::DispatchResultWithPostInfo;
 use frame_support::pallet_prelude::Pays;
 
 impl<T: Config> Pallet<T> {
-  pub fn reward_subnets(block: u64, epoch: u32, epoch_length: u64) -> DispatchResultWithPostInfo {
+  pub fn reward_subnets(block: u64, epoch: u32) -> DispatchResultWithPostInfo {
     // --- Get base rewards based on subnet memory requirements
     let base_reward_per_mb: u128 = BaseRewardPerMB::<T>::get();
     // --- Get required attestation percentage
@@ -148,7 +148,7 @@ impl<T: Config> Pallet<T> {
               |params: &mut SubnetNode<T::AccountId>| {
                 params.classification = SubnetNodeClassification {
                   class: SubnetNodeClass::Included,
-                  start_epoch: (epoch + 1) as u64,
+                  start_epoch: (epoch) as u64,
                 };
               },
             );
@@ -180,16 +180,18 @@ impl<T: Config> Pallet<T> {
           //      otherwise, increment penalty score only
           //      remove them if max penalties threshold is reached
           if !validated {
+            // --- Mutate nodes penalties count if not in consensus
+            SubnetNodePenalties::<T>::insert(subnet_id, account_id.clone(), penalties + 1);
+
             // --- To be removed or increase absent count, the consensus threshold must be reached
             if attestation_percentage > node_attestation_removal_threshold {
               // We don't slash nodes for not being in consensus
               // A node can be removed for any reason and may not be due to dishonesty
               // If subnet validators want to remove and slash a node, they can use the proposals mechanism
 
-              // --- Mutate nodes absentee count if not in consensus
-              SubnetNodePenalties::<T>::insert(subnet_id, account_id.clone(), penalties + 1);
-
               // --- Ensure maximum sequential removal consensus threshold is reached
+              // We make sure the super majority are in agreeance to remove someone
+              // TODO: Check the size of subnet and scale it from there
               if penalties + 1 > max_subnet_node_penalties {
                 // --- Increase account penalty count
                 // AccountPenaltyCount::<T>::mutate(account_id.clone(), |n: &mut u32| *n += 1);
@@ -202,32 +204,12 @@ impl<T: Config> Pallet<T> {
             continue
           }
 
-          //
-          // TODO: Test removing this ``!submission.attests.contains(&account_id)`` to allow those that do not attest to gain rewards
-          //
+          // --- At this point, a subnet node is in the consensus data
 
-
-
-          
-          // --- If not attested, do not receive rewards
-          // We don't penalize accounts for not attesting data in case data is corrupted
-          // It is up to subnet nodes to remove them via consensus
-          if !submission.attests.contains_key(&account_id) {
-            continue
-          }
-
-          let score = subnet_node_data.score;
-
-          if score == 0 {
-            // --- Increase penalty count by one if score is ``0``
-            // This is an unlikely scenario, but counted as an absence in consensus
-            SubnetNodePenalties::<T>::mutate(subnet_id, account_id.clone(), |n: &mut u32| *n += 1);
-            continue
-          }
-          
           // --- Check if can be included in validation data
-          // By this point, node is validated, update to submittable
-          if subnet_node.classification.class == SubnetNodeClass::Included && penalties == 0 {
+          // By this point, node is validated, update to submittable if they have no penalties
+          let is_included = subnet_node.classification.class == SubnetNodeClass::Included;
+          if is_included && penalties == 0 {
             // --- Upgrade to Submittable
             SubnetNodesData::<T>::mutate(
               subnet_id,
@@ -235,16 +217,40 @@ impl<T: Config> Pallet<T> {
               |params: &mut SubnetNode<T::AccountId>| {
                 params.classification = SubnetNodeClassification {
                   class: SubnetNodeClass::Submittable,
-                  start_epoch: (epoch + 1) as u64, // in case rewards are called late, we add them to the next epoch, 2 from the consensus data
+                  start_epoch: (epoch) as u64, // in case rewards are called late, we add them to the next epoch, 2 from the consensus data
                 };
               },
             );
+            continue
+          } else if is_included && penalties != 0 {
+            // --- Decrease subnet node penalty count by one if in consensus and attested consensus
+            SubnetNodePenalties::<T>::mutate(subnet_id, account_id.clone(), |n: &mut u32| n.saturating_dec());
+            continue
           }
+
+          // --- At this point, the subnet node is submittable and included in consensus data
+
+          //
+          // TODO: Test removing this ``!submission.attests.contains(&account_id)`` to allow those that do not attest to gain rewards
+          //
+
+          // --- If not attested, do not receive rewards
+          // We don't penalize accounts for not attesting data in case data is corrupted
+          // It is up to subnet nodes to remove them via consensus
+          // But since consensus was formed at the least, we assume they're against the consensus, therefor likely dishonest
+          if !submission.attests.contains_key(&account_id) {
+            continue
+          }
+
+          let score = subnet_node_data.score;
 
           // The subnet node has passed the gauntlet and is about to receive rewards
           
           // --- Decrease subnet node penalty count by one if in consensus and attested consensus
-          SubnetNodePenalties::<T>::mutate(subnet_id, account_id.clone(), |n: &mut u32| n.saturating_dec());
+          // Don't hit the storage unless we have to
+          if penalties != 0 {
+            SubnetNodePenalties::<T>::mutate(subnet_id, account_id.clone(), |n: &mut u32| n.saturating_dec());
+          }
 
           // --- Calculate score percentage of peer versus sum
           let score_percentage: u128 = Self::percent_div(subnet_node_data.score, sum as u128);
@@ -257,7 +263,7 @@ impl<T: Config> Pallet<T> {
           }
 
           // --- Skip if no rewards to give
-          // This is possible if a user is given a ``0`` as a score and is not validator, but unlikely to happen
+          // Unlikely to happen
           if account_reward == 0 {
             continue
           }

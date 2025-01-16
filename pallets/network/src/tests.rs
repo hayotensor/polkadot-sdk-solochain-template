@@ -605,7 +605,6 @@ fn test_register_subnet() {
     let subnet = SubnetsData::<Test>::get(subnet_id).unwrap();
   
     let min_nodes = subnet.min_nodes;
-  
   })
 }
 
@@ -4214,6 +4213,61 @@ fn test_validate() {
 }
 
 #[test]
+fn test_validate_peer_with_0_score() {
+  new_test_ext().execute_with(|| {
+    let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
+    let deposit_amount: u128 = 10000000000000000000000;
+    let amount: u128 = 1000000000000000000000;
+
+    build_activated_subnet(subnet_path.clone(), 0, 0, deposit_amount, amount);
+
+    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+    let total_subnet_nodes = TotalSubnetNodes::<Test>::get(subnet_id);
+
+    let epoch_length = EpochLength::get();
+    let epoch = System::block_number() / epoch_length;
+
+    Network::do_epoch_preliminaries(System::block_number(), epoch as u32, epoch_length);
+
+    let mut subnet_node_data_vec: Vec<SubnetNodeData> = Vec::new();
+    for n in 0..total_subnet_nodes {
+      let mut peer_subnet_node_data: SubnetNodeData = SubnetNodeData {
+        peer_id: peer(n),
+        score: DEFAULT_SCORE,
+      };
+
+      if n == total_subnet_nodes {
+        peer_subnet_node_data.score = 0
+      }
+
+      subnet_node_data_vec.push(peer_subnet_node_data);
+    }
+  
+    let validator = SubnetRewardsValidator::<Test>::get(subnet_id, epoch as u32);
+    assert!(validator != None, "Validator is None");
+
+    assert_ok!(
+      Network::validate(
+        RuntimeOrigin::signed(account(0)), 
+        subnet_id,
+        subnet_node_data_vec.clone(),
+        None,
+      )
+    );
+
+    let submission = SubnetRewardsSubmission::<Test>::get(subnet_id, epoch as u32).unwrap();
+    let data = submission.data;
+
+    // peer should be removed due to 0 score
+    for n in data {
+      if n.peer_id == peer(total_subnet_nodes) {
+        assert!(false);
+      }
+    }
+  });
+}
+
+#[test]
 fn test_validate_invalid_validator() {
   new_test_ext().execute_with(|| {
     let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
@@ -4568,7 +4622,7 @@ fn test_reward_subnets() {
       );
     }
     
-    Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
+    Network::reward_subnets(System::block_number(), epoch as u32);
   });
 }
 
@@ -4635,7 +4689,7 @@ fn test_reward_subnets_remove_subnet_node() {
 
       let submission_nodes_count = submission_nodes.len() as u128;
 
-      Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
+      Network::reward_subnets(System::block_number(), epoch as u32);
       let node_absent_count = SubnetNodePenalties::<Test>::get(subnet_id, account(total_subnet_nodes-1));
 
       if num + 1 > max_absent {
@@ -4745,7 +4799,7 @@ fn test_reward_subnets_remove_subnet_node() {
 //           );
 //         }
         
-//         Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
+//         Network::reward_subnets(System::block_number(), epoch as u32);
   
 //         let node_absent_count = SubnetNodePenalties::<Test>::get(subnet_id, account(total_subnet_nodes-1));
 //         assert_eq!(node_absent_count, 1);
@@ -4771,7 +4825,7 @@ fn test_reward_subnets_remove_subnet_node() {
 //           );
 //         }
         
-//         Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
+//         Network::reward_subnets(System::block_number(), epoch as u32);
   
 //         let node_absent_count = SubnetNodePenalties::<Test>::get(subnet_id, account(total_subnet_nodes-1));
 //         assert_eq!(node_absent_count, 0);  
@@ -4835,7 +4889,7 @@ fn test_reward_subnets_check_balances() {
     let submission_nodes: BTreeSet<<Test as frame_system::Config>::AccountId> = Network::get_classified_accounts(subnet_id, &SubnetNodeClass::Submittable, epoch);
     let submission_nodes_count = submission_nodes.len() as u128;
 
-    Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
+    Network::reward_subnets(System::block_number(), epoch as u32);
     let node_absent_count = SubnetNodePenalties::<Test>::get(subnet_id, account(total_subnet_nodes-1));
     assert_eq!(node_absent_count, 0); 
           
@@ -4908,7 +4962,7 @@ fn test_reward_subnets_validator_slash() {
     
     let before_slash_validator_stake_balance: u128 = AccountSubnetStake::<Test>::get(&validator.clone().unwrap(), subnet_id);
 
-    Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
+    Network::reward_subnets(System::block_number(), epoch as u32);
 
     let slashed_validator_stake_balance: u128 = AccountSubnetStake::<Test>::get(&validator.clone().unwrap(), subnet_id);
 
@@ -4958,7 +5012,7 @@ fn test_reward_subnets_subnet_penalty_count() {
       );
     }
     
-    Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
+    Network::reward_subnets(System::block_number(), epoch as u32);
 
     let subnet_penalty_count = SubnetPenaltyCount::<Test>::get(subnet_id);
     assert_eq!(subnet_penalty_count, 1);
@@ -5004,7 +5058,7 @@ fn test_reward_subnets_account_penalty_count() {
 
     // No Attest
 
-    Network::reward_subnets(System::block_number(), epoch as u32, epoch_length);
+    Network::reward_subnets(System::block_number(), epoch as u32);
 
     let subnet_penalty_count = SubnetPenaltyCount::<Test>::get(subnet_id);
     assert_eq!(subnet_penalty_count, 1);
@@ -7307,6 +7361,118 @@ fn test_get_target_subnet_nodes() {
     log::error!("target_nodes: {:?}", target_nodes);
     assert!(target_nodes < 100);
 
+  });
+}
+
+#[test]
+fn test_epoch_steps() {
+  new_test_ext().execute_with(|| {
+    let subnet_path: Vec<u8> = "petals-team/StableBeluga2".into();
+    let deposit_amount: u128 = 10000000000000000000000;
+    let amount: u128 = 1000000000000000000000;
+
+    let n_peers = 8;
+    build_activated_subnet(subnet_path.clone(), 0, n_peers, deposit_amount, amount);
+
+    let subnet_id = SubnetPaths::<Test>::get(subnet_path.clone()).unwrap();
+
+    let epoch_length = EpochLength::get();
+    let epoch = System::block_number() / epoch_length;
+
+    let included_nodes: BTreeSet<<Test as frame_system::Config>::AccountId> = Network::get_classified_accounts(subnet_id, &SubnetNodeClass::Included, epoch);
+    let initial_total_subnet_nodes = included_nodes.len() as u32;
+
+    for n in 0..6 {
+      let epoch = System::block_number() / epoch_length;
+      log::error!("test_epoch_steps epoch: {:?}", epoch);
+
+      Network::do_epoch_preliminaries(System::block_number(), epoch as u32, epoch_length);
+      
+      let included_nodes: BTreeSet<<Test as frame_system::Config>::AccountId> = Network::get_classified_accounts(subnet_id, &SubnetNodeClass::Included, epoch);
+      let included_nodes_count = included_nodes.len() as u128;
+
+      log::error!("included_nodes_count {:?}", included_nodes_count);
+  
+      let submittable_nodes: BTreeSet<<Test as frame_system::Config>::AccountId> = Network::get_classified_accounts(subnet_id, &SubnetNodeClass::Submittable, epoch);
+      let submittable_nodes_count = submittable_nodes.len() as u128;
+
+      let validator = SubnetRewardsValidator::<Test>::get(subnet_id, epoch as u32);
+      assert!(validator != None, "Validator is None");
+
+      let subnet_node_data_vec = subnet_node_data(0, (included_nodes_count) as u32);
+      let subnet_node_data_vec_len = subnet_node_data_vec.len();
+      log::error!("subnet_node_data_vec_len {:?}", subnet_node_data_vec_len);
+
+      for node in &subnet_node_data_vec {
+
+        if node.peer_id == peer(n_peers) {
+          log::error!("node in subnet_node_data_vec");
+
+        }
+      }
+
+      assert_ok!(
+        Network::validate(
+          RuntimeOrigin::signed(validator.clone().unwrap()), 
+          subnet_id,
+          subnet_node_data_vec.clone(),
+          None,
+        )
+      );
+  
+      // Attest
+      for n in 0..(submittable_nodes_count as u32) {
+        if account(n) == validator.clone().unwrap() {
+          continue
+        }
+        assert_ok!(
+          Network::attest(
+            RuntimeOrigin::signed(account(n)), 
+            subnet_id,
+          )
+        );
+      }
+      
+      let submission = SubnetRewardsSubmission::<Test>::get(subnet_id, epoch as u32).unwrap();
+  
+      assert_eq!(submission.validator, validator.clone().unwrap());
+      assert_eq!(submission.data.len(), subnet_node_data_vec.len());
+      assert_eq!(submission.attests.len(), submittable_nodes_count as usize);
+
+      Network::reward_subnets(System::block_number(), epoch as u32);
+
+      // Add new subnet node and check if they're inclusion on next epoch
+      if n == 0 {
+        let _ = Balances::deposit_creating(&account(n_peers), deposit_amount);
+        assert_ok!(
+          Network::add_subnet_node(
+            RuntimeOrigin::signed(account(n_peers)),
+            subnet_id,
+            peer(n_peers),
+            amount,
+            None,
+            None,
+            None,
+          ) 
+        );
+        // activated as Idle
+        let subnet_node = SubnetNodesData::<Test>::get(subnet_id, account(n_peers));
+        assert_eq!(subnet_node.classification.class, SubnetNodeClass::Idle);    
+      } else if n == 1 {
+        // automatically upgraded to Included after first next epoch
+        let subnet_node = SubnetNodesData::<Test>::get(subnet_id, account(n_peers));
+        assert_eq!(subnet_node.classification.class, SubnetNodeClass::Included);    
+      } else if n == 2 {
+        // automatically upgraded to Submittable after first next epoch
+        let subnet_node = SubnetNodesData::<Test>::get(subnet_id, account(n_peers));
+        assert_eq!(subnet_node.classification.class, SubnetNodeClass::Submittable);    
+      } else {
+        let subnet_node = SubnetNodesData::<Test>::get(subnet_id, account(n_peers));
+        assert_eq!(subnet_node.classification.class, SubnetNodeClass::Submittable);    
+      }
+  
+      increase_epochs(1);
+    }
   });
 }
 

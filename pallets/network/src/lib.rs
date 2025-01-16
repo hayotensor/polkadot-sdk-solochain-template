@@ -991,8 +991,8 @@ pub mod pallet {
 	}
 	#[pallet::type_value]
 	pub fn DefaultMinSubnetNodes() -> u32 {
-		// testnet is 5
-		5
+		// testnet is 4
+		4
 	}
 	#[pallet::type_value]
 	pub fn DefaultMinSubnetRegistrationBlocks() -> u64 {
@@ -2887,7 +2887,7 @@ pub mod pallet {
 
 				// Reward subnets for the previous epoch
 				// Reward before shifting
-				Self::reward_subnets(block, (epoch - 1) as u32, epoch_length);
+				Self::reward_subnets(block, (epoch - 1) as u32);
 
 				// return T::WeightInfo::on_initialize_reward_subnets();
 				return Weight::from_parts(207_283_478_000, 22166406)
