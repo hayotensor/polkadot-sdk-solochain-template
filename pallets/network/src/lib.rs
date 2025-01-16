@@ -991,8 +991,8 @@ pub mod pallet {
 	}
 	#[pallet::type_value]
 	pub fn DefaultMinSubnetNodes() -> u32 {
-		// testnet is 5
-		5
+		// testnet is 4
+		4
 	}
 	#[pallet::type_value]
 	pub fn DefaultMinSubnetRegistrationBlocks() -> u64 {
