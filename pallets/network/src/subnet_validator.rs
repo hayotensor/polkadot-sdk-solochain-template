@@ -149,32 +149,20 @@ impl<T: Config> Pallet<T> {
     subnet_id: u32,
     account_ids: Vec<T::AccountId>,
     min_subnet_nodes: u32,
+    target_accountants_len: u32,
     epoch: u32,
   ) {
-    // TODO: Make sure this is only called if subnet is activated and on the following epoch
-    
-    // Redundant
-    // If validator already chosen, then return
-    if let Ok(rewards_validator) = SubnetRewardsValidator::<T>::try_get(subnet_id, epoch) {
-      return
-    }
-
     let subnet_nodes_len = account_ids.len();
-    
+
     // --- Ensure min subnet peers that are submittable are at least the minimum required
-    // --- Consensus cannot begin until this minimum is reached
-    // --- If not min subnet peers count then accountant isn't needed
-    if (subnet_nodes_len as u32) < min_subnet_nodes {
-      return
+    if subnet_nodes_len < min_subnet_nodes as usize {
+        return
     }
 
-    let rand_index = Self::get_random_number((subnet_nodes_len - 1) as u32, block as u32);
-
-    // --- Choose random accountant from eligible accounts
-    let validator: &T::AccountId = &account_ids[rand_index as usize];
-
-    // --- Insert validator for next epoch
-    SubnetRewardsValidator::<T>::insert(subnet_id, epoch, validator);
+    // Insert validator using weighted selection for next epoch
+    if let Some(validator) = Self::select_validator_weighted(subnet_id, account_ids, epoch as u32) {
+        SubnetRewardsValidator::<T>::insert(subnet_id, epoch, validator);
+    }
   }
 
   // // Get random account within subnet
@@ -211,6 +199,9 @@ impl<T: Config> Pallet<T> {
   pub fn slash_validator(subnet_id: u32, validator: T::AccountId, attestation_percentage: u128, block: u64) {
     // We never ensure balance is above 0 because any validator chosen must have the target stake
     // balance at a minimum
+
+    let epoch = block / T::EpochLength::get();
+    Self::record_validator_slash(subnet_id, validator.clone(), epoch as u32);
 
     // --- Get stake balance
     // This could be greater than the target stake balance

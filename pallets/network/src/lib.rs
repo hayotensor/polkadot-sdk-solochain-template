@@ -506,6 +506,15 @@ pub mod pallet {
 		pub peer_id: PeerId,
 	}
 
+	#[derive(Encode, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
+	pub struct ValidatorPerformance {
+		pub successful_validations: u32,
+		pub total_validations: u32,
+		pub last_slash_epoch: u32,
+		pub consecutive_validations: u32,
+		pub total_slashes: u32,
+	}
+
 	#[derive(Encode, Decode, scale_info::TypeInfo, Clone, PartialEq, Eq)]
 	pub enum ActionType {
 		Deregister,
@@ -1061,6 +1070,17 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn max_subnets)]
 	pub type MaxSubnets<T> = StorageValue<_, u32, ValueQuery, DefaultMaxSubnets>;
+
+	#[pallet::storage]
+	pub type ValidatorPerformanceData<T: Config> = StorageDoubleMap
+		_,
+		Blake2_128Concat,
+		u32, // subnet_id
+		Identity,
+		T::AccountId,
+		ValidatorPerformance,
+		ValueQuery,
+	>;
 
 	// Mapping of each subnet stored by ID, uniqued by `SubnetPaths`
 	// Stores subnet data by a unique id
