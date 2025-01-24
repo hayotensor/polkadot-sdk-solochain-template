@@ -1577,16 +1577,25 @@ impl<T: Config> Pallet<T> {
   /// - Subnet stake
   /// - Subnet delegate stake
   fn get_stake_balance(account_id: T::AccountId) -> u128 {
-    /// TODO: Add voting power based on validator level
-    /// i.e. subnet nodes get 100%, blockchain nodes get 100%, subnet delegates get 50%, blockchain delegates get 50%
-    let subnet_stake_balance: u128 = T::SubnetVote::get_stake_balance(account_id.clone());
-    let subnet_delegate_stake_balance: u128 = T::SubnetVote::get_delegate_stake_balance(account_id.clone());
-    let blockchain_stake_balance: u128 = 0;
-    let blockchain_delegate_stake_balance: u128 = 0;
-    subnet_stake_balance
-      .saturating_add(subnet_delegate_stake_balance)
-      .saturating_add(blockchain_stake_balance)
-      .saturating_add(blockchain_delegate_stake_balance)
+    // Get all stake balances
+    let subnet_node_stake: u128 = T::SubnetVote::get_stake_balance(account_id.clone());
+    let blockchain_node_stake: u128 = T::SubnetVote::get_blockchain_stake_balance(account_id.clone());
+    let subnet_delegate_stake: u128 = T::SubnetVote::get_delegate_stake_balance(account_id.clone());
+    let blockchain_delegate_stake: u128 = T::SubnetVote::get_blockchain_delegate_stake_balance(account_id.clone());
+
+    // Apply 50% weight to both types of delegate stakes
+    let weighted_subnet_delegate = subnet_delegate_stake
+        .saturating_mul(50)
+        .saturating_div(100);
+    let weighted_blockchain_delegate = blockchain_delegate_stake
+        .saturating_mul(50)
+        .saturating_div(100);
+
+    // Sum all stakes with their respective weights
+    subnet_node_stake
+        .saturating_add(blockchain_node_stake)
+        .saturating_add(weighted_subnet_delegate)
+        .saturating_add(weighted_blockchain_delegate)
   }
 
   /// Get current vote balance for proposal ID
